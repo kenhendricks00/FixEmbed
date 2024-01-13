@@ -4,4 +4,5 @@
 This bot fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
 # Usage
 Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> link, and the bot will remove the service's embed if any and automatically repost it as the service's alternative link.
+<br>
 You can disable or enable the bot in a channel by using the <code>\disable</code> and <code>\enable</code> commands.
