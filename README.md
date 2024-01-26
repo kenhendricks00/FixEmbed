@@ -19,7 +19,7 @@ You can add the bot to your server by clicking on the following link: [Invite li
 If you need help, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue.
 
 # Links
-- [Top.gg page](https://top.gg/bot/1173820242305224764) (please leave an upvote!) - Coming Soon!
+- [Top.gg page](https://top.gg/bot/1173820242305224764) (please leave an upvote!)
 - [Support server](https://discord.gg/QFxTAmtZdn)
 - [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)
 
