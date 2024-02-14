@@ -86,6 +86,9 @@ async def on_message(message):
             link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+)"
             matches = re.findall(link_pattern, message.content)
 
+            # Flag to check if a valid link is found
+            valid_link_found = False
+
             for original_link in matches:
                 display_text = ""
                 modified_link = original_link
@@ -129,8 +132,18 @@ async def on_message(message):
                     community_match = re.findall(r"reddit\.com/r/(\w+)/comments", original_link)
                     user_or_community = community_match[0] if community_match else "Unknown"
 
-                # Send the formatted message if a service and user/community were identified
+                # Modify the link if necessary
                 if service and user_or_community:
+                    display_text = f"{service} • {user_or_community}"
+                    modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
+                                                 .replace("x.com", "fxtwitter.com")\
+                                                 .replace("tiktok.com", "vxtiktok.com")\
+                                                 .replace("instagram.com", "ddinstagram.com")\
+                                                 .replace("reddit.com", "rxddit.com")
+                    valid_link_found = True
+
+                # Send the formatted message and delete the original message if a valid link is found
+                if valid_link_found:
                     formatted_message = f"[{display_text}](https://{modified_link}) | Sent by {message.author.mention}"
                     await message.channel.send(formatted_message)
                     await message.delete()
