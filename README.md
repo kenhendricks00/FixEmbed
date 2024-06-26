@@ -13,7 +13,11 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 You can disable or enable the bot in a channel by using the <code>\disable</code> and <code>\enable</code> commands.
 
 # Add the bot to your server
-You can add the bot to your server by clicking on the following link: [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)
+You can add the bot to your server by clicking on the following link: [Invite link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+
+# Host the bot yourself using Docker
+You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembedbot)
+Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
 # Get help
 If you need help, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue.
