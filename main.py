@@ -1,9 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import re
 import os
 import logging
 from dotenv import load_dotenv
+import itertools
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -16,13 +17,23 @@ client = commands.Bot(command_prefix='/', intents=intents)
 channel_states = {}
 
 def create_footer(embed, client):
-  embed.set_footer(text=f"{client.user.name} | ver. 1.0.3", icon_url=client.user.avatar.url)
+  embed.set_footer(text=f"{client.user.name} | ver. 1.0.4", icon_url=client.user.avatar.url)
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
     await client.tree.sync()  # Sync commands with Discord
+    change_status.start()  # Start the status change loop
+
+# Define the statuses to alternate
+statuses = itertools.cycle(["for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links"])
+
+# Task to change the bot's status
+@tasks.loop(seconds=60)  # Change status every 60 seconds
+async def change_status():
+    current_status = next(statuses)
+    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=current_status))
 
 @client.tree.command(name='enable', description="Enable link processing in this channel or another channel")
 async def enable(ctx, channel: discord.TextChannel = None):
