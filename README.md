@@ -17,6 +17,7 @@ You can add the bot to your server by clicking on the following link: [Invite li
 
 # Host the bot yourself using Docker
 You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembedbot)
+<br>
 Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
 # Get help
