@@ -1,29 +1,50 @@
+from typing import Optional
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import re
 import os
 import logging
 from dotenv import load_dotenv
 import itertools
+import aiosqlite
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
 # Bot configuration
 intents = discord.Intents(guild_messages=True, message_content=True, guilds=True)
-client = commands.Bot(command_prefix='/', intents=intents)
+client = commands.AutoShardedBot(shard_count=10, command_prefix='/', intents=intents)
 
 # In-memory storage for channel states
 channel_states = {}
 
 def create_footer(embed, client):
-  embed.set_footer(text=f"{client.user.name} | ver. 1.0.4", icon_url=client.user.avatar.url)
+    embed.set_footer(text=f"{client.user.name} | ver. 1.0.5", icon_url=client.user.avatar.url)
+
+async def init_db():
+    async with aiosqlite.connect('channel_states.db') as db:
+        await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
+        await db.commit()
+
+async def load_channel_states():
+    async with aiosqlite.connect('channel_states.db') as db:
+        async with db.execute('SELECT channel_id, state FROM channel_states') as cursor:
+            async for row in cursor:
+                channel_states[row[0]] = row[1]
+
+async def update_channel_state(channel_id, state):
+    async with aiosqlite.connect('channel_states.db') as db:
+        await db.execute('INSERT OR REPLACE INTO channel_states (channel_id, state) VALUES (?, ?)', (channel_id, state))
+        await db.commit()
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
     await client.tree.sync()  # Sync commands with Discord
+    await init_db()  # Initialize the database
+    await load_channel_states()  # Load channel states from the database
     change_status.start()  # Start the status change loop
 
 # Define the statuses to alternate
@@ -35,26 +56,49 @@ async def change_status():
     current_status = next(statuses)
     await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=current_status))
 
-@client.tree.command(name='enable', description="Enable link processing in this channel or another channel")
-async def enable(ctx, channel: discord.TextChannel = None):
-    if not channel:
-        channel = ctx.channel
-    channel_states[channel.id] = True
-    embed = discord.Embed(title=f"{client.user.name}", description=f'✅ Enabled for {channel.mention}!', color=discord.Color(0x78b159))
-    create_footer(embed, client)
-    await ctx.response.send_message(embed=embed)
+# Enable command
+@client.tree.command(name='enable', description="Enable link processing in this channel, another channel, or all channels")
+@app_commands.describe(channel="The channel to enable link processing in (leave blank for current channel)", all_channels="Enable link processing in all channels")
+async def enable(ctx: discord.Interaction, channel: Optional[discord.TextChannel] = None, all_channels: Optional[bool] = False):
+    if all_channels:
+        for ch in ctx.guild.text_channels:
+            channel_states[ch.id] = True
+            await update_channel_state(ch.id, True)
+        embed = discord.Embed(title=f"{client.user.name}", description=f'✅ Enabled in all channels of {ctx.guild.name}!', color=discord.Color(0x78b159))
+        create_footer(embed, client)
+        await ctx.response.send_message(embed=embed)
+    else:
+        if channel is None:
+            channel = ctx.channel
+        channel_states[channel.id] = True
+        await update_channel_state(channel.id, True)
+        embed = discord.Embed(title=f"{client.user.name}", description=f'✅ Enabled for {channel.mention}!', color=discord.Color(0x78b159))
+        create_footer(embed, client)
+        await ctx.response.send_message(embed=embed)
 
-@client.tree.command(name='disable', description="Disable link processing in this channel or another channel")
-async def disable(ctx, channel: discord.TextChannel = None):
-    if not channel:
-        channel = ctx.channel
-    channel_states[channel.id] = False
-    embed = discord.Embed(title=f"{client.user.name}", description=f'❎ Disabled for {channel.mention}!', color=discord.Color(0x78b159))
-    create_footer(embed, client)
-    await ctx.response.send_message(embed=embed)
+# Disable command
+@client.tree.command(name='disable', description="Disable link processing in this channel, another channel, or all channels")
+@app_commands.describe(channel="The channel to disable link processing in (leave blank for current channel)", all_channels="Disable link processing in all channels")
+async def disable(ctx: discord.Interaction, channel: Optional[discord.TextChannel] = None, all_channels: Optional[bool] = False):
+    if all_channels:
+        for ch in ctx.guild.text_channels:
+            channel_states[ch.id] = False
+            await update_channel_state(ch.id, False)
+        embed = discord.Embed(title=f"{client.user.name}", description=f'❎ Disabled in all channels of {ctx.guild.name}!', color=discord.Color(0x78b159))
+        create_footer(embed, client)
+        await ctx.response.send_message(embed=embed)
+    else:
+        if channel is None:
+            channel = ctx.channel
+        channel_states[channel.id] = False
+        await update_channel_state(channel.id, False)
+        embed = discord.Embed(title=f"{client.user.name}", description=f'❎ Disabled for {channel.mention}!', color=discord.Color(0x78b159))
+        create_footer(embed, client)
+        await ctx.response.send_message(embed=embed)
 
 @client.tree.command(name='about', description="Show information about the bot or a specific channel")
-async def about(ctx, channel: discord.TextChannel = None):
+@app_commands.describe(channel="The channel to show information about")
+async def about(ctx: discord.Interaction, channel: Optional[discord.TextChannel] = None):
     # If no channel is specified, use the current channel
     if not channel:
         channel = ctx.channel
@@ -147,7 +191,7 @@ async def on_message(message):
                 if service and user_or_community:
                     display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
-                                                 .replace("x.com", "fxtwitter.com")\
+                                                 .replace("x.com", "fixupx.com")\
                                                  .replace("tiktok.com", "vxtiktok.com")\
                                                  .replace("instagram.com", "ddinstagram.com")\
                                                  .replace("reddit.com", "rxddit.com")
