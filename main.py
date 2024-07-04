@@ -1,10 +1,11 @@
-from typing import Optional
-import discord
+import logging
+import asyncio
 from discord.ext import commands, tasks
 from discord import app_commands, ui
+from typing import Optional
+import discord
 import re
 import os
-import logging
 from dotenv import load_dotenv
 import itertools
 import aiosqlite
@@ -15,9 +16,7 @@ logging.basicConfig(level=logging.INFO)
 # Bot configuration
 intents = discord.Intents.default()
 intents.message_content = True
-client = commands.AutoShardedBot(shard_count=10,
-     command_prefix='/',
-     intents=intents)
+client = commands.AutoShardedBot(shard_count=10, command_prefix='/', intents=intents)
 
 # In-memory storage for channel states and settings
 channel_states = {}
@@ -25,31 +24,21 @@ bot_settings = {
     "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit"]
 }
 
-
 def create_footer(embed, client):
-    embed.set_footer(text=f"{client.user.name} | ver. 1.0.6",
-                     icon_url=client.user.avatar.url)
-
+    embed.set_footer(text=f"{client.user.name} | ver. 1.0.6", icon_url=client.user.avatar.url)
 
 async def init_db():
-    async with aiosqlite.connect('fixembed_data.db') as db:
-        await db.execute(
-            '''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)'''
-        )
-        await db.commit()
+    db = await aiosqlite.connect('fixembed_data.db')
+    await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
+    await db.commit()
+    await db.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
+    await db.commit()
+    return db
 
-        await db.execute(
-            '''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)'''
-        )
-        await db.commit()
-
-
-async def load_channel_states():
-    async with aiosqlite.connect('fixembed_data.db') as db:
-        async with db.execute(
-                'SELECT channel_id, state FROM channel_states') as cursor:
-            async for row in cursor:
-                channel_states[row[0]] = row[1]
+async def load_channel_states(db):
+    async with db.execute('SELECT channel_id, state FROM channel_states') as cursor:
+        async for row in cursor:
+            channel_states[row[0]] = row[1]
 
     # Enable all channels by default if not specified
     for guild in client.guilds:
@@ -57,41 +46,48 @@ async def load_channel_states():
             if channel.id not in channel_states:
                 channel_states[channel.id] = True
 
+async def load_settings(db):
+    async with db.execute('SELECT key, value FROM settings') as cursor:
+        async for row in cursor:
+            key, value = row
+            if key == "enabled_services":
+                bot_settings[key] = eval(value)
+            else:
+                channel_states[int(key)] = value == 'True'
 
-async def load_settings():
-    async with aiosqlite.connect('fixembed_data.db') as db:
-        async with db.execute('SELECT key, value FROM settings') as cursor:
-            async for row in cursor:
-                key, value = row
-                if key == "enabled_services":
-                    bot_settings[key] = eval(value)
-                else:
-                    channel_states[int(key)] = value == 'True'
+async def update_channel_state(db, channel_id, state):
+    retries = 5
+    for i in range(retries):
+        try:
+            await db.execute('INSERT OR REPLACE INTO channel_states (channel_id, state) VALUES (?, ?)', (channel_id, state))
+            await db.commit()
+            break
+        except sqlite3.OperationalError as e:
+            if 'locked' in str(e):
+                await asyncio.sleep(0.1)
+            else:
+                raise
 
-
-async def update_channel_state(channel_id, state):
-    async with aiosqlite.connect('fixembed_data.db') as db:
-        await db.execute(
-            'INSERT OR REPLACE INTO channel_states (channel_id, state) VALUES (?, ?)',
-            (channel_id, state))
-        await db.commit()
-
-
-async def update_setting(key, value):
-    async with aiosqlite.connect('fixembed_data.db') as db:
-        await db.execute(
-            'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-            (key, repr(value)))
-        await db.commit()
-
+async def update_setting(db, key, value):
+    retries = 5
+    for i in range(retries):
+        try:
+            await db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, repr(value)))
+            await db.commit()
+            break
+        except sqlite3.OperationalError as e:
+            if 'locked' in str(e):
+                await asyncio.sleep(0.1)
+            else:
+                raise
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
-    await init_db()  # Initialize the database
-    await load_channel_states()  # Load channel states from the database
-    await load_settings()  # Load settings from the database
+    client.db = await init_db()  # Initialize the database
+    await load_channel_states(client.db)  # Load channel states from the database
+    await load_settings(client.db)  # Load settings from the database
     change_status.start()  # Start the status change loop
 
     # Sync commands only once
@@ -101,13 +97,10 @@ async def on_ready():
     except Exception as e:
         print(f'Failed to sync commands: {e}')
 
-
 # Define the statuses to alternate
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for TikTok links",
-    "for Instagram links"
+    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links"
 ])
-
 
 # Task to change the bot's status
 @tasks.loop(seconds=60)  # Change status every 60 seconds
@@ -115,7 +108,6 @@ async def change_status():
     current_status = next(statuses)
     await client.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching, name=current_status))
-
 
 # Enable command
 @client.tree.command(
@@ -130,13 +122,12 @@ async def enable(interaction: discord.Interaction,
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = True
-    await update_channel_state(channel.id, True)
+    await update_channel_state(client.db, channel.id, True)
     embed = discord.Embed(title=f"{client.user.name}",
                           description=f'✅ Enabled for {channel.mention}!',
                           color=discord.Color(0x78b159))
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
-
 
 # Disable command
 @client.tree.command(
@@ -151,13 +142,12 @@ async def disable(interaction: discord.Interaction,
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = False
-    await update_channel_state(channel.id, False)
+    await update_channel_state(client.db, channel.id, False)
     embed = discord.Embed(title=f"{client.user.name}",
                           description=f'❎ Disabled for {channel.mention}!',
                           color=discord.Color(0x78b159))
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
-
 
 @client.tree.command(
     name='about',
@@ -204,7 +194,6 @@ async def about(interaction: discord.Interaction,
         inline=False)
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
-
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
@@ -257,8 +246,6 @@ class SettingsDropdown(ui.Select):
             view = ServiceSettingsView(self.interaction)
             await interaction.response.send_message(embed=embed, view=view)
 
-
-# Dropdown menu for enabling/disabling specific services
 class ServicesDropdown(ui.Select):
 
     def __init__(self, interaction, parent_view):
@@ -282,7 +269,7 @@ class ServicesDropdown(ui.Select):
         global bot_settings  # Ensure we use the global settings dictionary
         selected_services = self.values
         bot_settings["enabled_services"] = selected_services
-        await update_setting("enabled_services", selected_services)
+        await update_setting(client.db, "enabled_services", selected_services)
 
         # Refresh the dropdown menu
         self.parent_view.clear_items()
@@ -297,11 +284,23 @@ class ServicesDropdown(ui.Select):
         ])
         embed = discord.Embed(
             title="Service Settings",
-            description=
-            f"Configure which services are enabled.\n\n**Enabled services:**\n{service_status_list}",
+            description=f"Configure which services are enabled.\n\n**Enabled services:**\n{service_status_list}",
             color=discord.Color.blurple())
-        await interaction.response.edit_message(embed=embed,
-                                                view=self.parent_view)
+        
+        try:
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+        except discord.errors.NotFound:
+            # Interaction has expired, use edit_original_response instead
+            try:
+                await interaction.edit_original_response(embed=embed, view=self.parent_view)
+            except discord.errors.NotFound:
+                logging.error("Failed to edit original response: Unknown Webhook")
+        except discord.errors.InteractionResponded:
+            # Interaction already responded, use edit_original_response
+            try:
+                await interaction.edit_original_response(embed=embed, view=self.parent_view)
+            except discord.errors.NotFound:
+                logging.error("Failed to edit original response: Unknown Webhook")
 
 
 class SettingsView(ui.View):
@@ -310,7 +309,6 @@ class SettingsView(ui.View):
         super().__init__()
         self.add_item(SettingsDropdown(interaction))
 
-
 class ServiceSettingsView(ui.View):
 
     def __init__(self, interaction):
@@ -318,18 +316,16 @@ class ServiceSettingsView(ui.View):
         self.add_item(ServicesDropdown(interaction, self))
         self.add_item(SettingsDropdown(interaction))
 
-
 # Toggle button for FixEmbed
 class FixEmbedSettingsView(ui.View):
 
-    def __init__(self, enabled, interaction):
-        super().__init__()
+    def __init__(self, enabled, interaction, timeout=180):
+        super().__init__(timeout=timeout)
         self.enabled = enabled
         self.interaction = interaction
         self.toggle_button = discord.ui.Button(
             label="Enabled" if enabled else "Disabled",
-            style=discord.ButtonStyle.green
-            if enabled else discord.ButtonStyle.red)
+            style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red)
         self.toggle_button.callback = self.toggle
         self.add_item(self.toggle_button)
         self.add_item(SettingsDropdown(interaction))
@@ -338,8 +334,8 @@ class FixEmbedSettingsView(ui.View):
         self.enabled = not self.enabled
         for ch in self.interaction.guild.text_channels:
             channel_states[ch.id] = self.enabled
-            await update_channel_state(ch.id, self.enabled)
-            await update_setting(str(ch.id), self.enabled)
+            await update_channel_state(client.db, ch.id, self.enabled)
+            await update_setting(client.db, str(ch.id), self.enabled)
         self.toggle_button.label = "Enabled" if self.enabled else "Disabled"
         self.toggle_button.style = discord.ButtonStyle.green if self.enabled else discord.ButtonStyle.red
 
@@ -348,26 +344,51 @@ class FixEmbedSettingsView(ui.View):
             title="FixEmbed Settings",
             description="**Enable/Disable FixEmbed:**\n"
             f"{'🟢 FixEmbed enabled' if self.enabled else '🔴 FixEmbed disabled'}",
-            color=discord.Color.green()
-            if self.enabled else discord.Color.red())
+            color=discord.Color.green() if self.enabled else discord.Color.red())
 
-        # Update the SettingsDropdown with the new status
-        self.clear_items()
-        self.add_item(self.toggle_button)
-        self.add_item(SettingsDropdown(self.interaction))
+        try:
+            await interaction.response.edit_message(embed=embed, view=self)
+        except discord.errors.NotFound:
+            # Interaction has expired, use edit_original_response instead
+            try:
+                await interaction.edit_original_response(embed=embed, view=self)
+            except discord.errors.NotFound:
+                logging.error("Failed to edit original response: Unknown Webhook")
+        except discord.errors.InteractionResponded:
+            # Interaction already responded, use edit_original_response
+            try:
+                await interaction.edit_original_response(embed=embed, view=self)
+            except discord.errors.NotFound:
+                logging.error("Failed to edit original response: Unknown Webhook")
 
-        await interaction.response.edit_message(embed=embed, view=self)
+    async def on_timeout(self):
+        # Disable all components when the view times out
+        for item in self.children:
+            item.disabled = True
+
+        # Update the message to indicate that the view is no longer interactive
+        embed = discord.Embed(
+            title="FixEmbed Settings",
+            description="This view has timed out and is no longer interactive.",
+            color=discord.Color.red())
+        
+        try:
+            await self.interaction.edit_original_response(embed=embed, view=self)
+        except discord.errors.NotFound:
+            logging.error("Failed to edit original response on timeout: Unknown Webhook")
 
 
+# Settings command
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
+    # Determine if FixEmbed is enabled or disabled in the interaction's guild
+    enabled = all(channel_states.get(ch.id, True) for ch in interaction.guild.text_channels)
+    
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
                           color=discord.Color.blurple())
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed,
-                                            view=SettingsView(interaction))
-
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
 
 @client.event
 async def on_message(message):
@@ -458,7 +479,6 @@ async def on_message(message):
 
     # This line is necessary to process commands
     await client.process_commands(message)
-
 
 # Loading the bot token from .env
 load_dotenv()
