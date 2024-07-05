@@ -227,7 +227,8 @@ class SettingsDropdown(ui.Select):
             embed = discord.Embed(
                 title="FixEmbed Settings",
                 description="**Enable/Disable FixEmbed:**\n"
-                f"{'🟢 FixEmbed enabled' if enabled else '🔴 FixEmbed disabled'}",
+                f"{'🟢 FixEmbed enabled' if enabled else '🔴 FixEmbed disabled'}\n\n"
+                "**NOTE:** May take a few seconds to apply changes to all channels.",
                 color=discord.Color.green()
                 if enabled else discord.Color.red())
             view = FixEmbedSettingsView(enabled, self.interaction)
@@ -331,6 +332,9 @@ class FixEmbedSettingsView(ui.View):
         self.add_item(SettingsDropdown(interaction))
 
     async def toggle(self, interaction: discord.Interaction):
+        # Acknowledge the interaction
+        await interaction.response.defer()
+        
         self.enabled = not self.enabled
         for ch in self.interaction.guild.text_channels:
             channel_states[ch.id] = self.enabled
@@ -343,7 +347,8 @@ class FixEmbedSettingsView(ui.View):
         embed = discord.Embed(
             title="FixEmbed Settings",
             description="**Enable/Disable FixEmbed:**\n"
-            f"{'🟢 FixEmbed enabled' if self.enabled else '🔴 FixEmbed disabled'}",
+            f"{'🟢 FixEmbed enabled' if self.enabled else '🔴 FixEmbed disabled'}\n\n"
+            "**NOTE:** May take a few seconds to apply changes to all channels.",
             color=discord.Color.green() if self.enabled else discord.Color.red())
 
         try:
