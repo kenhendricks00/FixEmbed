@@ -5,20 +5,31 @@
 <br>
 FixEmbed is a Discord bot that fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
 
-# Usage
+# 🛠️ Usage
 Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> link, and the bot will remove your message and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/header.png">
 </p>
 It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
-# Features
-- Supports Twitter, TikTok, Instagram, Reddit, and more.
-- Easy setup and configuration.
-- Customizable settings for individual servers.
+# 🌟 Why Choose FixEmbed?
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, TikTok, Reddit, and more.
+- **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
+- **Reliable Performance**: Ensures consistent embed functionality across all platforms.
+
+# 📋 Key Features
+1. **Multi-Platform Support**:
+    - **X/Twitter**
+    - **Instagram**
+    - **TikTok**
+    - **Reddit**
+2. **Customizable Settings**:
+    - Enable or disable services per channel or server-wide.
+3. **Easy Hosting Options**:
+    - Host the bot yourself using Docker.
 
 # 🚀 Invite FixEmbed to Your Server
-You can invite the bot to your server by using the following invite link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
 # 🐳 Host FixEmbed Yourself
 You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembed)
@@ -34,11 +45,11 @@ If you need support or have any questions, you can join the [support server](htt
 <br>
 **Note:** If it's a technical issue, be sure to have debug info ready by using <code>/settings</code>, then click Debug.
 
-# Links
-- 🎉 [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
-- 🗳️ [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)
-- ⭐ [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbed)
-- 💬 [Join the Support Server](https://discord.gg/QFxTAmtZdn)
+# 🎉 Quick Links
+- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)
+- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbed)
+- [Join the Support Server](https://discord.gg/QFxTAmtZdn)
 
 # 📜 Credits
 - [FxTwitter](https://github.com/FixTweet/FxTwitter), the service used to fix Twitter embeds, created by FixTweet
