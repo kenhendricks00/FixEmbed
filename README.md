@@ -6,7 +6,7 @@
 FixEmbed is a Discord bot that fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
 
 # Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> link, and the bot will automatically repost it as the service's alternative link.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> link, and the bot will remove your message and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/header.png">
 </p>
