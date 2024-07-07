@@ -17,15 +17,19 @@ It's possible to toggle the link conversion on specific channels using <code>/en
 - Easy setup and configuration.
 - Customizable settings for individual servers.
 
-# Invite FixEmbed to Your Server
+# 🚀 Invite FixEmbed to Your Server
 You can invite the bot to your server by using the following invite link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
-# Host FixEmbed Yourself using Docker
+# 🐳 Host FixEmbed Yourself
 You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembed)
 <br>
+```bash
+docker pull kenhendricks00/fixembed
+docker run -d kenhendricks00/fixembed
+```
 Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
-# Support
+# 💬 Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.
 <br>
 **Note:** If it's a technical issue, be sure to have debug info ready by using <code>/settings</code>, then click Debug.
@@ -36,7 +40,7 @@ If you need support or have any questions, you can join the [support server](htt
 - ⭐ [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbed)
 - 💬 [Join the Support Server](https://discord.gg/QFxTAmtZdn)
 
-# Credits
+# 📜 Credits
 - [FxTwitter](https://github.com/FixTweet/FxTwitter), the service used to fix Twitter embeds, created by FixTweet
 - [InstaFix](https://github.com/Wikidepia/InstaFix), the service used to fix Instagram embeds, created by Wikidepia
 - [fxreddit](https://github.com/MinnDevelopment/fxreddit), the service used to fix Reddit embeds, created by MinnDevelopment
