@@ -12,7 +12,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 </p>
 It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
-## Features
+# Features
 - Supports Twitter, TikTok, Instagram, Reddit, and more.
 - Easy setup and configuration.
 - Customizable settings for individual servers.
