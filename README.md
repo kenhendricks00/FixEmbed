@@ -32,7 +32,7 @@ It's possible to toggle the link conversion on specific channels using <code>/en
 Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
 # 🐳 Host FixEmbed Yourself
-You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembed)
+You can host the bot yourself using Docker:
 <br>
 ```bash
 docker pull kenhendricks00/fixembed
