@@ -12,6 +12,11 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 </p>
 It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
+## Features
+- Supports Twitter, TikTok, Instagram, Reddit, and more.
+- Easy setup and configuration.
+- Customizable settings for individual servers.
+
 # Invite the bot to your server
 You can invite the bot to your server by using the following invite link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
