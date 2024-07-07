@@ -29,7 +29,7 @@ Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.
 
 # Links
-- [Top.gg page](https://top.gg/bot/1173820242305224764) (please vote!)
+- [Top.gg page](https://top.gg/bot/1173820242305224764) (Please vote for FixEmbed!)
 - [Support server](https://discord.gg/QFxTAmtZdn)
 - [Invite link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
