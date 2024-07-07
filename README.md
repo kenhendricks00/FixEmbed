@@ -1,7 +1,7 @@
-# <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/logo.png" width="48"> FixEmbedBot
+# <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png" width="48"> FixEmbed
 <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" rel="nofollow"><img src="https://camo.githubusercontent.com/c9d524617457c843a9a16119bf4e905c95724baaff86e13e0426c274bc12a83b/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f696e766974655f6c696e6b2d626c7565" alt="Invite Link" data-canonical-src="https://img.shields.io/badge/invite_link-purple" style="max-width: 100%;"></a>
 <a href="https://top.gg/bot/1173820242305224764" rel="nofollow"><img src="https://camo.githubusercontent.com/af95e6799eab2821bfb606ae00f9f86f952ffd80149bf01f84d4ff7b4d014305/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f546f672e67672d666333313634" alt="Tog.gg" data-canonical-src="https://img.shields.io/badge/Top.gg-FF3366" style="max-width: 100%;"></a>
-<img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbedBot" alt="Last Commit" data-canonical-src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbedBot" style="max-width: 100%;">
+<img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed" alt="Last Commit" data-canonical-src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed" style="max-width: 100%;">
 <br>
 FixEmbed is a Discord bot that fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
 
@@ -16,7 +16,7 @@ It's possible to toggle the link conversion on specific channels using <code>/en
 You can invite the bot to your server by using the following invite link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
 # Host the bot yourself using Docker
-You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembedbot)
+You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembed)
 <br>
 Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
