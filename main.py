@@ -97,6 +97,8 @@ async def on_ready():
     except Exception as e:
         print(f'Failed to sync commands: {e}')
 
+    client.launch_time = discord.utils.utcnow()
+
 # Define the statuses to alternate
 statuses = itertools.cycle([
     "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links"
@@ -162,8 +164,8 @@ async def about(interaction: discord.Interaction):
         name="Links",
         value=
         ("- [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)\n"
-         "- [Tog.gg Page](https://top.gg/bot/1173820242305224764) (please vote!)\n"
-         "- [Source code](https://github.com/kenhendricks00/FixEmbedBot) (please leave a star!)\n"
+         "- [Tog.gg page](https://top.gg/bot/1173820242305224764) (Please vote for FixEmbed!)\n"
+         "- [Source code](https://github.com/kenhendricks00/FixEmbedBot) (Please leave a star on GitHub!)\n"
          "- [Support server](https://discord.gg/QFxTAmtZdn)"),
         inline=False)
     create_footer(embed, client)
@@ -181,27 +183,46 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     # Check if FixEmbed is working in the specified channel
     fix_embed_status = channel_states.get(channel.id, True)
 
+    # Check if FixEmbed is enabled or disabled in all channels
+    fix_embed_enabled = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
+
     # Set embed color to Discord purple
     embed = discord.Embed(
         title="Debug Information",
         description="For more help, join the [support server](https://discord.gg/QFxTAmtZdn)",
         color=discord.Color(0x7289DA))
-    embed.add_field(name="Ping",
-                    value=f"{round(client.latency * 1000)} ms",
-                    inline=False)
+    
     embed.add_field(
         name="Status and Permissions",
-        value=
-        (f'{f"🟢 **FixEmbed working in** {channel.mention}" if fix_embed_status else f"🔴 **FixEmbed not working in** {channel.mention}"}\n'
-         f"- {'🟢 FixEmbed enabled' if fix_embed_status else '🔴 FixEmbed disabled'}\n"
-         f"- {'🟢' if permissions.read_messages else '🔴'} Read message permission\n"
-         f"- {'🟢' if permissions.send_messages else '🔴'} Send message permission\n"
-         f"- {'🟢' if permissions.embed_links else '🔴'} Embed links permission\n"
-         f"- {'🟢' if permissions.manage_messages else '🔴'} Manage messages permission"
-         ),
-        inline=False)
+        value=(
+            f'{f"🟢 **FixEmbed working in** {channel.mention}" if fix_embed_status else f"🔴 **FixEmbed not working in** {channel.mention}"}\n'
+            f"- {'🟢 FixEmbed enabled' if fix_embed_status else '🔴 FixEmbed disabled'}\n"
+            f"- {'🟢' if permissions.read_messages else '🔴'} Read message permission\n"
+            f"- {'🟢' if permissions.send_messages else '🔴'} Send message permission\n"
+            f"- {'🟢' if permissions.embed_links else '🔴'} Embed links permission\n"
+            f"- {'🟢' if permissions.manage_messages else '🔴'} Manage messages permission"
+        ),
+        inline=False
+    )
+
+    # Add FixEmbed Stats section
+    shard_id = client.shard_id if client.shard_id is not None else 0
+    embed.add_field(
+        name="FixEmbed Stats",
+        value=(
+            f"```\n"
+            f"Status: {'Enabled' if fix_embed_enabled else 'Disabled'}\n"
+            f"Shard: {shard_id + 1}\n"
+            f"Uptime: {str(discord.utils.utcnow() - client.launch_time).split('.')[0]}\n"
+            f"Version: 1.0.7\n"
+            f"```"
+        ),
+        inline=False
+    )
+
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
+
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
