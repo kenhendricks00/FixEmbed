@@ -11,8 +11,6 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/header.png">
 </p>
 It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
-<br>
-You can use <code>/settings</code> to enable/disable FixEmbed in all channels, choose which services to convert, and get debug information on FixEmbed.
 
 # Features
 - Supports Twitter, TikTok, Instagram, Reddit, and more.
