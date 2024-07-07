@@ -3,7 +3,7 @@
 <a href="https://top.gg/bot/1173820242305224764" rel="nofollow"><img src="https://camo.githubusercontent.com/af95e6799eab2821bfb606ae00f9f86f952ffd80149bf01f84d4ff7b4d014305/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f546f672e67672d666333313634" alt="Tog.gg" data-canonical-src="https://img.shields.io/badge/Top.gg-FF3366" style="max-width: 100%;"></a>
 <img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbedBot" alt="Last Commit" data-canonical-src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbedBot" style="max-width: 100%;">
 <br>
-A Discord bot that fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
+FixEmbed is a Discord bot that fixes the lack of embed of support in Discord. Automatically reposts <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> and more as their fixed alternatives.
 
 # Usage
 Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Tiktok</code>, <code>Reddit</code> link, and the bot will remove the service's embed if any and automatically reposts it as the service's alternative link.
