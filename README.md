@@ -27,6 +27,7 @@ Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
 # Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.
+**Note:** If it's a technical issue, be sure to have debug info ready by using <code>/settings</code>, then click Debug.
 
 # Links
 - 🎉 [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
