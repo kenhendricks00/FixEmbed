@@ -12,8 +12,8 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 </p>
 It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
-# Add the bot to your server
-You can add the bot to your server by clicking on the following link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+# Invite the bot to your server
+You can invite the bot to your server by using the following invite link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 
 # Host the bot yourself using Docker
 You can host the bot yourself using Docker using the following link: [Docker Image](https://hub.docker.com/r/kenhendricks00/fixembedbot)
