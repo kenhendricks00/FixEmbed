@@ -25,7 +25,7 @@ bot_settings = {
 }
 
 def create_footer(embed, client):
-    embed.set_footer(text=f"{client.user.name} | ver. 1.0.6", icon_url=client.user.avatar.url)
+    embed.set_footer(text=f"{client.user.name} | ver. 1.0.7", icon_url=client.user.avatar.url)
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -151,10 +151,26 @@ async def disable(interaction: discord.Interaction,
 
 @client.tree.command(
     name='about',
-    description="Show information about the bot or a specific channel")
-@app_commands.describe(channel="The channel to show information about")
-async def about(interaction: discord.Interaction,
-                channel: Optional[discord.TextChannel] = None):
+    description="Show information about the bot")
+async def about(interaction: discord.Interaction):
+    # Set embed color to Discord purple
+    embed = discord.Embed(
+        title="About",
+        description="This bot fixes the lack of embed support in Discord.",
+        color=discord.Color(0x7289DA))
+    embed.add_field(
+        name="Links",
+        value=
+        ("- [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)\n"
+         "- [Tog.gg Page](https://top.gg/bot/1173820242305224764) (please vote!)\n"
+         "- [Source code](https://github.com/kenhendricks00/FixEmbedBot) (please leave a star!)\n"
+         "- [Support server](https://discord.gg/QFxTAmtZdn)"),
+        inline=False)
+    create_footer(embed, client)
+    await interaction.response.send_message(embed=embed)
+
+# Debug command
+async def debug_info(interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
     # If no channel is specified, use the current channel
     if not channel:
         channel = interaction.channel
@@ -167,14 +183,14 @@ async def about(interaction: discord.Interaction,
 
     # Set embed color to Discord purple
     embed = discord.Embed(
-        title="About",
-        description="This bot fixes the lack of embed support in Discord.",
+        title="Debug Information",
+        description="For more help, join the [support server](https://discord.gg/QFxTAmtZdn)",
         color=discord.Color(0x7289DA))
     embed.add_field(name="Ping",
                     value=f"{round(client.latency * 1000)} ms",
                     inline=False)
     embed.add_field(
-        name="Debug info",
+        name="Status and Permissions",
         value=
         (f'{f"🟢 **FixEmbed working in** {channel.mention}" if fix_embed_status else f"🔴 **FixEmbed not working in** {channel.mention}"}\n'
          f"- {'🟢 FixEmbed enabled' if fix_embed_status else '🔴 FixEmbed disabled'}\n"
@@ -184,16 +200,8 @@ async def about(interaction: discord.Interaction,
          f"- {'🟢' if permissions.manage_messages else '🔴'} Manage messages permission"
          ),
         inline=False)
-    embed.add_field(
-        name="Links",
-        value=
-        ("- [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)\n"
-         "- [Tog.gg Page](https://top.gg/bot/1173820242305224764) (please vote!)\n"
-         "- [Source code](https://github.com/kenhendricks00/FixEmbedBot) (please leave a star!)\n"
-         "- [Support server](https://discord.gg/QFxTAmtZdn)"),
-        inline=False)
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
@@ -212,7 +220,12 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(
                 label="Service Settings",
                 description="Configure which services are enabled",
-                emoji="⚙️")
+                emoji="⚙️"),
+            discord.SelectOption(
+                label="Debug",
+                description="Show current debug information",
+                emoji="🐞"
+            )
         ]
         super().__init__(placeholder="Choose an option...",
                          min_values=1,
@@ -246,6 +259,8 @@ class SettingsDropdown(ui.Select):
                 color=discord.Color.blurple())
             view = ServiceSettingsView(self.interaction)
             await interaction.response.send_message(embed=embed, view=view)
+        elif self.values[0] == "Debug":
+            await debug_info(interaction, interaction.channel)
 
 class ServicesDropdown(ui.Select):
 
@@ -302,7 +317,6 @@ class ServicesDropdown(ui.Select):
                 await interaction.edit_original_response(embed=embed, view=self.parent_view)
             except discord.errors.NotFound:
                 logging.error("Failed to edit original response: Unknown Webhook")
-
 
 class SettingsView(ui.View):
 
@@ -381,7 +395,6 @@ class FixEmbedSettingsView(ui.View):
             await self.interaction.edit_original_response(embed=embed, view=self)
         except discord.errors.NotFound:
             logging.error("Failed to edit original response on timeout: Unknown Webhook")
-
 
 # Settings command
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
