@@ -10,7 +10,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/header.png">
 </p>
-It's possible to disable the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
+It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
 # Add the bot to your server
 You can add the bot to your server by clicking on the following link: [Invite Link](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
