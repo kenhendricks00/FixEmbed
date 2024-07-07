@@ -10,7 +10,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbedBot/main/assets/header.png">
 </p>
-It's possible to toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
+You can toggle the link conversion on specific channels using <code>/enable</code> and <code>/disable</code>.
 
 # 🌟 Why Choose FixEmbed?
 - **Comprehensive Platform Support**: Supports X/Twitter, Instagram, TikTok, Reddit, and more.
