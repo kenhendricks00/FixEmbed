@@ -34,7 +34,7 @@ You can toggle the link conversion on specific channels using <code>/activate</c
     - **TikTok**
     - **Reddit**
 2. **Customizable Settings**:
-    - Enable or disable services per channel or server-wide.
+    - Activate or deactivate services per channel or server-wide.
 3. **Easy Hosting Options**:
     - Host the bot yourself using Docker.
 
