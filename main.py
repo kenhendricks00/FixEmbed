@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 import itertools
 import aiosqlite
 
+# Version number
+VERSION = "1.0.8"
+
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
@@ -25,7 +28,7 @@ bot_settings = {
 }
 
 def create_footer(embed, client):
-    embed.set_footer(text=f"{client.user.name} | ver. 1.0.7", icon_url=client.user.avatar.url)
+    embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -40,7 +43,7 @@ async def load_channel_states(db):
         async for row in cursor:
             channel_states[row[0]] = row[1]
 
-    # Enable all channels by default if not specified
+    # Activate all channels by default if not specified
     for guild in client.guilds:
         for channel in guild.text_channels:
             if channel.id not in channel_states:
@@ -111,43 +114,43 @@ async def change_status():
     await client.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching, name=current_status))
 
-# Enable command
+# Activate command
 @client.tree.command(
-    name='enable',
-    description="Enable link processing in this channel or another channel")
+    name='activate',
+    description="Activate link processing in this channel or another channel")
 @app_commands.describe(
     channel=
-    "The channel to enable link processing in (leave blank for current channel)"
+    "The channel to activate link processing in (leave blank for current channel)"
 )
-async def enable(interaction: discord.Interaction,
+async def activate(interaction: discord.Interaction,
                  channel: Optional[discord.TextChannel] = None):
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = True
     await update_channel_state(client.db, channel.id, True)
     embed = discord.Embed(title=f"{client.user.name}",
-                          description=f'✅ Enabled for {channel.mention}!',
+                          description=f'✅ Activated for {channel.mention}!',
                           color=discord.Color(0x78b159))
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
 
-# Disable command
+# Deactivate command
 @client.tree.command(
-    name='disable',
-    description="Disable link processing in this channel or another channel")
+    name='deactivate',
+    description="Deactivate link processing in this channel or another channel")
 @app_commands.describe(
     channel=
-    "The channel to disable link processing in (leave blank for current channel)"
+    "The channel to deactivate link processing in (leave blank for current channel)"
 )
-async def disable(interaction: discord.Interaction,
+async def deactivate(interaction: discord.Interaction,
                   channel: Optional[discord.TextChannel] = None):
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = False
     await update_channel_state(client.db, channel.id, False)
     embed = discord.Embed(title=f"{client.user.name}",
-                          description=f'❎ Disabled for {channel.mention}!',
-                          color=discord.Color(0x78b159))
+                          description=f'❌ Deactivated for {channel.mention}!',
+                          color=discord.Color.red())
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
 
@@ -191,8 +194,8 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     # Check if FixEmbed is working in the specified channel
     fix_embed_status = channel_states.get(channel.id, True)
 
-    # Check if FixEmbed is enabled or disabled in all channels
-    fix_embed_enabled = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
+    # Check if FixEmbed is activated or deactivated in all channels
+    fix_embed_activated = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
 
     # Set embed color to Discord purple
     embed = discord.Embed(
@@ -204,7 +207,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
         name="Status and Permissions",
         value=(
             f'{f"🟢 **FixEmbed working in** {channel.mention}" if fix_embed_status else f"🔴 **FixEmbed not working in** {channel.mention}"}\n'
-            f"- {'🟢 FixEmbed enabled' if fix_embed_status else '🔴 FixEmbed disabled'}\n"
+            f"- {'🟢 FixEmbed activated' if fix_embed_status else '🔴 FixEmbed deactivated'}\n"
             f"- {'🟢' if permissions.read_messages else '🔴'} Read message permission\n"
             f"- {'🟢' if permissions.send_messages else '🔴'} Send message permission\n"
             f"- {'🟢' if permissions.embed_links else '🔴'} Embed links permission\n"
@@ -219,10 +222,10 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
         name="FixEmbed Stats",
         value=(
             f"```\n"
-            f"Status: {'Enabled' if fix_embed_enabled else 'Disabled'}\n"
+            f"Status: {'Activated' if fix_embed_activated else 'Deactivated'}\n"
             f"Shard: {shard_id + 1}\n"
             f"Uptime: {str(discord.utils.utcnow() - client.launch_time).split('.')[0]}\n"
-            f"Version: 1.0.7\n"
+            f"Version: {VERSION}\n"
             f"```"
         ),
         inline=False
@@ -231,24 +234,23 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
 
-
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
 
     def __init__(self, interaction):
         self.interaction = interaction
-        enabled = all(
+        activated = all(
             channel_states.get(ch.id, True)
             for ch in interaction.guild.text_channels)
         options = [
             discord.SelectOption(
                 label="FixEmbed",
-                description="Enable or disable the bot in all channels",
-                emoji="🟢" if enabled else "🔴"  # Emoji based on status
+                description="Activate or deactivate the bot in all channels",
+                emoji="🟢" if activated else "🔴"  # Emoji based on status
             ),
             discord.SelectOption(
                 label="Service Settings",
-                description="Configure which services are enabled",
+                description="Configure which services are activated",
                 emoji="⚙️"),
             discord.SelectOption(
                 label="Debug",
@@ -263,17 +265,17 @@ class SettingsDropdown(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "FixEmbed":
-            enabled = all(
+            activated = all(
                 channel_states.get(ch.id, True)
                 for ch in interaction.guild.text_channels)
             embed = discord.Embed(
                 title="FixEmbed Settings",
-                description="**Enable/Disable FixEmbed:**\n"
-                f"{'🟢 FixEmbed enabled' if enabled else '🔴 FixEmbed disabled'}\n\n"
+                description="**Activate/Deactivate FixEmbed:**\n"
+                f"{'🟢 FixEmbed activated' if activated else '🔴 FixEmbed deactivated'}\n\n"
                 "**NOTE:** May take a few seconds to apply changes to all channels.",
                 color=discord.Color.green()
-                if enabled else discord.Color.red())
-            view = FixEmbedSettingsView(enabled, self.interaction)
+                if activated else discord.Color.red())
+            view = FixEmbedSettingsView(activated, self.interaction)
             await interaction.response.send_message(embed=embed, view=view)
         elif self.values[0] == "Service Settings":
             enabled_services = bot_settings.get("enabled_services", [])
@@ -283,8 +285,7 @@ class SettingsDropdown(ui.Select):
             ])
             embed = discord.Embed(
                 title="Service Settings",
-                description=
-                f"Configure which services are enabled.\n\n**Enabled services:**\n{service_status_list}",
+                description=f"Configure which services are activated.\n\n**Activated services:**\n{service_status_list}",
                 color=discord.Color.blurple())
             view = ServiceSettingsView(self.interaction)
             await interaction.response.send_message(embed=embed, view=view)
@@ -296,22 +297,20 @@ class ServicesDropdown(ui.Select):
     def __init__(self, interaction, parent_view):
         self.interaction = interaction
         self.parent_view = parent_view
-        global bot_settings  # Ensure we use the global settings dictionary
         enabled_services = bot_settings.get("enabled_services", [])
         options = [
             discord.SelectOption(
                 label=service,
-                description=f"Enable or disable {service} links",
+                description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
             for service in ["Twitter", "TikTok", "Instagram", "Reddit"]
         ]
-        super().__init__(placeholder="Select services to enable...",
+        super().__init__(placeholder="Select services to activate...",
                          min_values=1,
                          max_values=len(options),
                          options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global bot_settings  # Ensure we use the global settings dictionary
         selected_services = self.values
         bot_settings["enabled_services"] = selected_services
         await update_setting(client.db, "enabled_services", selected_services)
@@ -329,7 +328,7 @@ class ServicesDropdown(ui.Select):
         ])
         embed = discord.Embed(
             title="Service Settings",
-            description=f"Configure which services are enabled.\n\n**Enabled services:**\n{service_status_list}",
+            description=f"Configure which services are activated.\n\n**Activated services:**\n{service_status_list}",
             color=discord.Color.blurple())
         
         try:
@@ -363,13 +362,13 @@ class ServiceSettingsView(ui.View):
 # Toggle button for FixEmbed
 class FixEmbedSettingsView(ui.View):
 
-    def __init__(self, enabled, interaction, timeout=180):
+    def __init__(self, activated, interaction, timeout=180):
         super().__init__(timeout=timeout)
-        self.enabled = enabled
+        self.activated = activated
         self.interaction = interaction
         self.toggle_button = discord.ui.Button(
-            label="Enabled" if enabled else "Disabled",
-            style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red)
+            label="Activated" if activated else "Deactivated",
+            style=discord.ButtonStyle.green if activated else discord.ButtonStyle.red)
         self.toggle_button.callback = self.toggle
         self.add_item(self.toggle_button)
         self.add_item(SettingsDropdown(interaction))
@@ -378,39 +377,29 @@ class FixEmbedSettingsView(ui.View):
         # Acknowledge the interaction
         await interaction.response.defer()
         
-        self.enabled = not self.enabled
+        self.activated = not self.activated
         for ch in self.interaction.guild.text_channels:
-            channel_states[ch.id] = self.enabled
-            await update_channel_state(client.db, ch.id, self.enabled)
-            await update_setting(client.db, str(ch.id), self.enabled)
-        self.toggle_button.label = "Enabled" if self.enabled else "Disabled"
-        self.toggle_button.style = discord.ButtonStyle.green if self.enabled else discord.ButtonStyle.red
+            channel_states[ch.id] = self.activated
+            await update_channel_state(client.db, ch.id, self.activated)
+            await update_setting(client.db, str(ch.id), self.activated)
+        self.toggle_button.label = "Activated" if self.activated else "Deactivated"
+        self.toggle_button.style = discord.ButtonStyle.green if self.activated else discord.ButtonStyle.red
 
         # Update the embed message
         embed = discord.Embed(
             title="FixEmbed Settings",
-            description="**Enable/Disable FixEmbed:**\n"
-            f"{'🟢 FixEmbed enabled' if self.enabled else '🔴 FixEmbed disabled'}\n\n"
+            description="**Activate/Deactivate FixEmbed:**\n"
+            f"{'🟢 FixEmbed activated' if self.activated else '🔴 FixEmbed deactivated'}\n\n"
             "**NOTE:** May take a few seconds to apply changes to all channels.",
-            color=discord.Color.green() if self.enabled else discord.Color.red())
+            color=discord.Color.green() if self.activated else discord.Color.red())
 
         try:
-            await interaction.response.edit_message(embed=embed, view=self)
+            await interaction.edit_original_response(embed=embed, view=self)
         except discord.errors.NotFound:
-            # Interaction has expired, use edit_original_response instead
-            try:
-                await interaction.edit_original_response(embed=embed, view=self)
-            except discord.errors.NotFound:
-                logging.error("Failed to edit original response: Unknown Webhook")
-        except discord.errors.InteractionResponded:
-            # Interaction already responded, use edit_original_response
-            try:
-                await interaction.edit_original_response(embed=embed, view=self)
-            except discord.errors.NotFound:
-                logging.error("Failed to edit original response: Unknown Webhook")
+            logging.error("Failed to edit original response: Unknown Webhook")
 
     async def on_timeout(self):
-        # Disable all components when the view times out
+        # Deactivate all components when the view times out
         for item in self.children:
             item.disabled = True
 
@@ -428,8 +417,8 @@ class FixEmbedSettingsView(ui.View):
 # Settings command
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
-    # Determine if FixEmbed is enabled or disabled in the interaction's guild
-    enabled = all(channel_states.get(ch.id, True) for ch in interaction.guild.text_channels)
+    # Determine if FixEmbed is activated or deactivated in the interaction's guild
+    activated = all(channel_states.get(ch.id, True) for ch in interaction.guild.text_channels)
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
@@ -443,7 +432,7 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # Check if the feature is enabled for the channel
+    # Check if the feature is activated for the channel
     if channel_states.get(message.channel.id, True):
         try:
             link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+)"
