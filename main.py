@@ -161,12 +161,20 @@ async def about(interaction: discord.Interaction):
         description="This bot fixes the lack of embed support in Discord.",
         color=discord.Color(0x7289DA))
     embed.add_field(
-        name="Links",
+        name="🎉 Quick Links",
         value=
-        ("- [Invite link](https://discord.com/api/oauth2/authorize?client_id=1173820242305224764&permissions=274877934592&scope=bot+applications.commands)\n"
-         "- [Tog.gg page](https://top.gg/bot/1173820242305224764) (Please vote for FixEmbed!)\n"
-         "- [Source code](https://github.com/kenhendricks00/FixEmbedBot) (Please leave a star on GitHub!)\n"
-         "- [Support server](https://discord.gg/QFxTAmtZdn)"),
+        ("- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
+         "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
+         "- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbedBot)\n"
+         "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)"),
+        inline=False)
+    embed.add_field(
+        name="📜 Credits",
+        value=
+        ("- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
+         "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
+         "- [fxreddit](https://github.com/MinnDevelopment/fxreddit), created by MinnDevelopment\n"
+         "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx"),
         inline=False)
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
