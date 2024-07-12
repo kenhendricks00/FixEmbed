@@ -11,7 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -435,7 +435,7 @@ async def on_message(message):
     # Check if the feature is activated for the channel
     if channel_states.get(message.channel.id, True):
         try:
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+)"
             matches = re.findall(link_pattern, message.content)
 
             # Flag to check if a valid link is found
@@ -486,10 +486,10 @@ async def on_message(message):
                         0] if user_match else "Unknown"
 
                 # Check and process Reddit links
-                elif 'reddit.com' in original_link:
+                elif 'reddit.com' in original_link or 'old.reddit.com' in original_link:
                     service = "Reddit"
                     community_match = re.findall(
-                        r"reddit\.com/r/(\w+)/comments", original_link)
+                        r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)/comments", original_link)
                     user_or_community = community_match[
                         0] if community_match else "Unknown"
 
@@ -500,8 +500,9 @@ async def on_message(message):
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
                                                  .replace("tiktok.com", "vxtiktok.com")\
-                                                 .replace("instagram.com", "ddinstagram.com")\
-                                                 .replace("reddit.com", "rxddit.com")
+                                                 .replace("instagram.com", "g.ddinstagram.com")\
+                                                 .replace("reddit.com", "rxddit.com")\
+                                                 .replace("old.reddit.com", "rxddit.com")
                     valid_link_found = True
 
                 # Send the formatted message and delete the original message if a valid link is found
@@ -515,6 +516,7 @@ async def on_message(message):
 
     # This line is necessary to process commands
     await client.process_commands(message)
+
 
 # Loading the bot token from .env
 load_dotenv()
