@@ -11,7 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
-VERSION = "1.0.9"
+VERSION = "1.1.0"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -23,9 +23,7 @@ client = commands.AutoShardedBot(shard_count=10, command_prefix='/', intents=int
 
 # In-memory storage for channel states and settings
 channel_states = {}
-bot_settings = {
-    "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit"]
-}
+bot_settings = {}
 
 def create_footer(embed, client):
     embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
@@ -34,7 +32,7 @@ async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
     await db.commit()
-    await db.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
+    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT)''')
     await db.commit()
     return db
 
@@ -50,13 +48,10 @@ async def load_channel_states(db):
                 channel_states[channel.id] = True
 
 async def load_settings(db):
-    async with db.execute('SELECT key, value FROM settings') as cursor:
+    async with db.execute('SELECT guild_id, enabled_services FROM guild_settings') as cursor:
         async for row in cursor:
-            key, value = row
-            if key == "enabled_services":
-                bot_settings[key] = eval(value)
-            else:
-                channel_states[int(key)] = value == 'True'
+            guild_id, enabled_services = row
+            bot_settings[guild_id] = eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit"]
 
 async def update_channel_state(db, channel_id, state):
     retries = 5
@@ -71,11 +66,11 @@ async def update_channel_state(db, channel_id, state):
             else:
                 raise
 
-async def update_setting(db, key, value):
+async def update_setting(db, guild_id, enabled_services):
     retries = 5
     for i in range(retries):
         try:
-            await db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, repr(value)))
+            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services) VALUES (?, ?)', (guild_id, repr(enabled_services)))
             await db.commit()
             break
         except sqlite3.OperationalError as e:
@@ -119,11 +114,10 @@ async def change_status():
     name='activate',
     description="Activate link processing in this channel or another channel")
 @app_commands.describe(
-    channel=
-    "The channel to activate link processing in (leave blank for current channel)"
+    channel="The channel to activate link processing in (leave blank for current channel)"
 )
 async def activate(interaction: discord.Interaction,
-                 channel: Optional[discord.TextChannel] = None):
+                   channel: Optional[discord.TextChannel] = None):
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = True
@@ -139,11 +133,10 @@ async def activate(interaction: discord.Interaction,
     name='deactivate',
     description="Deactivate link processing in this channel or another channel")
 @app_commands.describe(
-    channel=
-    "The channel to deactivate link processing in (leave blank for current channel)"
+    channel="The channel to deactivate link processing in (leave blank for current channel)"
 )
 async def deactivate(interaction: discord.Interaction,
-                  channel: Optional[discord.TextChannel] = None):
+                     channel: Optional[discord.TextChannel] = None):
     if not channel:
         channel = interaction.channel
     channel_states[channel.id] = False
@@ -165,19 +158,21 @@ async def about(interaction: discord.Interaction):
         color=discord.Color(0x7289DA))
     embed.add_field(
         name="🎉 Quick Links",
-        value=
-        ("- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
-         "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
-         "- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbedBot)\n"
-         "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)"),
+        value=(
+            "- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
+            "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
+            "- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbedBot)\n"
+            "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)"
+        ),
         inline=False)
     embed.add_field(
         name="📜 Credits",
-        value=
-        ("- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
-         "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
-         "- [fxreddit](https://github.com/MinnDevelopment/fxreddit), created by MinnDevelopment\n"
-         "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx"),
+        value=(
+            "- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
+            "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
+            "- [fxreddit](https://github.com/MinnDevelopment/fxreddit), created by MinnDevelopment\n"
+            "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx"
+        ),
         inline=False)
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
@@ -232,13 +227,14 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, ["Twitter", "TikTok", "Instagram", "Reddit"])))
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
 
-    def __init__(self, interaction):
+    def __init__(self, interaction, enabled_services):
         self.interaction = interaction
+        self.enabled_services = enabled_services
         activated = all(
             channel_states.get(ch.id, True)
             for ch in interaction.guild.text_channels)
@@ -275,10 +271,10 @@ class SettingsDropdown(ui.Select):
                 "**NOTE:** May take a few seconds to apply changes to all channels.",
                 color=discord.Color.green()
                 if activated else discord.Color.red())
-            view = FixEmbedSettingsView(activated, self.interaction)
+            view = FixEmbedSettingsView(activated, self.interaction, self.enabled_services)
             await interaction.response.send_message(embed=embed, view=view)
         elif self.values[0] == "Service Settings":
-            enabled_services = bot_settings.get("enabled_services", [])
+            enabled_services = self.enabled_services
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
                 for service in ["Twitter", "TikTok", "Instagram", "Reddit"]
@@ -287,17 +283,17 @@ class SettingsDropdown(ui.Select):
                 title="Service Settings",
                 description=f"Configure which services are activated.\n\n**Activated services:**\n{service_status_list}",
                 color=discord.Color.blurple())
-            view = ServiceSettingsView(self.interaction)
+            view = ServiceSettingsView(self.interaction, enabled_services)
             await interaction.response.send_message(embed=embed, view=view)
         elif self.values[0] == "Debug":
             await debug_info(interaction, interaction.channel)
 
 class ServicesDropdown(ui.Select):
 
-    def __init__(self, interaction, parent_view):
+    def __init__(self, interaction, parent_view, enabled_services):
         self.interaction = interaction
         self.parent_view = parent_view
-        enabled_services = bot_settings.get("enabled_services", [])
+        self.enabled_services = enabled_services
         options = [
             discord.SelectOption(
                 label=service,
@@ -312,18 +308,18 @@ class ServicesDropdown(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         selected_services = self.values
-        bot_settings["enabled_services"] = selected_services
-        await update_setting(client.db, "enabled_services", selected_services)
+        guild_id = self.interaction.guild.id
+        bot_settings[guild_id] = selected_services
+        await update_setting(client.db, guild_id, selected_services)
 
         # Refresh the dropdown menu
         self.parent_view.clear_items()
         self.parent_view.add_item(
-            ServicesDropdown(self.interaction, self.parent_view))
-        self.parent_view.add_item(SettingsDropdown(self.interaction))
+            ServicesDropdown(self.interaction, self.parent_view, selected_services))
+        self.parent_view.add_item(SettingsDropdown(self.interaction, selected_services))
 
-        enabled_services = bot_settings.get("enabled_services", [])
         service_status_list = "\n".join([
-            f"{'🟢' if service in enabled_services else '🔴'} {service}"
+            f"{'🟢' if service in selected_services else '🔴'} {service}"
             for service in ["Twitter", "TikTok", "Instagram", "Reddit"]
         ])
         embed = discord.Embed(
@@ -348,30 +344,31 @@ class ServicesDropdown(ui.Select):
 
 class SettingsView(ui.View):
 
-    def __init__(self, interaction):
+    def __init__(self, interaction, enabled_services):
         super().__init__()
-        self.add_item(SettingsDropdown(interaction))
+        self.add_item(SettingsDropdown(interaction, enabled_services))
 
 class ServiceSettingsView(ui.View):
 
-    def __init__(self, interaction):
+    def __init__(self, interaction, enabled_services):
         super().__init__()
-        self.add_item(ServicesDropdown(interaction, self))
-        self.add_item(SettingsDropdown(interaction))
+        self.add_item(ServicesDropdown(interaction, self, enabled_services))
+        self.add_item(SettingsDropdown(interaction, enabled_services))
 
 # Toggle button for FixEmbed
 class FixEmbedSettingsView(ui.View):
 
-    def __init__(self, activated, interaction, timeout=180):
+    def __init__(self, activated, interaction, enabled_services, timeout=180):
         super().__init__(timeout=timeout)
         self.activated = activated
         self.interaction = interaction
+        self.enabled_services = enabled_services
         self.toggle_button = discord.ui.Button(
             label="Activated" if activated else "Deactivated",
             style=discord.ButtonStyle.green if activated else discord.ButtonStyle.red)
         self.toggle_button.callback = self.toggle
         self.add_item(self.toggle_button)
-        self.add_item(SettingsDropdown(interaction))
+        self.add_item(SettingsDropdown(interaction, enabled_services))
 
     async def toggle(self, interaction: discord.Interaction):
         # Acknowledge the interaction
@@ -418,13 +415,14 @@ class FixEmbedSettingsView(ui.View):
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     # Determine if FixEmbed is activated or deactivated in the interaction's guild
-    activated = all(channel_states.get(ch.id, True) for ch in interaction.guild.text_channels)
+    guild_id = interaction.guild.id
+    enabled_services = bot_settings.get(guild_id, ["Twitter", "TikTok", "Instagram", "Reddit"])
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
                           color=discord.Color.blurple())
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, enabled_services))
 
 @client.event
 async def on_message(message):
@@ -433,6 +431,9 @@ async def on_message(message):
         return
 
     # Check if the feature is activated for the channel
+    guild_id = message.guild.id
+    enabled_services = bot_settings.get(guild_id, ["Twitter", "TikTok", "Instagram", "Reddit"])
+    
     if channel_states.get(message.channel.id, True):
         try:
             link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+)"
@@ -494,8 +495,7 @@ async def on_message(message):
                         0] if community_match else "Unknown"
 
                 # Modify the link if necessary
-                if service and user_or_community and service in bot_settings[
-                        "enabled_services"]:
+                if service and user_or_community and service in enabled_services:
                     display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
