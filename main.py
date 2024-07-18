@@ -11,7 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -519,7 +519,7 @@ async def on_message(message):
     
     if channel_states.get(message.channel.id, True):
         try:
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+)"
             matches = re.findall(link_pattern, message.content)
 
             # Flag to check if a valid link is found
@@ -561,10 +561,19 @@ async def on_message(message):
                         modified_link = f"vxtiktok.com/t/{user_or_community}"
                         display_text = f"TikTok • {user_or_community}"
 
+                # Check and process TikTok short links (vm.tiktok.com/<code>)
+                elif 'vm.tiktok.com' in original_link:
+                    service = "TikTok"
+                    tiktok_match = re.search(r"vm\.tiktok\.com/(\w+)", original_link)
+                    if tiktok_match:
+                        user_or_community = tiktok_match.group(1)
+                        modified_link = f"vxtiktok.com/{user_or_community}"
+                        display_text = f"TikTok • {user_or_community}"
+
                 # Check and process Instagram links
                 elif 'instagram.com' in original_link:
                     service = "Instagram"
-                    user_match = re.findall(r"instagram\.com/(?:p|reel)/(\w+)",
+                    user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)",
                                             original_link)
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
