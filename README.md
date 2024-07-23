@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/static/v1?label=Top.gg&message=Vote&color=red" alt="Top.gg">
   </a>
   <a href="https://github.com/kenhendricks00/FixEmbed/commits/main/">
-    <img src="https://img.shields.io/static/v1?label=Last%20Commit&message=Today&color=green" alt="Last Commit">
+    <img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed?label=Last%20Commit&color=green" alt="Last Commit">
   </a>
 </div>
 <br>
