@@ -11,7 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -62,8 +62,9 @@ async def load_settings(db):
     async with db.execute('SELECT guild_id, enabled_services, mention_users FROM guild_settings') as cursor:
         async for row in cursor:
             guild_id, enabled_services, mention_users = row
+            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]          
             bot_settings[guild_id] = {
-                "enabled_services": eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"],
+                "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True
             }
 
@@ -113,7 +114,7 @@ async def on_ready():
 
 # Define the statuses to alternate
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links", "for Pixiv links"
+    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links", "for Threads links", "for Pixiv links"
 ])
 
 # Task to change the bot's status
@@ -186,6 +187,7 @@ async def about(interaction: discord.Interaction):
             "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
             "- [fxreddit](https://github.com/MinnDevelopment/fxreddit), created by MinnDevelopment\n"
             "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx\n"
+            "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao"
         ),
         inline=False)
@@ -242,7 +244,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit"], "mention_users": True})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})))
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
@@ -303,10 +305,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"])
+            enabled_services = self.settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"]
+                for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
             ])
             embed = discord.Embed(
                 title="Service Settings",
@@ -323,13 +325,13 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"])
+        enabled_services = settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"]
+            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -350,7 +352,7 @@ class ServicesDropdown(ui.Select):
 
         service_status_list = "\n".join([
             f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"]
+            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -497,7 +499,7 @@ class MentionUsersSettingsView(ui.View):
 async def settings(interaction: discord.Interaction):
     # Determine if FixEmbed is activated or deactivated in the interaction's guild
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"], "mention_users": True})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
@@ -513,13 +515,13 @@ async def on_message(message):
 
     # Check if the feature is activated for the channel
     guild_id = message.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"], "mention_users": True})
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"])
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})
+    enabled_services = guild_settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
     mention_users = guild_settings.get("mention_users", True)
     
     if channel_states.get(message.channel.id, True):
         try:
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Flag to check if a valid link is found
@@ -593,15 +595,27 @@ async def on_message(message):
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
 
+                # Check and process Threads links
+                elif 'threads.net' in original_link:
+                    service = "Threads"
+                    user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
+                    if len(user_match) > 0:
+                        user_or_community, post_id = user_match[0]
+                        modified_link = f"fixthreads.net/@{user_or_community}/post/{post_id}"
+                        display_text = f"Threads • @{user_or_community}"
+
+
                 # Modify the link if necessary
                 if service and user_or_community and service in enabled_services:
-                    display_text = f"{service} • {user_or_community}"
+                    if not display_text:
+                        display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
                                                  .replace("tiktok.com", "vxtiktok.com")\
                                                  .replace("instagram.com", "g.ddinstagram.com")\
                                                  .replace("reddit.com", "rxddit.com")\
                                                  .replace("old.reddit.com", "rxddit.com")\
+                                                 .replace("threads.net", "fixthreads.net")\
                                                  .replace("pixiv.net", "phixiv.net")
                     valid_link_found = True
 
@@ -627,7 +641,7 @@ async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Pixiv"],
+            "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"],
             "mention_users": True
         }
         await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"])
