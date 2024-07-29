@@ -11,6 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
+# Changing this
 VERSION = "1.1.4"
 
 # Initialize logging
