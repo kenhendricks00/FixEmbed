@@ -11,7 +11,7 @@ import itertools
 import aiosqlite
 
 # Version number
-VERSION = "1.1.3"
+VERSION = "1.1.4"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -521,7 +521,7 @@ async def on_message(message):
     
     if channel_states.get(message.channel.id, True):
         try:
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Flag to check if a valid link is found
@@ -584,7 +584,7 @@ async def on_message(message):
                 elif 'reddit.com' in original_link or 'old.reddit.com' in original_link:
                     service = "Reddit"
                     community_match = re.findall(
-                        r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)/comments", original_link)
+                        r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)", original_link)
                     user_or_community = community_match[
                         0] if community_match else "Unknown"
                     
