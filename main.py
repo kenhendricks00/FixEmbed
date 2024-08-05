@@ -306,7 +306,7 @@ class SettingsDropdown(ui.Select):
             delete_original = self.settings.get("delete_original", True)
             embed = discord.Embed(
                 title="Delivery Method Settings",
-                description=f"Original message deletion is currently {'enabled' if delete_original else 'disabled'}.",
+                description=f"Original message deletion is currently {'activated' if delete_original else 'deactivated'}.",
                 color=discord.Color.green() if delete_original else discord.Color.red())
             view = DeliveryMethodSettingsView(delete_original, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view)
@@ -530,7 +530,7 @@ class DeliveryMethodSettingsView(ui.View):
         self.interaction = interaction
         self.settings = settings
         self.toggle_button = discord.ui.Button(
-            label="Enabled" if delete_original else "Disabled",
+            label="Activated" if delete_original else "Deactivated",
             style=discord.ButtonStyle.green if delete_original else discord.ButtonStyle.red)
         self.toggle_button.callback = self.toggle
         self.add_item(self.toggle_button)
@@ -546,13 +546,13 @@ class DeliveryMethodSettingsView(ui.View):
         await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.settings["mention_users"], self.delete_original)
         
         # Update the button label and style
-        self.toggle_button.label = "Enabled" if self.delete_original else "Disabled"
+        self.toggle_button.label = "Activated" if self.delete_original else "Deactivated"
         self.toggle_button.style = discord.ButtonStyle.green if self.delete_original else discord.ButtonStyle.red
 
         # Update the embed message
         embed = discord.Embed(
             title="Delivery Method Setting",
-            description=f"Original message deletion is now {'enabled' if self.delete_original else 'disabled'}.",
+            description=f"Original message deletion is now {'activated' if self.delete_original else 'deactivated'}.",
             color=discord.Color.green() if self.delete_original else discord.Color.red())
 
         try:
