@@ -8,10 +8,11 @@ import re
 import os
 from dotenv import load_dotenv
 import itertools
-import aiosqlite
+import aiosqlite  # Import aiosqlite for asynchronous database operations
+import sqlite3  # Import sqlite3 for handling sqlite exceptions
 
 # Version number
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -32,14 +33,23 @@ async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
     await db.commit()
-    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN)''')
+    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN, delete_original BOOLEAN DEFAULT TRUE)''')
     await db.commit()
 
-    # Add mention_users column if it doesn't exist
+    # Ensure columns exist
     try:
         await db.execute('ALTER TABLE guild_settings ADD COLUMN mention_users BOOLEAN DEFAULT TRUE')
         await db.commit()
-    except Exception as e:
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e):
+            pass
+        else:
+            raise
+
+    try:
+        await db.execute('ALTER TABLE guild_settings ADD COLUMN delete_original BOOLEAN DEFAULT TRUE')
+        await db.commit()
+    except sqlite3.OperationalError as e:
         if 'duplicate column name' in str(e):
             pass
         else:
@@ -59,13 +69,14 @@ async def load_channel_states(db):
                 channel_states[channel.id] = True
 
 async def load_settings(db):
-    async with db.execute('SELECT guild_id, enabled_services, mention_users FROM guild_settings') as cursor:
+    async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original FROM guild_settings') as cursor:
         async for row in cursor:
-            guild_id, enabled_services, mention_users = row
-            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]          
+            guild_id, enabled_services, mention_users, delete_original = row
+            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
-                "mention_users": mention_users if mention_users is not None else True
+                "mention_users": mention_users if mention_users is not None else True,
+                "delete_original": delete_original if delete_original is not None else True
             }
 
 async def update_channel_state(db, channel_id, state):
@@ -81,11 +92,11 @@ async def update_channel_state(db, channel_id, state):
             else:
                 raise
 
-async def update_setting(db, guild_id, enabled_services, mention_users):
+async def update_setting(db, guild_id, enabled_services, mention_users, delete_original):
     retries = 5
     for i in range(retries):
         try:
-            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users) VALUES (?, ?, ?)', (guild_id, repr(enabled_services), mention_users))
+            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users, delete_original) VALUES (?, ?, ?, ?)', (guild_id, repr(enabled_services), mention_users, delete_original))
             await db.commit()
             break
         except sqlite3.OperationalError as e:
@@ -114,7 +125,7 @@ async def on_ready():
 
 # Define the statuses to alternate
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links", "for Threads links", "for Pixiv links"
+    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links"
 ])
 
 # Task to change the bot's status
@@ -188,7 +199,8 @@ async def about(interaction: discord.Interaction):
             "- [fxreddit](https://github.com/MinnDevelopment/fxreddit), created by MinnDevelopment\n"
             "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx\n"
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
-            "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao"
+            "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
+            "- [VixBluesky](https://github.com/Rapougnac/VixBluesky), created by Rapougnac"
         ),
         inline=False)
     create_footer(embed, client)
@@ -244,7 +256,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})))
 
 # Dropdown menu for settings
 class SettingsDropdown(ui.Select):
@@ -256,6 +268,8 @@ class SettingsDropdown(ui.Select):
             channel_states.get(ch.id, True)
             for ch in interaction.guild.text_channels)
         mention_users = settings.get("mention_users", True)
+        delete_original = settings.get("delete_original", True)
+        
         options = [
             discord.SelectOption(
                 label="FixEmbed",
@@ -266,6 +280,11 @@ class SettingsDropdown(ui.Select):
                 label="Mention Users",
                 description="Toggle mentioning users in messages",
                 emoji="🔔" if mention_users else "🔕"  # Emoji based on mention setting
+            ),
+            discord.SelectOption(
+                label="Delivery Method",
+                description="Toggle original message deletion",
+                emoji="📬" if delete_original else "📪"  # Emoji based on the deletion setting
             ),
             discord.SelectOption(
                 label="Service Settings",
@@ -283,7 +302,15 @@ class SettingsDropdown(ui.Select):
                          options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "FixEmbed":
+        if self.values[0] == "Delivery Method":
+            delete_original = self.settings.get("delete_original", True)
+            embed = discord.Embed(
+                title="Delivery Method Settings",
+                description=f"Original message deletion is currently {'enabled' if delete_original else 'disabled'}.",
+                color=discord.Color.green() if delete_original else discord.Color.red())
+            view = DeliveryMethodSettingsView(delete_original, self.interaction, self.settings)
+            await interaction.response.send_message(embed=embed, view=view)
+        elif self.values[0] == "FixEmbed":
             activated = all(
                 channel_states.get(ch.id, True)
                 for ch in interaction.guild.text_channels)
@@ -305,10 +332,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
+            enabled_services = self.settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
+                for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
             ])
             embed = discord.Embed(
                 title="Service Settings",
@@ -325,13 +352,13 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
+        enabled_services = settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
+            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -342,7 +369,7 @@ class ServicesDropdown(ui.Select):
         selected_services = self.values
         guild_id = self.interaction.guild.id
         self.settings["enabled_services"] = selected_services
-        await update_setting(client.db, guild_id, selected_services, self.settings["mention_users"])
+        await update_setting(client.db, guild_id, selected_services, self.settings["mention_users"], self.settings["delete_original"])
 
         # Refresh the dropdown menu
         self.parent_view.clear_items()
@@ -352,7 +379,7 @@ class ServicesDropdown(ui.Select):
 
         service_status_list = "\n".join([
             f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"]
+            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -463,7 +490,7 @@ class MentionUsersSettingsView(ui.View):
         
         self.mention_users = not self.mention_users
         self.settings["mention_users"] = self.mention_users
-        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.mention_users)
+        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.mention_users, self.settings["delete_original"])
         self.toggle_button.label = "Activated" if self.mention_users else "Deactivated"
         self.toggle_button.style = discord.ButtonStyle.green if self.mention_users else discord.ButtonStyle.red
 
@@ -494,12 +521,67 @@ class MentionUsersSettingsView(ui.View):
         except discord.errors.NotFound:
             logging.error("Failed to edit original response on timeout: Unknown Webhook")
 
+# Toggle button for Delivery Method
+class DeliveryMethodSettingsView(ui.View):
+
+    def __init__(self, delete_original, interaction, settings, timeout=180):
+        super().__init__(timeout=timeout)
+        self.delete_original = delete_original
+        self.interaction = interaction
+        self.settings = settings
+        self.toggle_button = discord.ui.Button(
+            label="Enabled" if delete_original else "Disabled",
+            style=discord.ButtonStyle.green if delete_original else discord.ButtonStyle.red)
+        self.toggle_button.callback = self.toggle
+        self.add_item(self.toggle_button)
+        self.add_item(SettingsDropdown(interaction, settings))
+
+    async def toggle(self, interaction: discord.Interaction):
+        # Acknowledge the interaction
+        await interaction.response.defer()
+
+        # Toggle the delete_original setting
+        self.delete_original = not self.delete_original
+        self.settings["delete_original"] = self.delete_original
+        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.settings["mention_users"], self.delete_original)
+        
+        # Update the button label and style
+        self.toggle_button.label = "Enabled" if self.delete_original else "Disabled"
+        self.toggle_button.style = discord.ButtonStyle.green if self.delete_original else discord.ButtonStyle.red
+
+        # Update the embed message
+        embed = discord.Embed(
+            title="Delivery Method Setting",
+            description=f"Original message deletion is now {'enabled' if self.delete_original else 'disabled'}.",
+            color=discord.Color.green() if self.delete_original else discord.Color.red())
+
+        try:
+            await interaction.edit_original_response(embed=embed, view=self)
+        except discord.errors.NotFound:
+            logging.error("Failed to edit original response: Unknown Webhook")
+
+    async def on_timeout(self):
+        # Deactivate all components when the view times out
+        for item in self.children:
+            item.disabled = True
+
+        # Update the message to indicate that the view is no longer interactive
+        embed = discord.Embed(
+            title="Delivery Method Setting",
+            description="This view has timed out and is no longer interactive.",
+            color=discord.Color.red())
+        
+        try:
+            await self.interaction.edit_original_response(embed=embed, view=self)
+        except discord.errors.NotFound:
+            logging.error("Failed to edit original response on timeout: Unknown Webhook")
+
 # Settings command
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     # Determine if FixEmbed is activated or deactivated in the interaction's guild
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
@@ -515,13 +597,18 @@ async def on_message(message):
 
     # Check if the feature is activated for the channel
     guild_id = message.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"], "mention_users": True})
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"])
+    guild_settings = bot_settings.get(guild_id, {
+        "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+        "mention_users": True,
+        "delete_original": True
+    })
+    enabled_services = guild_settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
     mention_users = guild_settings.get("mention_users", True)
+    delete_original = guild_settings.get("delete_original", True)
     
     if channel_states.get(message.channel.id, True):
         try:
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Flag to check if a valid link is found
@@ -604,6 +691,14 @@ async def on_message(message):
                         modified_link = f"fixthreads.net/@{user_or_community}/post/{post_id}"
                         display_text = f"Threads • @{user_or_community}"
 
+                # Check and process Bluesky links
+                elif 'bsky.app' in original_link:
+                    service = "Bluesky"
+                    bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
+                    if len(bsky_match) > 0:
+                        user_or_community, post_id = bsky_match[0]
+                        modified_link = f"bskyx.app/profile/{user_or_community}/post/{post_id}"
+                        display_text = f"Bluesky • {user_or_community}"
 
                 # Modify the link if necessary
                 if service and user_or_community and service in enabled_services:
@@ -616,18 +711,26 @@ async def on_message(message):
                                                  .replace("reddit.com", "rxddit.com")\
                                                  .replace("old.reddit.com", "rxddit.com")\
                                                  .replace("threads.net", "fixthreads.net")\
-                                                 .replace("pixiv.net", "phixiv.net")
+                                                 .replace("pixiv.net", "phixiv.net")\
+                                                 .replace("bsky.app", "bskyx.app")
                     valid_link_found = True
 
                 # Send the formatted message and delete the original message if a valid link is found
                 if valid_link_found:
-                    formatted_message = f"[{display_text}](https://{modified_link})"
-                    if mention_users:
-                        formatted_message += f" | Sent by {message.author.mention}"
+                    if delete_original:
+                        formatted_message = f"[{display_text}](https://{modified_link})"
+                        if mention_users:
+                            formatted_message += f" | Sent by {message.author.mention}"
+                        else:
+                            formatted_message += f" | Sent by {message.author.display_name}"
+                        await message.channel.send(formatted_message)
+                        await message.delete()
                     else:
-                        formatted_message += f" | Sent by {message.author.display_name}"
-                    await message.channel.send(formatted_message)
-                    await message.delete()
+                        # Remove the embed from the original message
+                        await message.edit(suppress=True)
+                        # Send a simple reply without the "Sent by" part
+                        formatted_message = f"[{display_text}](https://{modified_link})"
+                        await message.channel.send(formatted_message)
 
         except Exception as e:
             logging.error(f"Error in on_message: {e}")
@@ -635,16 +738,18 @@ async def on_message(message):
     # This line is necessary to process commands
     await client.process_commands(message)
 
+
 # Ensure the bot settings are initialized when a new guild joins
 @client.event
 async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv"],
-            "mention_users": True
+            "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+            "mention_users": True,
+            "delete_original": True
         }
-        await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"])
+        await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"], bot_settings[guild_id]["delete_original"])
 
 # Loading the bot token from .env
 load_dotenv()
