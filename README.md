@@ -67,7 +67,7 @@ If you need support or have any questions, you can join the [support server](htt
 # 📜 Credits
 - [FxTwitter](https://github.com/FixTweet/FxTwitter), the service used to fix Twitter embeds, created by FixTweet
 - [InstaFix](https://github.com/Wikidepia/InstaFix), the service used to fix Instagram embeds, created by Wikidepia
-- [fxreddit](https://github.com/MinnDevelopment/fxreddit), the service used to fix Reddit embeds, created by MinnDevelopment
+- [vxReddit](https://github.com/dylanpdx/vxReddit), the service used to fix Reddit embeds, created by dylanpdx
 - [vxtiktok](https://github.com/dylanpdx/vxtiktok), the service used to fix TikTok embeds, created by dylanpdx
 - [fixthreads](https://github.com/milanmdev/fixthreads), the service used to fix Threads embeds, created by milanmdev
 - [phixiv](https://github.com/thelaao/phixiv), the service used to fix Pixiv embeds, created by thelaao
