@@ -588,12 +588,20 @@ async def on_message(message):
     
     if channel_states.get(message.channel.id, True):
         try:
+            # Standard link pattern to capture all the relevant links
             link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
+
+            # Regex pattern to detect links surrounded by < >
+            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)>"
 
             valid_link_found = False
 
             for original_link in matches:
+                # Skip links if they are surrounded by < >
+                if re.search(surrounded_link_pattern, message.content):
+                    continue  # Skip processing this link
+
                 display_text = ""
                 modified_link = original_link
                 service = ""
