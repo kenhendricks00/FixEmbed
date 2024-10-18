@@ -3,14 +3,11 @@
 </p>
 <div align="center">
   <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764">
-    <img src="https://img.shields.io/static/v1?label=Invite&message=Link&color=blue" alt="Invite Link">
-  </a>
+    <img src="https://img.shields.io/static/v1?label=Invite&message=Link&color=blue" alt="Invite Link"></a>
   <a href="https://top.gg/bot/1173820242305224764">
-    <img src="https://img.shields.io/static/v1?label=Top.gg&message=Vote&color=red" alt="Top.gg">
-  </a>
+    <img src="https://img.shields.io/static/v1?label=Top.gg&message=Vote&color=red" alt="Top.gg"></a>
   <a href="https://github.com/kenhendricks00/FixEmbed/commits/main/">
-    <img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed?label=Last%20Commit&color=green" alt="Last Commit">
-  </a>
+    <img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed?label=Last%20Commit&color=green" alt="Last Commit"></a>
 </div>
 <br>
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
