@@ -14,7 +14,7 @@ import time
 from collections import deque
 
 # Version number
-VERSION = "1.1.6"
+VERSION = "1.1.7"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 # Bot configuration
 intents = discord.Intents.default()
 intents.message_content = True
-client = commands.AutoShardedBot(shard_count=10, command_prefix='/', intents=intents)
+client = commands.Bot(command_prefix='/', intents=intents, shard_count=10)
 
 # In-memory storage for channel states and settings
 channel_states = {}
@@ -87,7 +87,7 @@ async def load_settings(db):
     async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original FROM guild_settings') as cursor:
         async for row in cursor:
             guild_id, enabled_services, mention_users, delete_original = row
-            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]          
+            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
@@ -138,7 +138,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for TikTok links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links"
 ])
 
 @tasks.loop(seconds=60)
@@ -208,7 +208,6 @@ async def about(interaction: discord.Interaction):
             "- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
             "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
             "- [vxReddit](https://github.com/dylanpdx/vxReddit), created by dylanpdx\n"
-            "- [vxtiktok](https://github.com/dylanpdx/vxtiktok), created by dylanpdx\n"
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
             "- [VixBluesky](https://github.com/Rapougnac/VixBluesky), created by Rapougnac"
@@ -259,7 +258,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})))
 
 class SettingsDropdown(ui.Select):
 
@@ -334,10 +333,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
+            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
             ])
             embed = discord.Embed(
                 title="Service Settings",
@@ -355,13 +354,13 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
+        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -381,7 +380,7 @@ class ServicesDropdown(ui.Select):
 
         service_status_list = "\n".join([
             f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -563,7 +562,7 @@ class DeliveryMethodSettingsView(ui.View):
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
@@ -578,22 +577,22 @@ async def on_message(message):
 
     guild_id = message.guild.id
     guild_settings = bot_settings.get(guild_id, {
-        "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
         "mention_users": True,
         "delete_original": True
     })
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
+    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
     mention_users = guild_settings.get("mention_users", True)
     delete_original = guild_settings.get("delete_original", True)
     
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Regex pattern to detect links surrounded by < >
-            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|tiktok\.com/@[^/]+/video/\d+|tiktok\.com/t/\w+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|vm\.tiktok\.com/\w+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)>"
+            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)>"
 
             valid_link_found = False
 
@@ -614,33 +613,6 @@ async def on_message(message):
                         original_link)
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
-
-                elif 'tiktok.com/@' in original_link:
-                    service = "TikTok"
-                    tiktok_match = re.search(
-                        r"tiktok\.com/@([^/]+)/video/(\d+)", original_link)
-                    if tiktok_match:
-                        user_or_community = tiktok_match.group(1)
-                        video_id = tiktok_match.group(2)
-                        modified_link = f"vxtiktok.com/@{user_or_community}/video/{video_id}"
-                        display_text = f"TikTok • @{user_or_community}"
-
-                elif 'tiktok.com/t/' in original_link:
-                    service = "TikTok"
-                    tiktok_match = re.search(r"tiktok\.com/t/(\w+)",
-                                             original_link)
-                    if tiktok_match:
-                        user_or_community = tiktok_match.group(1)
-                        modified_link = f"vxtiktok.com/t/{user_or_community}"
-                        display_text = f"TikTok • {user_or_community}"
-
-                elif 'vm.tiktok.com' in original_link:
-                    service = "TikTok"
-                    tiktok_match = re.search(r"vm\.tiktok\.com/(\w+)", original_link)
-                    if tiktok_match:
-                        user_or_community = tiktok_match.group(1)
-                        modified_link = f"vxtiktok.com/{user_or_community}"
-                        display_text = f"TikTok • {user_or_community}"
 
                 elif 'instagram.com' in original_link:
                     service = "Instagram"
@@ -683,7 +655,6 @@ async def on_message(message):
                         display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
-                                                 .replace("tiktok.com", "vxtiktok.com")\
                                                  .replace("instagram.com", "g.ddinstagram.com")\
                                                  .replace("reddit.com", "vxreddit.com")\
                                                  .replace("old.reddit.com", "vxreddit.com")\
@@ -716,7 +687,7 @@ async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "TikTok", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
             "mention_users": True,
             "delete_original": True
         }
