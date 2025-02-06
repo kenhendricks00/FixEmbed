@@ -606,35 +606,33 @@ async def on_message(message):
                 service = ""
                 user_or_community = ""
 
-                if 'twitter.com' in original_link or 'x.com' in original_link:
+                # Extract domain from original_link
+                domain = original_link.split('/')[0].lower()  # Get the domain part
+
+                if domain in ['twitter.com', 'x.com']:
                     service = "Twitter"
                     user_match = re.findall(
                         r"(?:twitter\.com|x\.com)/(\w+)/status/\d+",
                         original_link)
-                    user_or_community = user_match[
-                        0] if user_match else "Unknown"
+                    user_or_community = user_match[0] if user_match else "Unknown"
 
-                elif 'instagram.com' in original_link:
+                elif domain == 'instagram.com':
                     service = "Instagram"
-                    user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)",
-                                            original_link)
-                    user_or_community = user_match[
-                        0] if user_match else "Unknown"
+                    user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)", original_link)
+                    user_or_community = user_match[0] if user_match else "Unknown"
 
-                elif 'reddit.com' in original_link or 'old.reddit.com' in original_link:
+                elif domain in ['reddit.com', 'old.reddit.com']:
                     service = "Reddit"
                     community_match = re.findall(
                         r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)", original_link)
-                    user_or_community = community_match[
-                        0] if community_match else "Unknown"
+                    user_or_community = community_match[0] if community_match else "Unknown"
                     
-                elif 'pixiv.net' in original_link:
+                elif domain == 'pixiv.net':
                     service = "Pixiv"
                     user_match = re.findall(r"pixiv\.net/(?:en/)?artworks/(\d+)", original_link)
-                    user_or_community = user_match[
-                        0] if user_match else "Unknown"
+                    user_or_community = user_match[0] if user_match else "Unknown"
 
-                elif 'threads.net' in original_link:
+                elif domain == 'threads.net':
                     service = "Threads"
                     user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
                     if len(user_match) > 0:
@@ -642,7 +640,7 @@ async def on_message(message):
                         modified_link = f"fixthreads.net/@{user_or_community}/post/{post_id}"
                         display_text = f"Threads • @{user_or_community}"
 
-                elif 'bsky.app' in original_link:
+                elif domain == 'bsky.app':
                     service = "Bluesky"
                     bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
                     if len(bsky_match) > 0:
@@ -653,14 +651,21 @@ async def on_message(message):
                 if service and user_or_community and service in enabled_services:
                     if not display_text:
                         display_text = f"{service} • {user_or_community}"
-                    modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
-                                                 .replace("x.com", "fixupx.com")\
-                                                 .replace("instagram.com", "g.ddinstagram.com")\
-                                                 .replace("reddit.com", "vxreddit.com")\
-                                                 .replace("old.reddit.com", "vxreddit.com")\
-                                                 .replace("threads.net", "fixthreads.net")\
-                                                 .replace("pixiv.net", "phixiv.net")\
-                                                 .replace("bsky.app", "bskyx.app")
+                    
+                    # Apply service-specific domain replacement
+                    if service == "Twitter":
+                        modified_link = original_link.replace("twitter.com", "fxtwitter.com").replace("x.com", "fixupx.com")
+                    elif service == "Instagram":
+                        modified_link = original_link.replace("instagram.com", "g.ddinstagram.com")
+                    elif service == "Reddit":
+                        modified_link = original_link.replace("reddit.com", "vxreddit.com").replace("old.reddit.com", "vxreddit.com")
+                    elif service == "Threads":
+                        modified_link = original_link.replace("threads.net", "fixthreads.net")
+                    elif service == "Pixiv":
+                        modified_link = original_link.replace("pixiv.net", "phixiv.net")
+                    elif service == "Bluesky":
+                        modified_link = original_link.replace("bsky.app", "bskyx.app")
+
                     valid_link_found = True
 
                 if valid_link_found:
