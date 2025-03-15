@@ -658,7 +658,10 @@ async def on_message(message):
                     elif service == "Instagram":
                         modified_link = original_link.replace("instagram.com", "g.ddinstagram.com")
                     elif service == "Reddit":
-                        modified_link = original_link.replace("reddit.com", "vxreddit.com").replace("old.reddit.com", "vxreddit.com")
+                        if "old.reddit.com" in original_link:
+                            modified_link = original_link.replace("old.reddit.com", "vxreddit.com")
+                        else:
+                            modified_link = original_link.replace("reddit.com", "vxreddit.com")
                     elif service == "Threads":
                         modified_link = original_link.replace("threads.net", "fixthreads.net")
                     elif service == "Pixiv":
