@@ -17,15 +17,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Make features section visible immediately
-    document.querySelectorAll('.feature-card').forEach(element => {
-        element.style.opacity = '1';
-        element.style.transform = 'translateY(0)';
-    });
-    
-    // Add scroll animation for other elements
+    // Add scroll animation for elements
     const animateOnScroll = function() {
-        const elements = document.querySelectorAll('.platform-card, .support-card, .step');
+        const elements = document.querySelectorAll('.feature-card, .platform-card, .support-card, .step');
         
         elements.forEach(element => {
             const elementPosition = element.getBoundingClientRect().top;
@@ -38,8 +32,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
-    // Apply initial styles for animations (excluding feature cards)
-    const elementsToAnimate = document.querySelectorAll('.platform-card, .support-card, .step');
+    // Apply initial styles for animations
+    const elementsToAnimate = document.querySelectorAll('.feature-card, .platform-card, .support-card, .step');
     elementsToAnimate.forEach(element => {
         element.style.opacity = '0';
         element.style.transform = 'translateY(20px)';
