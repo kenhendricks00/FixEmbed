@@ -481,23 +481,85 @@ footer {
 }
 
 /* Responsive Design */
-@media (max-width: 1024px) {
+/* Modify hero section base layout */
+.hero-section {
+    position: relative;
+    overflow: visible;
+}
+
+.hero-section .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+}
+
+/* Force spacing between hero content and image */
+.hero-content {
+    max-width: 42%; 
+    padding-right: 3%;
+}
+
+.hero-image {
+    position: relative;
+    max-width: 40%;
+    margin-left: 15%;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.hero-content {
+    max-width: 50%;
+}
+
+/* Large screens */
+@media (min-width: 1201px) {
     .hero-image {
-        position: relative;
-        right: 0;
-        top: 0;
-        transform: none;
+        position: absolute;
+        right: 10%;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+}
+
+/* Medium screens */
+@media (max-width: 1200px) and (min-width: 1025px) {
+    .hero-image {
+        max-width: 45%;
+    }
+    
+    .hero-content {
+        max-width: 45%;
+    }
+}
+
+/* Small screens */
+@media (max-width: 1024px) {
+    .hero-section {
+        padding: 60px 0;
+    }
+    
+    .hero-section .container {
+        flex-direction: column;
+    }
+    
+    .hero-image {
         margin-top: 40px;
         max-width: 100%;
+        order: 2;
     }
     
     .hero-content {
         max-width: 100%;
         margin-right: 0;
+        order: 1;
+        text-align: center;
     }
     
-    .hero-section {
-        padding: 60px 0;
+    /* Center CTA buttons on mobile */
+    .cta-buttons {
+        justify-content: center;
     }
     
     .container {
