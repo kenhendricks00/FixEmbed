@@ -488,29 +488,39 @@ footer {
 }
 
 .hero-section .container {
+    position: relative;
+}
+
+/* Desktop hero styles */
+.hero-desktop {
     display: flex;
     align-items: center;
     justify-content: space-between;
     position: relative;
 }
 
+/* Mobile hero styles - hidden by default */
+.hero-mobile {
+    display: none;
+    flex-direction: column;
+    text-align: center;
+}
+
 /* Force spacing between hero content and image */
 .hero-content {
     max-width: 42%; 
     padding-right: 3%;
+    position: relative;
+    z-index: 10; /* Ensure text is always on top */
 }
 
 .hero-image {
-    position: relative;
     max-width: 40%;
     margin-left: 15%;
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     overflow: hidden;
-}
-
-.hero-content {
-    max-width: 50%;
+    z-index: 5; /* Lower than content */
 }
 
 /* Large screens */
@@ -523,43 +533,54 @@ footer {
     }
 }
 
-/* Medium screens */
-@media (max-width: 1200px) and (min-width: 1025px) {
-    .hero-image {
-        max-width: 45%;
-    }
-    
-    .hero-content {
-        max-width: 45%;
-    }
-}
-
 /* Small screens */
 @media (max-width: 1024px) {
     .hero-section {
         padding: 60px 0;
     }
     
-    .hero-section .container {
-        flex-direction: column;
+    /* Hide desktop, show mobile layout */
+    .hero-desktop {
+        display: none;
     }
     
-    .hero-image {
-        margin-top: 40px;
-        max-width: 100%;
-        order: 2;
+    .hero-mobile {
+        display: flex;
     }
     
-    .hero-content {
+    .hero-image-mobile {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        position: static; /* Static positioning to ensure natural stacking */
+        z-index: 1; /* Proper z-index */
+        display: block; /* Force block display */
+    }
+    
+    .hero-image-mobile img {
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .hero-mobile h1 {
         max-width: 100%;
         margin-right: 0;
-        order: 1;
         text-align: center;
+        position: static; /* Static positioning to ensure natural stacking */
+        z-index: 2; /* Higher z-index than image */
+        padding-right: 0; /* Reset padding on mobile */
+        margin-bottom: 30px; /* Add space between content and image */
     }
     
     /* Center CTA buttons on mobile */
-    .cta-buttons {
+    .mobile-buttons {
+        display: flex;
         justify-content: center;
+        gap: 20px;
+        margin-bottom: 30px; /* Increased space between buttons and image */
+        margin-top: 20px;
     }
     
     .container {
