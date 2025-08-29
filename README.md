@@ -13,14 +13,14 @@
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
 
 # 🛠️ Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code> link, and the bot will remove your message or just the embed and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>YouTube</code> link, and the bot will remove your message or just the embed and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
 </p>
 You can toggle the link conversion on specific channels using <code>/activate</code> and <code>/deactivate</code>.
 
 # 🌟 Why Choose FixEmbed?
-- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, and more.
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, and more.
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
 
@@ -32,9 +32,12 @@ You can toggle the link conversion on specific channels using <code>/activate</c
     - **Threads**
     - **Pixiv**
     - **Bluesky**
+    - **YouTube**
 2. **Customizable Settings**:
     - Activate or deactivate services per channel or server-wide.
-3. **Easy Hosting Options**:
+3. **Direct Message Capability**:
+    - Use the bot privately by sending links directly.
+4. **Easy Hosting Options**:
     - Host the bot yourself using Docker.
 
 # 🚀 Invite FixEmbed to Your Server
@@ -62,8 +65,9 @@ If you need support or have any questions, you can join the [support server](htt
 
 # 📜 Credits
 - [FxTwitter](https://github.com/FixTweet/FxTwitter), the service used to fix Twitter embeds, created by FixTweet
-- [InstaFix](https://github.com/Wikidepia/InstaFix), the service used to fix Instagram embeds, created by Wikidepia
+- [KKInstagram](https://kkinstagram.com), the service used to fix Instagram embeds
 - [vxReddit](https://github.com/dylanpdx/vxReddit), the service used to fix Reddit embeds, created by dylanpdx
 - [fixthreads](https://github.com/milanmdev/fixthreads), the service used to fix Threads embeds, created by milanmdev
 - [phixiv](https://github.com/thelaao/phixiv), the service used to fix Pixiv embeds, created by thelaao
 - [VixBluesky](https://github.com/Rapougnac/VixBluesky), the service used to fix Bluesky embeds, created by Rapougnac
+- [koutube](https://github.com/iGerman00/koutube), the service used to fix YouTube embeds, created by iGerman00
