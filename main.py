@@ -14,7 +14,7 @@ import time
 from collections import deque
 
 # Version number
-VERSION = "1.1.7"
+VERSION = "1.1.8"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +45,18 @@ async def rate_limited_send(channel, content):
 
 def create_footer(embed, client):
     embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
+
+def is_channel_enabled(channel_id):
+    # DMs are always enabled
+    if isinstance(channel_id, discord.DMChannel) or str(channel_id).startswith('DM:'):
+        return True
+        
+    # Check the channel state in the dictionary
+    if channel_id in channel_states:
+        return channel_states[channel_id]
+    
+    # Default to True if not found
+    return True
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -87,7 +99,7 @@ async def load_settings(db):
     async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original FROM guild_settings') as cursor:
         async for row in cursor:
             guild_id, enabled_services, mention_users, delete_original = row
-            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]          
+            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
@@ -138,7 +150,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for YouTube links"
 ])
 
 @tasks.loop(seconds=60)
@@ -206,11 +218,12 @@ async def about(interaction: discord.Interaction):
         name="📜 Credits",
         value=(
             "- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
-            "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
+            "- [KKInstagram](https://kkinstagram.com), Instagram embed fixer\n"
             "- [vxReddit](https://github.com/dylanpdx/vxReddit), created by dylanpdx\n"
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
-            "- [VixBluesky](https://github.com/Rapougnac/VixBluesky), created by Rapougnac"
+            "- [VixBluesky](https://github.com/Rapougnac/VixBluesky), created by Rapougnac\n"
+            "- [koutube](https://github.com/iGerman00/koutube), created by iGerman00"
         ),
         inline=False)
     create_footer(embed, client)
@@ -222,8 +235,8 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
 
     guild = interaction.guild
     permissions = channel.permissions_for(guild.me)
-    fix_embed_status = channel_states.get(channel.id, True)
-    fix_embed_activated = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
+    fix_embed_status = is_channel_enabled(channel.id)
+    fix_embed_activated = all(is_channel_enabled(ch.id) for ch in guild.text_channels)
 
     embed = discord.Embed(
         title="Debug Information",
@@ -258,7 +271,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"], "mention_users": True, "delete_original": True})))
 
 class SettingsDropdown(ui.Select):
 
@@ -266,7 +279,7 @@ class SettingsDropdown(ui.Select):
         self.interaction = interaction
         self.settings = settings
         activated = all(
-            channel_states.get(ch.id, True)
+            is_channel_enabled(ch.id)
             for ch in interaction.guild.text_channels)
         mention_users = settings.get("mention_users", True)
         delete_original = settings.get("delete_original", True)
@@ -313,7 +326,7 @@ class SettingsDropdown(ui.Select):
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "FixEmbed":
             activated = all(
-                channel_states.get(ch.id, True)
+                is_channel_enabled(ch.id)
                 for ch in interaction.guild.text_channels)
             embed = discord.Embed(
                 title="FixEmbed Settings",
@@ -333,10 +346,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
+            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
             ])
             embed = discord.Embed(
                 title="Service Settings",
@@ -354,13 +367,13 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
+        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -380,7 +393,7 @@ class ServicesDropdown(ui.Select):
 
         service_status_list = "\n".join([
             f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -561,12 +574,26 @@ class DeliveryMethodSettingsView(ui.View):
 
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
+    # Check if in a DM
+    if interaction.guild is None:
+        embed = discord.Embed(title="Settings",
+                             description="FixEmbed is always enabled in DMs with all services active.",
+                             color=discord.Color(0x7289DA))
+        embed.add_field(
+            name="📱 Direct Messages Mode",
+            value="All link fixing features are enabled when chatting directly with the bot.",
+            inline=False)
+        create_footer(embed, client)
+        await interaction.response.send_message(embed=embed)
+        return
+    
+    # Guild settings
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"], "mention_users": True, "delete_original": True})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"], "mention_users": True, "delete_original": True})
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
-                          color=discord.Color.blurple())
+                          color=discord.Color(0x7289DA))
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed, view=SettingsView(interaction, guild_settings), ephemeral=True)
 
@@ -575,24 +602,43 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    guild_id = message.guild.id
-    guild_settings = bot_settings.get(guild_id, {
-        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+    # Default settings to use for DMs
+    dm_settings = {
+        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
         "mention_users": True,
         "delete_original": True
-    })
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"])
-    mention_users = guild_settings.get("mention_users", True)
-    delete_original = guild_settings.get("delete_original", True)
+    }
     
-    if channel_states.get(message.channel.id, True):
+    # Check if message is in a guild or DM
+    is_dm = message.guild is None
+    
+    if is_dm:
+        # Use default settings for DMs
+        enabled_services = dm_settings["enabled_services"]
+        mention_users = dm_settings["mention_users"]
+        delete_original = dm_settings["delete_original"]
+        channel_enabled = True  # Always enable in DMs
+    else:
+        # Guild settings
+        guild_id = message.guild.id
+        guild_settings = bot_settings.get(guild_id, {
+            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
+            "mention_users": True,
+            "delete_original": True
+        })
+        enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
+        mention_users = guild_settings.get("mention_users", True)
+        delete_original = guild_settings.get("delete_original", True)
+        channel_enabled = is_channel_enabled(message.channel.id)
+    
+    if channel_enabled:
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Regex pattern to detect links surrounded by < >
-            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+)>"
+            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)>"
 
             valid_link_found = False
 
@@ -649,36 +695,75 @@ async def on_message(message):
                         user_or_community, post_id = bsky_match[0]
                         modified_link = f"bskyx.app/profile/{user_or_community}/post/{post_id}"
                         display_text = f"Bluesky • {user_or_community}"
+                        
+                elif 'youtube.com' in original_link or 'youtu.be' in original_link:
+                    service = "YouTube"
+                    if 'youtube.com' in original_link:
+                        video_id_match = re.findall(r"youtube\.com/watch\?v=([\w-]+)", original_link)
+                        if video_id_match:
+                            video_id = video_id_match[0]
+                            modified_link = f"koutube.com/watch?v={video_id}"
+                            display_text = f"YouTube • {video_id}"
+                    elif 'youtu.be' in original_link:
+                        video_id_match = re.findall(r"youtu\.be/([\w-]+)", original_link)
+                        if video_id_match:
+                            video_id = video_id_match[0]
+                            modified_link = f"koutube.com/watch?v={video_id}"
+                            display_text = f"YouTube • {video_id}"
 
                 if service and user_or_community and service in enabled_services:
                     if not display_text:
                         display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
-                                                 .replace("instagram.com", "g.ddinstagram.com")\
+                                                 .replace("instagram.com", "kkinstagram.com")\
                                                  .replace("reddit.com", "vxreddit.com")\
                                                  .replace("old.reddit.com", "vxreddit.com")\
                                                  .replace("threads.net", "fixthreads.net")\
                                                  .replace("pixiv.net", "phixiv.net")\
-                                                 .replace("bsky.app", "bskyx.app")
+                                                 .replace("bsky.app", "bskyx.app")\
+                                                 .replace("youtube.com", "koutube.com")\
+                                                 .replace("youtu.be", "koutube.com/watch?v=")
                     valid_link_found = True
 
                 if valid_link_found:
                     if delete_original:
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        if mention_users:
-                            formatted_message += f" | Sent by {message.author.mention}"
+                        if mention_users and not is_dm:
+                            # Only mention users in guilds, not in DMs
+                            await message.channel.send(f"{message.author.mention}: {formatted_message}")
                         else:
-                            formatted_message += f" | Sent by {message.author.display_name}"
-                        await rate_limited_send(message.channel, formatted_message)
-                        await message.delete()
+                            # No mention in DMs
+                            await message.channel.send(formatted_message)
+                        try:
+                            # Only delete message in guild context, not in DMs
+                            if not is_dm:
+                                await message.delete()
+                        except discord.errors.Forbidden:
+                            pass  # No permission to delete
                     else:
-                        await message.edit(suppress=True)
+                        # Don't delete original message, just reply with fixed link
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        await rate_limited_send(message.channel, formatted_message)
+                        try:
+                            # Use mention_author only in guilds, not in DMs
+                            await message.reply(formatted_message, mention_author=mention_users and not is_dm)
+                        except discord.errors.HTTPException:
+                            # Fallback if reply fails
+                            if is_dm:
+                                await message.channel.send(f"Fixed link: {formatted_message}")
+                            else:
+                                if mention_users:
+                                    await message.channel.send(f"{message.author.mention}: {formatted_message}")
+                                else:
+                                    await message.channel.send(formatted_message)
 
         except Exception as e:
             logging.error(f"Error in on_message: {e}")
+            # Log different error formats based on context
+            if is_dm:
+                logging.error(f"Error in DM with user {message.author.id}: {e}")
+            else:
+                logging.error(f"Error in guild {message.guild.id}, channel {message.channel.id}: {e}")
 
     await client.process_commands(message)
 
@@ -687,7 +772,7 @@ async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky"],
+            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
             "mention_users": True,
             "delete_original": True
         }
