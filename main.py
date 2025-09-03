@@ -14,7 +14,7 @@ import time
 from collections import deque
 
 # Version number
-VERSION = "1.1.8"
+VERSION = "1.1.9"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -218,7 +218,7 @@ async def about(interaction: discord.Interaction):
         name="📜 Credits",
         value=(
             "- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
-            "- [KKInstagram](https://kkinstagram.com), Instagram embed fixer\n"
+            "- [EmbedEZ](https://github.com/embedez), created by EmbedEZ\n"
             "- [vxReddit](https://github.com/dylanpdx/vxReddit), created by dylanpdx\n"
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
@@ -716,7 +716,7 @@ async def on_message(message):
                         display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
-                                                 .replace("instagram.com", "kkinstagram.com")\
+                                                 .replace("instagram.com", "instagramez.com")\
                                                  .replace("reddit.com", "vxreddit.com")\
                                                  .replace("old.reddit.com", "vxreddit.com")\
                                                  .replace("threads.net", "fixthreads.net")\
@@ -782,3 +782,4 @@ async def on_guild_join(guild):
 load_dotenv()
 bot_token = os.getenv('BOT_TOKEN')
 client.run(bot_token)
+
