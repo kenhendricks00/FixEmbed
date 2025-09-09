@@ -14,7 +14,7 @@ import time
 from collections import deque
 
 # Version number
-VERSION = "1.1.9"
+VERSION = "1.2.0"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -45,18 +45,6 @@ async def rate_limited_send(channel, content):
 
 def create_footer(embed, client):
     embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
-
-def is_channel_enabled(channel_id):
-    # DMs are always enabled
-    if isinstance(channel_id, discord.DMChannel) or str(channel_id).startswith('DM:'):
-        return True
-        
-    # Check the channel state in the dictionary
-    if channel_id in channel_states:
-        return channel_states[channel_id]
-    
-    # Default to True if not found
-    return True
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -218,7 +206,7 @@ async def about(interaction: discord.Interaction):
         name="📜 Credits",
         value=(
             "- [FxTwitter](https://github.com/FixTweet/FxTwitter), created by FixTweet\n"
-            "- [EmbedEZ](https://github.com/embedez), created by EmbedEZ\n"
+            "- [InstaFix](https://github.com/Wikidepia/InstaFix), created by Wikidepia\n"
             "- [vxReddit](https://github.com/dylanpdx/vxReddit), created by dylanpdx\n"
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
@@ -235,8 +223,8 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
 
     guild = interaction.guild
     permissions = channel.permissions_for(guild.me)
-    fix_embed_status = is_channel_enabled(channel.id)
-    fix_embed_activated = all(is_channel_enabled(ch.id) for ch in guild.text_channels)
+    fix_embed_status = channel_states.get(channel.id, True)
+    fix_embed_activated = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
 
     embed = discord.Embed(
         title="Debug Information",
@@ -279,7 +267,7 @@ class SettingsDropdown(ui.Select):
         self.interaction = interaction
         self.settings = settings
         activated = all(
-            is_channel_enabled(ch.id)
+            channel_states.get(ch.id, True)
             for ch in interaction.guild.text_channels)
         mention_users = settings.get("mention_users", True)
         delete_original = settings.get("delete_original", True)
@@ -326,7 +314,7 @@ class SettingsDropdown(ui.Select):
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "FixEmbed":
             activated = all(
-                is_channel_enabled(ch.id)
+                channel_states.get(ch.id, True)
                 for ch in interaction.guild.text_channels)
             embed = discord.Embed(
                 title="FixEmbed Settings",
@@ -574,26 +562,12 @@ class DeliveryMethodSettingsView(ui.View):
 
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
-    # Check if in a DM
-    if interaction.guild is None:
-        embed = discord.Embed(title="Settings",
-                             description="FixEmbed is always enabled in DMs with all services active.",
-                             color=discord.Color(0x7289DA))
-        embed.add_field(
-            name="📱 Direct Messages Mode",
-            value="All link fixing features are enabled when chatting directly with the bot.",
-            inline=False)
-        create_footer(embed, client)
-        await interaction.response.send_message(embed=embed)
-        return
-    
-    # Guild settings
     guild_id = interaction.guild.id
     guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"], "mention_users": True, "delete_original": True})
     
     embed = discord.Embed(title="Settings",
                           description="Configure FixEmbed's settings",
-                          color=discord.Color(0x7289DA))
+                          color=discord.Color.blurple())
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed, view=SettingsView(interaction, guild_settings), ephemeral=True)
 
@@ -602,36 +576,17 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # Default settings to use for DMs
-    dm_settings = {
+    guild_id = message.guild.id
+    guild_settings = bot_settings.get(guild_id, {
         "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
         "mention_users": True,
         "delete_original": True
-    }
+    })
+    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
+    mention_users = guild_settings.get("mention_users", True)
+    delete_original = guild_settings.get("delete_original", True)
     
-    # Check if message is in a guild or DM
-    is_dm = message.guild is None
-    
-    if is_dm:
-        # Use default settings for DMs
-        enabled_services = dm_settings["enabled_services"]
-        mention_users = dm_settings["mention_users"]
-        delete_original = dm_settings["delete_original"]
-        channel_enabled = True  # Always enable in DMs
-    else:
-        # Guild settings
-        guild_id = message.guild.id
-        guild_settings = bot_settings.get(guild_id, {
-            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
-            "mention_users": True,
-            "delete_original": True
-        })
-        enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
-        mention_users = guild_settings.get("mention_users", True)
-        delete_original = guild_settings.get("delete_original", True)
-        channel_enabled = is_channel_enabled(message.channel.id)
-    
-    if channel_enabled:
+    if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
             link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
@@ -695,7 +650,7 @@ async def on_message(message):
                         user_or_community, post_id = bsky_match[0]
                         modified_link = f"bskyx.app/profile/{user_or_community}/post/{post_id}"
                         display_text = f"Bluesky • {user_or_community}"
-                        
+
                 elif 'youtube.com' in original_link or 'youtu.be' in original_link:
                     service = "YouTube"
                     if 'youtube.com' in original_link:
@@ -716,7 +671,7 @@ async def on_message(message):
                         display_text = f"{service} • {user_or_community}"
                     modified_link = original_link.replace("twitter.com", "fxtwitter.com")\
                                                  .replace("x.com", "fixupx.com")\
-                                                 .replace("instagram.com", "instagramez.com")\
+                                                 .replace("instagram.com", "uuinstagram.com")\
                                                  .replace("reddit.com", "vxreddit.com")\
                                                  .replace("old.reddit.com", "vxreddit.com")\
                                                  .replace("threads.net", "fixthreads.net")\
@@ -729,41 +684,19 @@ async def on_message(message):
                 if valid_link_found:
                     if delete_original:
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        if mention_users and not is_dm:
-                            # Only mention users in guilds, not in DMs
-                            await message.channel.send(f"{message.author.mention}: {formatted_message}")
+                        if mention_users:
+                            formatted_message += f" | Sent by {message.author.mention}"
                         else:
-                            # No mention in DMs
-                            await message.channel.send(formatted_message)
-                        try:
-                            # Only delete message in guild context, not in DMs
-                            if not is_dm:
-                                await message.delete()
-                        except discord.errors.Forbidden:
-                            pass  # No permission to delete
+                            formatted_message += f" | Sent by {message.author.display_name}"
+                        await rate_limited_send(message.channel, formatted_message)
+                        await message.delete()
                     else:
-                        # Don't delete original message, just reply with fixed link
+                        await message.edit(suppress=True)
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        try:
-                            # Use mention_author only in guilds, not in DMs
-                            await message.reply(formatted_message, mention_author=mention_users and not is_dm)
-                        except discord.errors.HTTPException:
-                            # Fallback if reply fails
-                            if is_dm:
-                                await message.channel.send(f"Fixed link: {formatted_message}")
-                            else:
-                                if mention_users:
-                                    await message.channel.send(f"{message.author.mention}: {formatted_message}")
-                                else:
-                                    await message.channel.send(formatted_message)
+                        await rate_limited_send(message.channel, formatted_message)
 
         except Exception as e:
             logging.error(f"Error in on_message: {e}")
-            # Log different error formats based on context
-            if is_dm:
-                logging.error(f"Error in DM with user {message.author.id}: {e}")
-            else:
-                logging.error(f"Error in guild {message.guild.id}, channel {message.channel.id}: {e}")
 
     await client.process_commands(message)
 
@@ -782,4 +715,3 @@ async def on_guild_join(guild):
 load_dotenv()
 bot_token = os.getenv('BOT_TOKEN')
 client.run(bot_token)
-
