@@ -233,10 +233,23 @@ app.get('/debug/instagram', async (c) => {
                         debugInfo.downloadSectionPreview = cleanedHtml.substring(0, 500);
 
                         // Look for rapidcdn URLs
-                        const rapidcdnUrls = cleanedHtml.match(/https:\/\/d\.rapidcdn\.app[^"'\s]+/g);
+                        const rapidcdnUrls = cleanedHtml.match(/https:\/\/d\.rapidcdn\.app[^"'\s<>]+/g);
                         debugInfo.rapidcdnUrlsFound = rapidcdnUrls?.length || 0;
                         if (rapidcdnUrls && rapidcdnUrls.length > 0) {
-                            debugInfo.firstRapidcdnUrl = rapidcdnUrls[0];
+                            debugInfo.allRapidcdnUrls = rapidcdnUrls.map(u => ({
+                                type: u.includes('/thumb?') ? 'thumbnail' : (u.includes('/d?') ? 'download' : 'other'),
+                                url: u.substring(0, 150) + '...',
+                            }));
+                            // Find the actual download URL (not thumb)
+                            const downloadUrl = rapidcdnUrls.find(u => u.includes('/d?') || (!u.includes('/thumb?')));
+                            debugInfo.videoDownloadUrl = downloadUrl;
+                        }
+
+                        // Also look for direct video href links
+                        const hrefMatches = cleanedHtml.match(/href="([^"]+)"/g);
+                        debugInfo.hrefsFound = hrefMatches?.length || 0;
+                        if (hrefMatches) {
+                            debugInfo.hrefs = hrefMatches.slice(0, 5).map(h => h.substring(0, 100));
                         }
                     }
                 }
