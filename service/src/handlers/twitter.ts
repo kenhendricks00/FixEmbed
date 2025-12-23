@@ -1,50 +1,82 @@
 /**
  * FixEmbed Service - Twitter/X Handler
- * Uses fxtwitter API for reliable video embeds
+ * Uses Twitter's Syndication API (no third-party dependencies)
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseTwitterUrl, fetchJSON, truncateText } from '../utils/fetch';
+import { parseTwitterUrl, truncateText } from '../utils/fetch';
 import { platformColors } from '../utils/embed';
 
-// FxTwitter API response structure
-interface FxTwitterResponse {
-    code: number;
-    message: string;
-    tweet?: {
-        id: string;
-        text: string;
-        author: {
-            name: string;
-            screen_name: string;
-            avatar_url: string;
-        };
-        created_at: string;
-        replies: number;
-        retweets: number;
-        likes: number;
-        media?: {
-            photos?: Array<{
-                url: string;
-                width: number;
-                height: number;
-            }>;
-            videos?: Array<{
-                url: string;
-                thumbnail_url: string;
-                width: number;
-                height: number;
-                duration: number;
-                type: string;
-            }>;
-            mosaic?: {
-                formats: {
-                    jpeg: string;
-                    webp: string;
-                };
-            };
-        };
+interface SyndicationTweet {
+    __typename: string;
+    id_str: string;
+    text: string;
+    user: {
+        name: string;
+        screen_name: string;
+        profile_image_url_https: string;
     };
+    created_at: string;
+    favorite_count?: number;
+    conversation_count?: number;
+    entities?: {
+        media?: Array<{
+            type: string;
+            media_url_https: string;
+            sizes?: {
+                large?: { w: number; h: number };
+            };
+            video_info?: {
+                variants: Array<{
+                    bitrate?: number;
+                    content_type: string;
+                    url: string;
+                }>;
+                aspect_ratio?: [number, number];
+            };
+        }>;
+    };
+    extended_entities?: {
+        media?: Array<{
+            type: string;
+            media_url_https: string;
+            sizes?: {
+                large?: { w: number; h: number };
+            };
+            video_info?: {
+                variants: Array<{
+                    bitrate?: number;
+                    content_type: string;
+                    url: string;
+                }>;
+                aspect_ratio?: [number, number];
+            };
+        }>;
+    };
+    mediaDetails?: Array<{
+        type: string;
+        media_url_https: string;
+        video_info?: {
+            variants: Array<{
+                bitrate?: number;
+                content_type: string;
+                url: string;
+            }>;
+            aspect_ratio?: [number, number];
+        };
+    }>;
+}
+
+/**
+ * Get the best quality MP4 video URL from variants
+ */
+function getBestVideoUrl(variants: Array<{ bitrate?: number; content_type: string; url: string }>): string | null {
+    // Filter for MP4 videos and sort by bitrate (highest first)
+    const mp4Videos = variants
+        .filter(v => v.content_type === 'video/mp4' && v.bitrate !== undefined)
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+    return mp4Videos.length > 0 ? mp4Videos[0].url : null;
 }
 
 export const twitterHandler: PlatformHandler = {
@@ -61,61 +93,82 @@ export const twitterHandler: PlatformHandler = {
         }
 
         try {
-            // Use FxTwitter's API for better video support
-            const apiUrl = `https://api.fxtwitter.com/status/${parsed.tweetId}`;
+            // Use Twitter's Syndication API (public, no auth needed)
+            const apiUrl = `https://cdn.syndication.twimg.com/tweet-result?id=${parsed.tweetId}&lang=en&token=0`;
 
-            const response = await fetchJSON<FxTwitterResponse>(apiUrl, {
+            const response = await fetch(apiUrl, {
                 headers: {
-                    'User-Agent': 'FixEmbed/1.0 (Discord Embed Service)',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json',
                 },
             });
 
-            if (!response.tweet) {
-                return { success: false, error: response.message || 'Tweet not found' };
+            if (!response.ok) {
+                return { success: false, error: `Twitter API error: ${response.status}` };
             }
 
-            const tweet = response.tweet;
-            const author = tweet.author;
+            const tweet = await response.json() as SyndicationTweet;
 
-            // Build description with stats
+            if (!tweet || tweet.__typename === 'TweetTombstone') {
+                return { success: false, error: 'Tweet not found or deleted' };
+            }
+
+            // Build embed data
+            const authorName = tweet.user.name;
+            const authorHandle = tweet.user.screen_name;
+
+            // Build description
             let description = truncateText(tweet.text, 280);
-            description += `\n\n❤️ ${tweet.likes.toLocaleString()} • 🔁 ${tweet.retweets.toLocaleString()} • 💬 ${tweet.replies.toLocaleString()}`;
+            if (tweet.favorite_count !== undefined) {
+                description += `\n\n❤️ ${tweet.favorite_count.toLocaleString()}`;
+                if (tweet.conversation_count !== undefined) {
+                    description += ` • 💬 ${tweet.conversation_count.toLocaleString()}`;
+                }
+            }
 
-            // Check for media
+            // Check for media - try multiple sources
+            const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media;
             let image: string | undefined;
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
-            if (tweet.media?.videos && tweet.media.videos.length > 0) {
-                // Video content - use direct MP4 URL
-                const firstVideo = tweet.media.videos[0];
-                video = {
-                    url: firstVideo.url,
-                    width: firstVideo.width || 1280,
-                    height: firstVideo.height || 720,
-                    thumbnail: firstVideo.thumbnail_url,
-                };
-                // Also set image for fallback
-                image = firstVideo.thumbnail_url;
-            } else if (tweet.media?.photos && tweet.media.photos.length > 0) {
-                // Photo content
-                if (tweet.media.mosaic && tweet.media.photos.length > 1) {
-                    // Multiple images - use mosaic
-                    image = tweet.media.mosaic.formats.jpeg;
-                } else {
-                    image = tweet.media.photos[0].url;
+            if (media && media.length > 0) {
+                const firstMedia = media[0];
+
+                if (firstMedia.type === 'video' || firstMedia.type === 'animated_gif') {
+                    // Get best quality video
+                    const variants = firstMedia.video_info?.variants || [];
+                    const videoUrl = getBestVideoUrl(variants);
+
+                    if (videoUrl) {
+                        // Calculate dimensions from aspect ratio
+                        const aspectRatio = firstMedia.video_info?.aspect_ratio || [16, 9];
+                        const width = 1280;
+                        const height = Math.round(width * (aspectRatio[1] / aspectRatio[0]));
+
+                        video = {
+                            url: videoUrl,
+                            width,
+                            height,
+                            thumbnail: firstMedia.media_url_https,
+                        };
+                        // Also set image as fallback for clients that don't support video
+                        image = firstMedia.media_url_https;
+                    }
+                } else if (firstMedia.type === 'photo') {
+                    image = firstMedia.media_url_https;
                 }
             }
 
             return {
                 success: true,
                 data: {
-                    title: `${author.name} (@${author.screen_name})`,
+                    title: `${authorName} (@${authorHandle})`,
                     description,
-                    url: `https://twitter.com/${author.screen_name}/status/${parsed.tweetId}`,
+                    url: `https://twitter.com/${authorHandle}/status/${parsed.tweetId}`,
                     siteName: 'Twitter',
-                    authorName: author.name,
-                    authorUrl: `https://twitter.com/${author.screen_name}`,
-                    authorAvatar: author.avatar_url,
+                    authorName: authorName,
+                    authorUrl: `https://twitter.com/${authorHandle}`,
+                    authorAvatar: tweet.user.profile_image_url_https,
                     image,
                     video,
                     color: platformColors.twitter,
@@ -127,9 +180,8 @@ export const twitterHandler: PlatformHandler = {
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Failed to fetch tweet',
-                redirect: `https://fxtwitter.com/${parsed.username}/status/${parsed.tweetId}`,
+                redirect: `https://twitter.com/${parsed.username}/status/${parsed.tweetId}`,
             };
         }
     },
 };
-
