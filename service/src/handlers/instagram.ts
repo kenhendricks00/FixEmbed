@@ -100,78 +100,70 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
         html.match(/<span[^>]*class="[^"]*video-des[^"]*"[^>]*>([^<]*)</);
     if (descMatch) description = descMatch[1].trim();
 
-    // Extract preview image
-    const previewMatch = html.match(/class="media"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/) ||
-        html.match(/<img[^>]*class="[^"]*download-items__thumb[^"]*"[^>]*src="([^"]+)"/) ||
-        html.match(/<figure[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/);
-    if (previewMatch) preview = previewMatch[1];
+    // Extract preview/thumbnail image (rapidcdn thumb or scontent)
+    const thumbMatch = html.match(/https:\/\/d\.rapidcdn\.app\/thumb\?token=[^"'\s<>]+/);
+    if (thumbMatch) {
+        preview = thumbMatch[0];
+    } else {
+        const previewMatch = html.match(/<img[^>]*src="([^"]+)"/);
+        if (previewMatch) preview = previewMatch[1];
+    }
 
-    // Method 1: Table format (Facebook style)
-    if (html.includes('class="table"')) {
-        const rowMatches = html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
-        for (const row of rowMatches) {
-            const hrefMatch = row[1].match(/href="([^"]+)"/);
-            if (hrefMatch && hrefMatch[1].startsWith('http')) {
+    // Priority 1: Find rapidcdn /v2 video URL (this is the actual video)
+    const rapidcdnV2Match = html.match(/https:\/\/d\.rapidcdn\.app\/v2\?token=[^"'\s<>]+/);
+    if (rapidcdnV2Match) {
+        media.push({
+            url: rapidcdnV2Match[0],
+            type: 'video',
+            thumbnail: preview,
+        });
+        return { media, description, preview };
+    }
+
+    // Priority 2: Find rapidcdn /d download URL
+    const rapidcdnDMatch = html.match(/https:\/\/d\.rapidcdn\.app\/d\?token=[^"'\s<>]+/);
+    if (rapidcdnDMatch) {
+        media.push({
+            url: rapidcdnDMatch[0],
+            type: 'video',
+            thumbnail: preview,
+        });
+        return { media, description, preview };
+    }
+
+    // Priority 3: Any rapidcdn URL that's not a thumb
+    const rapidcdnUrls = html.match(/https:\/\/d\.rapidcdn\.app[^"'\s<>]+/g);
+    if (rapidcdnUrls) {
+        for (const url of rapidcdnUrls) {
+            if (!url.includes('/thumb?')) {
                 media.push({
-                    url: hrefMatch[1],
+                    url,
                     type: 'video',
+                    thumbnail: preview,
                 });
-                break; // Take first video
+                return { media, description, preview };
             }
         }
     }
 
-    // Method 2: Download items format (Instagram)
-    if (html.includes('download-items')) {
-        const itemMatches = html.matchAll(/class="download-items"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi);
-        for (const item of itemMatches) {
-            const content = item[1];
-            const thumbMatch = content.match(/download-items__thumb[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/);
-            const hrefMatch = content.match(/href="([^"]+)"/);
-            const isPhoto = content.includes('Download Photo');
-
-            if (isPhoto && thumbMatch) {
-                media.push({
-                    url: thumbMatch[1],
-                    type: 'image',
-                });
-            } else if (hrefMatch) {
-                media.push({
-                    url: hrefMatch[1],
-                    type: 'video',
-                    thumbnail: thumbMatch?.[1],
-                });
-            }
-        }
+    // Fallback: Look for href links with rapidcdn
+    const hrefMatch = html.match(/href="(https:\/\/d\.rapidcdn\.app[^"]+)"/);
+    if (hrefMatch) {
+        const isPhoto = html.includes('Download Photo');
+        media.push({
+            url: hrefMatch[1],
+            type: isPhoto ? 'image' : 'video',
+            thumbnail: preview,
+        });
+        return { media, description, preview };
     }
 
-    // Method 3: Card format
-    if (html.includes('class="card"') && media.length === 0) {
-        const cardMatches = html.matchAll(/class="card"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi);
-        for (const card of cardMatches) {
-            const content = card[1];
-            const hrefMatch = content.match(/href="([^"]+)"/);
-            const isPhoto = content.includes('Download Photo');
-
-            if (hrefMatch) {
-                media.push({
-                    url: hrefMatch[1],
-                    type: isPhoto ? 'image' : 'video',
-                });
-            }
-        }
-    }
-
-    // Method 4: Direct link fallback
-    if (media.length === 0) {
-        const directHref = html.match(/<a[^>]*href="(https:\/\/[^"]+d\.rapidcdn\.app[^"]+)"[^>]*>/);
-        if (directHref) {
-            const isPhoto = html.includes('Download Photo');
-            media.push({
-                url: directHref[1],
-                type: isPhoto ? 'image' : 'video',
-            });
-        }
+    // Fallback: If only thumb exists, return it as image
+    if (preview && preview.includes('rapidcdn')) {
+        media.push({
+            url: preview,
+            type: 'image',
+        });
     }
 
     return { media, description, preview };
