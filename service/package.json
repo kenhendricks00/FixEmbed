@@ -9,8 +9,7 @@
     "tail": "wrangler tail"
   },
   "dependencies": {
-    "hono": "^4.3.0",
-    "snapsave-media-downloader": "^1.5.4"
+    "hono": "^4.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
