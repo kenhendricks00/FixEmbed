@@ -1,125 +1,183 @@
 /**
  * FixEmbed Service - Instagram Handler
  * 
- * Uses snapsave-media-downloader for reliable media fetching.
- * Based on the vxinstagram approach.
+ * Uses Snapsave API with proper decryption.
+ * Based on snapsave-media-downloader implementation.
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseInstagramUrl, truncateText } from '../utils/fetch';
 import { platformColors } from '../utils/embed';
 
-// Snapsave response types
+// ========== Snapsave Decryption Logic ==========
+// Ported from https://github.com/ahmedrangel/snapsave-media-downloader
+
+function decodeSnapApp(args: string[]): string {
+    let [h, u, n, t, e, r] = args;
+    const tNum = Number(t);
+    const eNum = Number(e);
+
+    function decode(d: string, e: number, f: number): string {
+        const g = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/".split("");
+        const hArr = g.slice(0, e);
+        const iArr = g.slice(0, f);
+        let j = d.split("").reverse().reduce((a: number, b: string, c: number) => {
+            const idx = hArr.indexOf(b);
+            if (idx !== -1) return a + idx * (Math.pow(e, c));
+            return a;
+        }, 0);
+        let k = "";
+        while (j > 0) {
+            k = iArr[j % f] + k;
+            j = Math.floor(j / f);
+        }
+        return k || "0";
+    }
+
+    let result = "";
+    for (let i = 0, len = h.length; i < len;) {
+        let s = "";
+        while (i < len && h[i] !== n[eNum]) {
+            s += h[i];
+            i++;
+        }
+        i++;
+        for (let j = 0; j < n.length; j++) {
+            s = s.replace(new RegExp(n[j], "g"), j.toString());
+        }
+        result += String.fromCharCode(Number(decode(s, eNum, 10)) - tNum);
+    }
+
+    return result;
+}
+
+function getEncodedSnapApp(data: string): string[] {
+    const match = data.split("decodeURIComponent(escape(r))}(")[1];
+    if (!match) return [];
+    return match.split("))")[0]
+        .split(",")
+        .map(v => v.replace(/"/g, "").trim());
+}
+
+function getDecodedSnapSave(data: string): string {
+    const errorMatch = data?.split('document.querySelector("#alert").innerHTML = "');
+    if (errorMatch?.[1]) {
+        const errorMessage = errorMatch[1].split('";')[0]?.trim();
+        if (errorMessage) throw new Error(errorMessage);
+    }
+
+    const htmlMatch = data.split('getElementById("download-section").innerHTML = "')[1];
+    if (!htmlMatch) return "";
+
+    return htmlMatch
+        .split('"; document.getElementById("inputData").remove();')[0]
+        .replace(/\\"/g, '"')
+        .replace(/\\\//g, '/');
+}
+
+function decryptSnapSave(data: string): string {
+    const encoded = getEncodedSnapApp(data);
+    if (encoded.length === 0) return "";
+    const decoded = decodeSnapApp(encoded);
+    return getDecodedSnapSave(decoded);
+}
+
+// ========== HTML Parsing Helpers ==========
+
 interface SnapsaveMedia {
     url: string;
-    thumbnail?: string;
     type: 'video' | 'image';
-    resolution?: string;
+    thumbnail?: string;
 }
 
-interface SnapsaveResponse {
-    success: boolean;
-    data?: {
-        description?: string;
-        preview?: string;
-        media?: SnapsaveMedia[];
-    };
-}
+function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?: string, preview?: string } {
+    const media: SnapsaveMedia[] = [];
+    let description = '';
+    let preview = '';
 
-// Dynamic import for snapsave since it's an ESM module
-async function fetchWithSnapsave(url: string): Promise<SnapsaveResponse | null> {
-    try {
-        // We need to replicate snapsave logic since we can't use npm packages directly in CF Workers
-        // Snapsave API endpoint
-        const snapsaveUrl = 'https://snapsave.app/action.php';
+    // Extract description
+    const descMatch = html.match(/class="video-des"[^>]*>([^<]*)</) ||
+        html.match(/<span[^>]*class="[^"]*video-des[^"]*"[^>]*>([^<]*)</);
+    if (descMatch) description = descMatch[1].trim();
 
-        const formData = new URLSearchParams();
-        formData.append('url', url);
+    // Extract preview image
+    const previewMatch = html.match(/class="media"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/) ||
+        html.match(/<img[^>]*class="[^"]*download-items__thumb[^"]*"[^>]*src="([^"]+)"/) ||
+        html.match(/<figure[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/);
+    if (previewMatch) preview = previewMatch[1];
 
-        const response = await fetch(snapsaveUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Origin': 'https://snapsave.app',
-                'Referer': 'https://snapsave.app/',
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            return null;
-        }
-
-        const html = await response.text();
-
-        // Parse the response - snapsave returns HTML with embedded data
-        // Look for the download links in the response
-        const mediaUrls: SnapsaveMedia[] = [];
-
-        // Try to extract video URL
-        const videoMatch = html.match(/href="(https:\/\/[^"]+)"[^>]*>.*?Download.*?Video/gi);
-        if (videoMatch) {
-            for (const match of videoMatch) {
-                const urlMatch = match.match(/href="([^"]+)"/);
-                if (urlMatch) {
-                    mediaUrls.push({
-                        url: urlMatch[1],
-                        type: 'video',
-                    });
-                    break; // Take first video
-                }
+    // Method 1: Table format (Facebook style)
+    if (html.includes('class="table"')) {
+        const rowMatches = html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+        for (const row of rowMatches) {
+            const hrefMatch = row[1].match(/href="([^"]+)"/);
+            if (hrefMatch && hrefMatch[1].startsWith('http')) {
+                media.push({
+                    url: hrefMatch[1],
+                    type: 'video',
+                });
+                break; // Take first video
             }
         }
+    }
 
-        // Try to extract image URL
-        const imageMatch = html.match(/href="(https:\/\/[^"]+)"[^>]*>.*?Download.*?Photo/gi) ||
-            html.match(/href="(https:\/\/[^"]+)"[^>]*>.*?Download.*?Image/gi);
-        if (imageMatch && mediaUrls.length === 0) {
-            for (const match of imageMatch) {
-                const urlMatch = match.match(/href="([^"]+)"/);
-                if (urlMatch) {
-                    mediaUrls.push({
-                        url: urlMatch[1],
-                        type: 'image',
-                    });
-                    break; // Take first image
-                }
+    // Method 2: Download items format (Instagram)
+    if (html.includes('download-items')) {
+        const itemMatches = html.matchAll(/class="download-items"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi);
+        for (const item of itemMatches) {
+            const content = item[1];
+            const thumbMatch = content.match(/download-items__thumb[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/);
+            const hrefMatch = content.match(/href="([^"]+)"/);
+            const isPhoto = content.includes('Download Photo');
+
+            if (isPhoto && thumbMatch) {
+                media.push({
+                    url: thumbMatch[1],
+                    type: 'image',
+                });
+            } else if (hrefMatch) {
+                media.push({
+                    url: hrefMatch[1],
+                    type: 'video',
+                    thumbnail: thumbMatch?.[1],
+                });
             }
         }
+    }
 
-        // Alternative: look for rapidcdn URLs directly
-        const cdnMatches = html.match(/https:\/\/d\.rapidcdn\.app\/d\?token=[^"'\s]+/g);
-        if (cdnMatches && mediaUrls.length === 0) {
-            // Determine type from context
-            const isVideo = html.includes('video') || html.includes('mp4');
-            mediaUrls.push({
-                url: cdnMatches[0],
-                type: isVideo ? 'video' : 'image',
+    // Method 3: Card format
+    if (html.includes('class="card"') && media.length === 0) {
+        const cardMatches = html.matchAll(/class="card"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi);
+        for (const card of cardMatches) {
+            const content = card[1];
+            const hrefMatch = content.match(/href="([^"]+)"/);
+            const isPhoto = content.includes('Download Photo');
+
+            if (hrefMatch) {
+                media.push({
+                    url: hrefMatch[1],
+                    type: isPhoto ? 'image' : 'video',
+                });
+            }
+        }
+    }
+
+    // Method 4: Direct link fallback
+    if (media.length === 0) {
+        const directHref = html.match(/<a[^>]*href="(https:\/\/[^"]+d\.rapidcdn\.app[^"]+)"[^>]*>/);
+        if (directHref) {
+            const isPhoto = html.includes('Download Photo');
+            media.push({
+                url: directHref[1],
+                type: isPhoto ? 'image' : 'video',
             });
         }
-
-        // Extract preview/thumbnail
-        const previewMatch = html.match(/https:\/\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/i);
-
-        if (mediaUrls.length > 0) {
-            return {
-                success: true,
-                data: {
-                    media: mediaUrls,
-                    preview: previewMatch ? previewMatch[0] : undefined,
-                },
-            };
-        }
-
-        return null;
-    } catch (error) {
-        console.error('Snapsave fetch error:', error);
-        return null;
     }
+
+    return { media, description, preview };
 }
+
+// ========== Handler ==========
 
 export const instagramHandler: PlatformHandler = {
     name: 'instagram',
@@ -139,139 +197,142 @@ export const instagramHandler: PlatformHandler = {
             return { success: false, error: 'Invalid Instagram URL' };
         }
 
+        // Stories don't have embed support
+        if (parsed.type === 'story') {
+            return { success: false, redirect: url };
+        }
+
         // Build canonical URL
         let canonicalUrl: string;
         if (parsed.type === 'reel') {
             canonicalUrl = `https://www.instagram.com/reel/${parsed.shortcode}/`;
-        } else if (parsed.type === 'story') {
-            canonicalUrl = url;
         } else {
             canonicalUrl = `https://www.instagram.com/p/${parsed.shortcode}/`;
         }
 
         try {
-            // First, try to get data via snapsave
-            const snapsaveResult = await fetchWithSnapsave(canonicalUrl);
+            // Call Snapsave API
+            const formData = new URLSearchParams();
+            formData.append('url', canonicalUrl);
 
-            if (snapsaveResult?.success && snapsaveResult.data?.media && snapsaveResult.data.media.length > 0) {
-                const firstMedia = snapsaveResult.data.media[0];
+            const response = await fetch('https://snapsave.app/action.php?lang=en', {
+                method: 'POST',
+                headers: {
+                    'Accept': '*/*',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Origin': 'https://snapsave.app',
+                    'Referer': 'https://snapsave.app/',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+                body: formData,
+            });
 
-                const result: HandlerResponse = {
-                    success: true,
-                    data: {
-                        title: 'Instagram',
-                        description: snapsaveResult.data.description
-                            ? truncateText(snapsaveResult.data.description, 280)
-                            : `View ${parsed.type === 'reel' ? 'Reel' : 'Post'} on Instagram`,
-                        url: canonicalUrl,
-                        siteName: 'Instagram',
-                        color: platformColors.instagram,
-                        platform: 'instagram',
-                    },
-                };
-
-                // Add media based on type
-                if (firstMedia.type === 'video') {
-                    result.data!.video = {
-                        url: firstMedia.url,
-                        width: 1080,
-                        height: 1920,
-                        thumbnail: snapsaveResult.data.preview || firstMedia.thumbnail,
-                    };
-                    result.data!.image = snapsaveResult.data.preview || firstMedia.thumbnail;
-                } else {
-                    result.data!.image = firstMedia.url;
-                }
-
-                return result;
+            if (!response.ok) {
+                throw new Error(`Snapsave returned ${response.status}`);
             }
 
-            // Fallback: Try embed HTML scraping
-            return await scrapeEmbedHtml(canonicalUrl, parsed);
+            const rawHtml = await response.text();
+
+            // Decrypt the response
+            const decryptedHtml = decryptSnapSave(rawHtml);
+
+            if (!decryptedHtml) {
+                throw new Error('Failed to decrypt response');
+            }
+
+            // Parse the HTML
+            const { media, description, preview } = parseSnapsaveHtml(decryptedHtml);
+
+            if (media.length === 0) {
+                throw new Error('No media found');
+            }
+
+            const firstMedia = media[0];
+
+            const result: HandlerResponse = {
+                success: true,
+                data: {
+                    title: 'Instagram',
+                    description: description
+                        ? truncateText(description, 280)
+                        : `View ${parsed.type === 'reel' ? 'Reel' : 'Post'} on Instagram`,
+                    url: canonicalUrl,
+                    siteName: 'Instagram',
+                    color: platformColors.instagram,
+                    platform: 'instagram',
+                },
+            };
+
+            // Add media
+            if (firstMedia.type === 'video') {
+                result.data!.video = {
+                    url: firstMedia.url,
+                    width: 1080,
+                    height: 1920,
+                    thumbnail: preview || firstMedia.thumbnail,
+                };
+                result.data!.image = preview || firstMedia.thumbnail;
+            } else {
+                result.data!.image = firstMedia.url;
+            }
+
+            return result;
 
         } catch (error) {
             console.error('Instagram handler error:', error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Failed to fetch Instagram content',
-                redirect: canonicalUrl,
-            };
+
+            // Fallback: try embed HTML scraping
+            return await scrapeEmbedHtml(canonicalUrl, parsed);
         }
     },
 };
 
-// Fallback: Scrape Instagram's embed HTML
+// ========== Fallback Scraper ==========
+
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
 
         const response = await fetch(embedUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml',
             },
         });
 
         if (!response.ok) {
-            return {
-                success: false,
-                error: `Instagram returned ${response.status}`,
-                redirect: canonicalUrl,
-            };
+            return { success: false, error: `Instagram returned ${response.status}`, redirect: canonicalUrl };
         }
 
         const html = await response.text();
 
-        // Extract username
         let username = '';
         const usernameMatch = html.match(/class="UsernameText"[^>]*>([^<]+)</i) ||
             html.match(/"username":"([^"]+)"/);
-        if (usernameMatch) {
-            username = usernameMatch[1].trim();
-        }
+        if (usernameMatch) username = usernameMatch[1].trim();
 
-        // Extract media URL
         let mediaUrl = '';
         let isVideo = false;
 
-        // Try video first
-        const videoMatch = html.match(/class="EmbeddedMediaVideo"[^>]*src="([^"]+)"/i) ||
-            html.match(/src="([^"]+)"[^>]*class="EmbeddedMediaVideo"/i);
+        const videoMatch = html.match(/class="EmbeddedMediaVideo"[^>]*src="([^"]+)"/i);
         if (videoMatch) {
             mediaUrl = videoMatch[1].replace(/\\u0026/g, '&');
             isVideo = true;
         }
 
-        // Try image
         if (!mediaUrl) {
-            const imageMatch = html.match(/class="EmbeddedMediaImage"[^>]*src="([^"]+)"/i) ||
-                html.match(/src="([^"]+)"[^>]*class="EmbeddedMediaImage"/i);
-            if (imageMatch) {
-                mediaUrl = imageMatch[1].replace(/\\u0026/g, '&');
-            }
+            const imageMatch = html.match(/class="EmbeddedMediaImage"[^>]*src="([^"]+)"/i);
+            if (imageMatch) mediaUrl = imageMatch[1].replace(/\\u0026/g, '&');
         }
 
-        // Extract caption
-        let caption = '';
-        const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/i);
-        if (captionMatch) {
-            caption = captionMatch[1]
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/<[^>]+>/g, '')
-                .replace(/\\n/g, '\n')
-                .trim();
-        }
-
-        // Build response
         const result: HandlerResponse = {
             success: true,
             data: {
                 title: username ? `@${username} on Instagram` : 'Instagram',
-                description: caption ? truncateText(caption, 280) : `View on Instagram`,
+                description: `View on Instagram`,
                 url: canonicalUrl,
                 siteName: 'Instagram',
                 authorName: username || undefined,
-                authorUrl: username ? `https://www.instagram.com/${username}/` : undefined,
                 color: platformColors.instagram,
                 platform: 'instagram',
             },
@@ -279,11 +340,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
 
         if (mediaUrl) {
             if (isVideo) {
-                result.data!.video = {
-                    url: mediaUrl,
-                    width: 1080,
-                    height: 1920,
-                };
+                result.data!.video = { url: mediaUrl, width: 1080, height: 1920 };
             } else {
                 result.data!.image = mediaUrl;
             }
@@ -292,10 +349,6 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         return result;
 
     } catch (error) {
-        return {
-            success: false,
-            error: 'Failed to scrape embed',
-            redirect: canonicalUrl,
-        };
+        return { success: false, error: 'Failed to scrape embed', redirect: canonicalUrl };
     }
 }
