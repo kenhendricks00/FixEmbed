@@ -87,7 +87,7 @@ app.get('/embed', async (c) => {
     }
 });
 
-// Video proxy endpoint for Instagram - redirects to the actual video with proper headers
+// Video proxy endpoint for Instagram - streams the video with proper headers
 app.get('/video/instagram', async (c) => {
     const videoUrl = c.req.query('url');
 
@@ -95,9 +95,36 @@ app.get('/video/instagram', async (c) => {
         return c.json({ error: 'Missing video URL' }, 400);
     }
 
-    // Redirect to the actual video URL
-    // This helps Discord fetch the video properly
-    return c.redirect(videoUrl, 302);
+    try {
+        // Fetch the video from the source
+        const response = await fetch(videoUrl, {
+            headers: {
+                'User-Agent': 'TelegramBot (like TwitterBot)',
+            },
+        });
+
+        if (!response.ok) {
+            return c.redirect(videoUrl, 302);
+        }
+
+        // Stream the video back with proper headers
+        const headers = new Headers();
+        headers.set('Content-Type', 'video/mp4');
+        headers.set('Accept-Ranges', 'bytes');
+
+        const contentLength = response.headers.get('Content-Length');
+        if (contentLength) {
+            headers.set('Content-Length', contentLength);
+        }
+
+        return new Response(response.body, {
+            status: 200,
+            headers,
+        });
+    } catch (error) {
+        // Fallback to redirect
+        return c.redirect(videoUrl, 302);
+    }
 });
 
 // Debug endpoint to test Instagram

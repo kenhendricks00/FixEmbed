@@ -52,8 +52,12 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         html += `  <meta property="og:video:url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:type" content="video/mp4">\n`;
-        html += `  <meta property="og:video:width" content="${embed.video.width}">\n`;
-        html += `  <meta property="og:video:height" content="${embed.video.height}">\n`;
+
+        // Only include dimensions if they're set (non-zero)
+        if (embed.video.width && embed.video.height) {
+            html += `  <meta property="og:video:width" content="${embed.video.width}">\n`;
+            html += `  <meta property="og:video:height" content="${embed.video.height}">\n`;
+        }
 
         if (embed.video.thumbnail) {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
@@ -62,8 +66,11 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         // Twitter player card for videos
         html += `  <meta name="twitter:card" content="player">\n`;
         html += `  <meta name="twitter:player" content="${escape(embed.video.url)}">\n`;
-        html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
-        html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
+
+        if (embed.video.width && embed.video.height) {
+            html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
+            html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
+        }
     }
 
     // Twitter-specific tags

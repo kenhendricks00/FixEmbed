@@ -257,21 +257,16 @@ export const instagramHandler: PlatformHandler = {
 
             // Add media
             if (firstMedia.type === 'video') {
-                // Use appropriate dimensions based on content type
-                // Reels are 9:16 vertical (720x1280), posts are usually square
-                const isReel = parsed.type === 'reel';
-                const width = isReel ? 720 : 720;
-                const height = isReel ? 1280 : 720;
-
                 // Use proxy URL for video like vxinstagram does
                 // This ensures Discord fetches the video properly
                 const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
                 const proxyVideoUrl = `https://${embedDomain}/video/instagram?url=${encodeURIComponent(firstMedia.url)}`;
 
+                // Don't set fixed dimensions - let Discord determine from video file
                 result.data!.video = {
                     url: proxyVideoUrl,
-                    width,
-                    height,
+                    width: 0,  // Discord will get from video metadata
+                    height: 0,
                     thumbnail: preview || firstMedia.thumbnail,
                 };
                 result.data!.image = preview || firstMedia.thumbnail;
