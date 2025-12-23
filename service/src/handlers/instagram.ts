@@ -263,8 +263,13 @@ export const instagramHandler: PlatformHandler = {
                 const width = isReel ? 720 : 720;
                 const height = isReel ? 1280 : 720;
 
+                // Use proxy URL for video like vxinstagram does
+                // This ensures Discord fetches the video properly
+                const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+                const proxyVideoUrl = `https://${embedDomain}/video/instagram?url=${encodeURIComponent(firstMedia.url)}`;
+
                 result.data!.video = {
-                    url: firstMedia.url,
+                    url: proxyVideoUrl,
                     width,
                     height,
                     thumbnail: preview || firstMedia.thumbnail,

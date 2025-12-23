@@ -87,6 +87,19 @@ app.get('/embed', async (c) => {
     }
 });
 
+// Video proxy endpoint for Instagram - redirects to the actual video with proper headers
+app.get('/video/instagram', async (c) => {
+    const videoUrl = c.req.query('url');
+
+    if (!videoUrl) {
+        return c.json({ error: 'Missing video URL' }, 400);
+    }
+
+    // Redirect to the actual video URL
+    // This helps Discord fetch the video properly
+    return c.redirect(videoUrl, 302);
+});
+
 // Debug endpoint to test Instagram
 app.get('/debug/instagram', async (c) => {
     const url = c.req.query('url') || 'https://www.instagram.com/reel/C05SEFntyFA/';
