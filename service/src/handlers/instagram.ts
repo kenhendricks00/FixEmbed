@@ -306,30 +306,101 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
 
         const html = await response.text();
 
+        // Extract username - multiple patterns
         let username = '';
-        const usernameMatch = html.match(/class="UsernameText"[^>]*>([^<]+)</i) ||
-            html.match(/"username":"([^"]+)"/);
-        if (usernameMatch) username = usernameMatch[1].trim();
+        const usernamePatterns = [
+            /class="UsernameText"[^>]*>([^<]+)</i,
+            /"username":"([^"]+)"/,
+            /data-log-event="usernameClick"[^>]*>([^<]+)</i,
+            /@([a-zA-Z0-9._]+)/,
+        ];
+        for (const pattern of usernamePatterns) {
+            const match = html.match(pattern);
+            if (match) {
+                username = match[1].trim();
+                break;
+            }
+        }
 
+        // Extract media URL - check multiple patterns
         let mediaUrl = '';
         let isVideo = false;
 
-        const videoMatch = html.match(/class="EmbeddedMediaVideo"[^>]*src="([^"]+)"/i);
-        if (videoMatch) {
-            mediaUrl = videoMatch[1].replace(/\\u0026/g, '&');
-            isVideo = true;
+        // Pattern 1: Video element with class
+        const videoPatterns = [
+            /class="[^"]*EmbeddedMediaVideo[^"]*"[^>]*src="([^"]+)"/i,
+            /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaVideo[^"]*"/i,
+            /<video[^>]*src="([^"]+)"/i,
+            /"video_url":"([^"]+)"/,
+        ];
+        for (const pattern of videoPatterns) {
+            const match = html.match(pattern);
+            if (match) {
+                mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                isVideo = true;
+                break;
+            }
         }
 
+        // Pattern 2: Image element with class
         if (!mediaUrl) {
-            const imageMatch = html.match(/class="EmbeddedMediaImage"[^>]*src="([^"]+)"/i);
-            if (imageMatch) mediaUrl = imageMatch[1].replace(/\\u0026/g, '&');
+            const imagePatterns = [
+                /class="[^"]*EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"/i,
+                /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaImage[^"]*"/i,
+                /<img[^>]*class="[^"]*Embed[^"]*"[^>]*src="([^"]+)"/i,
+                /"display_url":"([^"]+)"/,
+                /"thumbnail_src":"([^"]+)"/,
+            ];
+            for (const pattern of imagePatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    break;
+                }
+            }
+        }
+
+        // Pattern 3: Look in the JSON data embedded in script tags
+        if (!mediaUrl) {
+            const jsonPatterns = [
+                /"display_url"\s*:\s*"([^"]+)"/,
+                /"src"\s*:\s*"(https:\/\/[^"]+scontent[^"]+)"/,
+                /"video_url"\s*:\s*"([^"]+)"/,
+            ];
+            for (const pattern of jsonPatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    isVideo = pattern.source.includes('video');
+                    break;
+                }
+            }
+        }
+
+        // Extract caption
+        let caption = '';
+        const captionPatterns = [
+            /class="[^"]*Caption[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+            /"text"\s*:\s*"([^"]{1,500})"/,
+        ];
+        for (const pattern of captionPatterns) {
+            const match = html.match(pattern);
+            if (match) {
+                caption = match[1]
+                    .replace(/<br\s*\/?>/gi, '\n')
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\u0026/g, '&')
+                    .trim();
+                if (caption.length > 0 && caption.length < 500) break;
+            }
         }
 
         const result: HandlerResponse = {
             success: true,
             data: {
                 title: username ? `@${username} on Instagram` : 'Instagram',
-                description: `View on Instagram`,
+                description: caption ? truncateText(caption, 280) : `View on Instagram`,
                 url: canonicalUrl,
                 siteName: 'Instagram',
                 authorName: username || undefined,
