@@ -50,6 +50,9 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - Use the bot privately by sending links directly.
 5. **Easy Hosting Options**:
     - Host the bot yourself using Docker.
+6. **Multi-Language Support**:
+    - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
+    - Change language via `/settings` → Language.
 
 # 🚀 Invite FixEmbed to Your Server
 Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)

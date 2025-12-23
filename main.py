@@ -15,7 +15,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.3"
+VERSION = "1.3.0"
 
 # Service configuration for link processing
 SERVICES = {
@@ -317,6 +317,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name=get_text(lang, "tip"),
         value=get_text(lang, "tip_value"),
+        inline=False)
+    
+    embed.add_field(
+        name=get_text(lang, "languages_supported"),
+        value=get_text(lang, "languages_supported_value"),
         inline=False)
     
     create_footer(embed, client)
