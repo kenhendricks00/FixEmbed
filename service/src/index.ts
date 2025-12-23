@@ -166,6 +166,85 @@ app.get('/debug/instagram', async (c) => {
             debugInfo.firstCdnVideoUrl = cdnVideoUrls[0].substring(0, 200);
         }
 
+        // Step 4: Try to decrypt the Snapsave response
+        try {
+            // Get the encoded params from the raw HTML
+            const encoded = rawHtml.split("decodeURIComponent(escape(r))}(")[1];
+            if (encoded) {
+                const params = encoded.split("))")[0]
+                    .split(",")
+                    .map((v: string) => v.replace(/"/g, "").trim());
+
+                debugInfo.snapsaveParams = {
+                    paramCount: params.length,
+                    h_length: params[0]?.length || 0,
+                    n: params[2] || 'N/A',
+                    t: params[3] || 'N/A',
+                    e: params[4] || 'N/A',
+                };
+
+                // Try the decryption
+                if (params.length >= 5) {
+                    const [h, u, n, t, e] = params;
+                    const tNum = Number(t);
+                    const eNum = Number(e);
+
+                    function decodeBase(d: string, base: number, target: number): string {
+                        const g = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/".split("");
+                        const hArr = g.slice(0, base);
+                        const iArr = g.slice(0, target);
+                        let j = d.split("").reverse().reduce((a: number, b: string, c: number) => {
+                            const idx = hArr.indexOf(b);
+                            if (idx !== -1) return a + idx * (Math.pow(base, c));
+                            return a;
+                        }, 0);
+                        let k = "";
+                        while (j > 0) {
+                            k = iArr[j % target] + k;
+                            j = Math.floor(j / target);
+                        }
+                        return k || "0";
+                    }
+
+                    let result = "";
+                    for (let i = 0, len = h.length; i < len;) {
+                        let s = "";
+                        while (i < len && h[i] !== n[eNum]) {
+                            s += h[i];
+                            i++;
+                        }
+                        i++;
+                        for (let j = 0; j < n.length; j++) {
+                            s = s.replace(new RegExp(n[j], "g"), j.toString());
+                        }
+                        result += String.fromCharCode(Number(decodeBase(s, eNum, 10)) - tNum);
+                    }
+
+                    debugInfo.decryptedLength = result.length;
+                    debugInfo.decryptedPreview = result.substring(0, 300);
+
+                    // Look for download section
+                    const downloadSectionMatch = result.match(/getElementById\("download-section"\)\.innerHTML = "(.+?)"; document/);
+                    if (downloadSectionMatch) {
+                        const cleanedHtml = downloadSectionMatch[1]
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\//g, '/');
+                        debugInfo.downloadSectionLength = cleanedHtml.length;
+                        debugInfo.downloadSectionPreview = cleanedHtml.substring(0, 500);
+
+                        // Look for rapidcdn URLs
+                        const rapidcdnUrls = cleanedHtml.match(/https:\/\/d\.rapidcdn\.app[^"'\s]+/g);
+                        debugInfo.rapidcdnUrlsFound = rapidcdnUrls?.length || 0;
+                        if (rapidcdnUrls && rapidcdnUrls.length > 0) {
+                            debugInfo.firstRapidcdnUrl = rapidcdnUrls[0];
+                        }
+                    }
+                }
+            }
+        } catch (decryptError) {
+            debugInfo.decryptError = decryptError instanceof Error ? decryptError.message : 'Unknown';
+        }
+
         return c.json(debugInfo);
     } catch (error) {
         debugInfo.error = error instanceof Error ? error.message : 'Unknown error';
