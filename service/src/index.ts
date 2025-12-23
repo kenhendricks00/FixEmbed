@@ -124,10 +124,16 @@ app.get('/api/embed', async (c) => {
 });
 
 // Platform-specific routes (optional, for direct access)
-// Example: /twitter/elonmusk/status/123456
+// Example: /twitter/elonmusk/status/123456 or /instagram/https://instagram.com/reel/xxx
 app.get('/:platform/*', async (c) => {
     const platform = c.req.param('platform');
-    const path = c.req.path.slice(platform.length + 2); // Remove /:platform/
+    let path = c.req.path.slice(platform.length + 2); // Remove /:platform/
+
+    // Check if path is a full URL (user passed full URL after platform)
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        // Redirect to embed endpoint with the full URL
+        return c.redirect(`/embed?url=${encodeURIComponent(path)}`, 302);
+    }
 
     // Map platform names to domains
     const platformDomains: Record<string, string> = {
