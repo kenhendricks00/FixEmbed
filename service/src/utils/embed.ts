@@ -23,7 +23,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 <head>
   <meta charset="utf-8">
   <meta property="og:title" content="${escape(embed.title)}">
-  <meta property="og:description" content="${escape(embed.description)}">
+  ${embed.description ? `<meta property="og:description" content="${escape(embed.description)}">` : ''}
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
   <meta property="og:type" content="${embed.video ? 'video.other' : 'article'}">
@@ -73,7 +73,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     // Twitter-specific tags
     html += `  <meta name="twitter:title" content="${escape(embed.title)}">\n`;
-    html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
+    if (embed.description) {
+        html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
+    }
 
     // Close head and add redirect body
     html += `</head>

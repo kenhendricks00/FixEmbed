@@ -247,7 +247,7 @@ export const instagramHandler: PlatformHandler = {
                     title: 'Instagram',
                     description: description
                         ? truncateText(description, 280)
-                        : `View ${parsed.type === 'reel' ? 'Reel' : 'Post'} on Instagram`,
+                        : undefined, // Don't set default description
                     url: canonicalUrl,
                     siteName: 'Instagram',
                     color: platformColors.instagram,
@@ -277,10 +277,6 @@ export const instagramHandler: PlatformHandler = {
                 result.data!.image = firstMedia.url;
             }
 
-            // Clear description if it's just the default text
-            if (result.data!.description?.startsWith('View ')) {
-                result.data!.description = '';
-            }
 
             return result;
 
