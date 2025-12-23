@@ -17,10 +17,17 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
 </p>
-You can toggle the link conversion on specific channels using <code>/activate</code> and <code>/deactivate</code>.
+
+**Commands:**
+- `/fix [link]` - Manually convert a link to an embed-friendly version
+- `/help` - View all commands and supported services
+- `/settings` - Configure bot settings for your server
+- `/activate` / `/deactivate` - Toggle link conversion for specific channels
+- **Right-click message → Apps → Fix Embed** - Convert links in any message
 
 # 🌟 Why Choose FixEmbed?
 - **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, and more.
+- **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
 
@@ -33,11 +40,15 @@ You can toggle the link conversion on specific channels using <code>/activate</c
     - **Pixiv**
     - **Bluesky**
     - **YouTube**
-2. **Customizable Settings**:
+2. **User-Installable App**:
+    - Install FixEmbed to your personal account
+    - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere
+    - Works in DMs, group chats, and servers
+3. **Customizable Settings**:
     - Activate or deactivate services per channel or server-wide.
-3. **Direct Message Capability**:
+4. **Direct Message Capability**:
     - Use the bot privately by sending links directly.
-4. **Easy Hosting Options**:
+5. **Easy Hosting Options**:
     - Host the bot yourself using Docker.
 
 # 🚀 Invite FixEmbed to Your Server
