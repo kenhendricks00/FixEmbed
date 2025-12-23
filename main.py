@@ -14,7 +14,46 @@ import time
 from collections import deque
 
 # Version number
-VERSION = "1.2.1"
+VERSION = "1.2.2"
+
+# Service configuration for link processing
+SERVICES = {
+    "Twitter": {
+        "patterns": [r"twitter\.com/(\w+)/status/(\d+)", r"x\.com/(\w+)/status/(\d+)"],
+        "replacements": {"twitter.com": "fxtwitter.com", "x.com": "fixupx.com"},
+        "display_format": "Twitter • {0}"
+    },
+    "Instagram": {
+        "patterns": [r"instagram\.com/(?:p|reel)/([\w-]+)"],
+        "replacements": {"instagram.com": "d.vxinstagram.com"},
+        "display_format": "Instagram • {0}"
+    },
+    "Reddit": {
+        "patterns": [r"(?:old\.)?reddit\.com/r/(\w+)/(?:s|comments)/\w+"],
+        "replacements": {"reddit.com": "vxreddit.com", "old.reddit.com": "vxreddit.com"},
+        "display_format": "Reddit • r/{0}"
+    },
+    "Threads": {
+        "patterns": [r"threads\.net/@([^/]+)/post/([\w-]+)"],
+        "replacements": {"threads.net": "fixthreads.net"},
+        "display_format": "Threads • @{0}"
+    },
+    "Pixiv": {
+        "patterns": [r"pixiv\.net/(?:en/)?artworks/(\d+)"],
+        "replacements": {"pixiv.net": "phixiv.net"},
+        "display_format": "Pixiv • {0}"
+    },
+    "Bluesky": {
+        "patterns": [r"bsky\.app/profile/([^/]+)/post/([\w-]+)"],
+        "replacements": {"bsky.app": "bskyx.app"},
+        "display_format": "Bluesky • {0}"
+    },
+    "YouTube": {
+        "patterns": [r"youtube\.com/watch\?v=([\w-]+)", r"youtu\.be/([\w-]+)"],
+        "replacements": {"youtube.com": "koutube.com", "youtu.be": "koutube.com/watch?v="},
+        "display_format": "YouTube • {0}"
+    }
+}
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -188,6 +227,8 @@ async def deactivate(interaction: discord.Interaction,
 @client.tree.command(
     name='about',
     description="Show information about the bot")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def about(interaction: discord.Interaction):
     embed = discord.Embed(
         title="About",
@@ -216,6 +257,119 @@ async def about(interaction: discord.Interaction):
         inline=False)
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
+
+@client.tree.command(
+    name='help',
+    description="Show all available commands")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="FixEmbed Commands",
+        description="Here are all the commands you can use:",
+        color=discord.Color(0x7289DA))
+    
+    commands_list = [
+        ("`/help`", "Show this help message"),
+        ("`/about`", "Show information about the bot"),
+        ("`/settings`", "Configure bot settings for your server"),
+        ("`/activate [channel]`", "Activate link processing in a channel"),
+        ("`/deactivate [channel]`", "Deactivate link processing in a channel")
+    ]
+    
+    embed.add_field(
+        name="📋 Commands",
+        value="\n".join([f"{cmd} - {desc}" for cmd, desc in commands_list]),
+        inline=False)
+    
+    embed.add_field(
+        name="🔗 Supported Services",
+        value="Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube",
+        inline=False)
+    
+    embed.add_field(
+        name="💡 Tip",
+        value="Wrap links in `< >` to prevent FixEmbed from processing them.",
+        inline=False)
+    
+    create_footer(embed, client)
+    await interaction.response.send_message(embed=embed)
+
+@client.tree.context_menu(name='Fix Embed')
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def fix_embed_context(interaction: discord.Interaction, message: discord.Message):
+    """Convert social media links in a message to embed-friendly versions."""
+    # Standard link pattern to capture all the relevant links
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
+    matches = re.findall(link_pattern, message.content)
+    
+    if not matches:
+        await interaction.response.send_message("No supported links found in this message.", ephemeral=True)
+        return
+    
+    fixed_links = []
+    
+    for original_link in matches:
+        display_text = ""
+        modified_link = original_link
+        
+        if 'twitter.com' in original_link or 'x.com' in original_link:
+            user_match = re.findall(r"(?:twitter\.com|x\.com)/(\w+)/status/\d+", original_link)
+            user = user_match[0] if user_match else "Unknown"
+            display_text = f"Twitter • {user}"
+            modified_link = original_link.replace("twitter.com", "fxtwitter.com").replace("x.com", "fixupx.com")
+            
+        elif 'instagram.com' in original_link:
+            user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)", original_link)
+            user = user_match[0] if user_match else "Unknown"
+            display_text = f"Instagram • {user}"
+            modified_link = original_link.replace("instagram.com", "d.vxinstagram.com")
+            
+        elif 'reddit.com' in original_link or 'old.reddit.com' in original_link:
+            community_match = re.findall(r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)", original_link)
+            community = community_match[0] if community_match else "Unknown"
+            display_text = f"Reddit • r/{community}"
+            modified_link = original_link.replace("reddit.com", "vxreddit.com").replace("old.reddit.com", "vxreddit.com")
+            
+        elif 'pixiv.net' in original_link:
+            id_match = re.findall(r"pixiv\.net/(?:en/)?artworks/(\d+)", original_link)
+            artwork_id = id_match[0] if id_match else "Unknown"
+            display_text = f"Pixiv • {artwork_id}"
+            modified_link = original_link.replace("pixiv.net", "phixiv.net")
+            
+        elif 'threads.net' in original_link:
+            user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
+            if user_match:
+                user = user_match[0][0]
+                display_text = f"Threads • @{user}"
+            modified_link = original_link.replace("threads.net", "fixthreads.net")
+            
+        elif 'bsky.app' in original_link:
+            bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
+            if bsky_match:
+                user = bsky_match[0][0]
+                display_text = f"Bluesky • {user}"
+            modified_link = original_link.replace("bsky.app", "bskyx.app")
+            
+        elif 'youtube.com' in original_link or 'youtu.be' in original_link:
+            if 'youtube.com' in original_link:
+                video_id_match = re.findall(r"youtube\.com/watch\?v=([\w-]+)", original_link)
+            else:
+                video_id_match = re.findall(r"youtu\.be/([\w-]+)", original_link)
+            if video_id_match:
+                video_id = video_id_match[0]
+                display_text = f"YouTube • {video_id}"
+                modified_link = f"koutube.com/watch?v={video_id}"
+        
+        if display_text and modified_link:
+            fixed_links.append(f"[{display_text}](https://{modified_link})")
+    
+    if fixed_links:
+        response = "\n".join(fixed_links)
+        await interaction.response.send_message(response)
+    else:
+        await interaction.response.send_message("Could not convert any links.", ephemeral=True)
 
 async def debug_info(interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
     if not channel:
@@ -695,8 +849,14 @@ async def on_message(message):
                         formatted_message = f"[{display_text}](https://{modified_link})"
                         await rate_limited_send(message.channel, formatted_message)
 
+        except discord.Forbidden:
+            logging.warning(f"Missing permissions in channel {message.channel.id}")
+        except discord.NotFound:
+            logging.debug(f"Message already deleted in channel {message.channel.id}")
+        except discord.HTTPException as e:
+            logging.error(f"HTTP error in on_message: {e}")
         except Exception as e:
-            logging.error(f"Error in on_message: {e}")
+            logging.error(f"Unexpected error in on_message: {e}", exc_info=True)
 
     await client.process_commands(message)
 
