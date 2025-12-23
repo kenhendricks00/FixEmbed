@@ -15,7 +15,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 
 # Service configuration for link processing
 SERVICES = {
@@ -53,6 +53,11 @@ SERVICES = {
         "patterns": [r"youtube\.com/watch\?v=([\w-]+)", r"youtu\.be/([\w-]+)"],
         "replacements": {"youtube.com": "koutube.com", "youtu.be": "koutube.com/watch?v="},
         "display_format": "YouTube • {0}"
+    },
+    "Bilibili": {
+        "patterns": [r"bilibili\.com/video/([\w]+)", r"b23\.tv/([\w]+)"],
+        "replacements": {"bilibili.com": "vxbilibili.com", "b23.tv": "vxb23.tv"},
+        "display_format": "Bilibili • {0}"
     }
 }
 
@@ -146,7 +151,7 @@ async def load_settings(db):
             mention_users = row[2]
             delete_original = row[3]
             language = row[4] if len(row) > 4 else "en"
-            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]          
+            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
@@ -198,7 +203,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for YouTube links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for YouTube links", "for Bilibili links"
 ])
 
 @tasks.loop(seconds=60)
@@ -276,7 +281,8 @@ async def about(interaction: discord.Interaction):
             "- [fixthreads](https://github.com/milanmdev/fixthreads), created by milanmdev\n"
             "- [phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
             "- [VixBluesky](https://github.com/Rapougnac/VixBluesky), created by Rapougnac\n"
-            "- [koutube](https://github.com/iGerman00/koutube), created by iGerman00"
+            "- [koutube](https://github.com/iGerman00/koutube), created by iGerman00\n"
+            "- [BiliFix](https://www.vxbilibili.com/), created by BiliFix\n"
         ),
         inline=False)
     create_footer(embed, client)
@@ -337,7 +343,7 @@ async def fix_link(interaction: discord.Interaction, link: str):
     """Convert a social media link to an embed-friendly version."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links
-    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
     match = re.search(link_pattern, link)
     
     if not match:
@@ -396,6 +402,20 @@ async def fix_link(interaction: discord.Interaction, link: str):
             display_text = f"YouTube • {video_id}"
             modified_link = f"koutube.com/watch?v={video_id}"
     
+    elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
+        if 'bilibili.com' in original_link:
+            video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", original_link)
+            if video_id_match:
+                video_id = video_id_match[0]
+                display_text = f"Bilibili • {video_id}"
+                modified_link = original_link.replace("bilibili.com", "vxbilibili.com")
+        else:
+            video_id_match = re.findall(r"b23\.tv/([\w]+)", original_link)
+            if video_id_match:
+                video_id = video_id_match[0]
+                display_text = f"Bilibili • {video_id}"
+                modified_link = original_link.replace("b23.tv", "vxb23.tv")
+    
     if display_text and modified_link:
         await interaction.response.send_message(f"[{display_text}](https://{modified_link})")
     else:
@@ -408,7 +428,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
     """Convert social media links in a message to embed-friendly versions."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links
-    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
     matches = re.findall(link_pattern, message.content)
     
     if not matches:
@@ -468,6 +488,20 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
                 video_id = video_id_match[0]
                 display_text = f"YouTube • {video_id}"
                 modified_link = f"koutube.com/watch?v={video_id}"
+        
+        elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
+            if 'bilibili.com' in original_link:
+                video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", original_link)
+                if video_id_match:
+                    video_id = video_id_match[0]
+                    display_text = f"Bilibili • {video_id}"
+                    modified_link = original_link.replace("bilibili.com", "vxbilibili.com")
+            else:
+                video_id_match = re.findall(r"b23\.tv/([\w]+)", original_link)
+                if video_id_match:
+                    video_id = video_id_match[0]
+                    display_text = f"Bilibili • {video_id}"
+                    modified_link = original_link.replace("b23.tv", "vxb23.tv")
         
         if display_text and modified_link:
             fixed_links.append(f"[{display_text}](https://{modified_link})")
@@ -608,10 +642,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
+            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"])
             service_status_list = "\n".join([
                 f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
+                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"]
             ])
             embed = discord.Embed(
                 title=get_text(lang, "service_settings"),
@@ -639,13 +673,13 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
+        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"])
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
                 emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"]
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -665,7 +699,7 @@ class ServicesDropdown(ui.Select):
 
         service_status_list = "\n".join([
             f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]
+            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"]
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -728,7 +762,7 @@ class LanguageDropdown(ui.Select):
         await update_setting(
             client.db, 
             guild_id, 
-            self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"]),
+            self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"]),
             self.settings.get("mention_users", True),
             self.settings.get("delete_original", True),
             selected_lang
@@ -932,7 +966,7 @@ class DeliveryMethodSettingsView(ui.View):
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"], "mention_users": True, "delete_original": True})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"], "mention_users": True, "delete_original": True})
     
     lang = get_guild_lang(interaction.guild.id)
     embed = discord.Embed(title=get_text(lang, "settings_title"),
@@ -948,22 +982,22 @@ async def on_message(message):
 
     guild_id = message.guild.id
     guild_settings = bot_settings.get(guild_id, {
-        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
+        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"],
         "mention_users": True,
         "delete_original": True
     })
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"])
+    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"])
     mention_users = guild_settings.get("mention_users", True)
     delete_original = guild_settings.get("delete_original", True)
     
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
+            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
             matches = re.findall(link_pattern, message.content)
 
             # Regex pattern to detect links surrounded by < >
-            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)>"
+            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)>"
 
             valid_link_found = False
 
@@ -1036,6 +1070,23 @@ async def on_message(message):
                             modified_link = f"koutube.com/watch?v={video_id}"
                             display_text = f"YouTube • {video_id}"
 
+                elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
+                    service = "Bilibili"
+                    if 'bilibili.com' in original_link:
+                        video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", original_link)
+                        if video_id_match:
+                            video_id = video_id_match[0]
+                            user_or_community = video_id
+                            modified_link = original_link.replace("bilibili.com", "vxbilibili.com")
+                            display_text = f"Bilibili • {video_id}"
+                    elif 'b23.tv' in original_link:
+                        video_id_match = re.findall(r"b23\.tv/([\w]+)", original_link)
+                        if video_id_match:
+                            video_id = video_id_match[0]
+                            user_or_community = video_id
+                            modified_link = original_link.replace("b23.tv", "vxb23.tv")
+                            display_text = f"Bilibili • {video_id}"
+
                 if service and user_or_community and service in enabled_services:
                     if not display_text:
                         display_text = f"{service} • {user_or_community}"
@@ -1048,7 +1099,9 @@ async def on_message(message):
                                                  .replace("pixiv.net", "phixiv.net")\
                                                  .replace("bsky.app", "bskyx.app")\
                                                  .replace("youtube.com", "koutube.com")\
-                                                 .replace("youtu.be", "koutube.com/watch?v=")
+                                                 .replace("youtu.be", "koutube.com/watch?v=")\
+                                                 .replace("bilibili.com", "vxbilibili.com")\
+                                                 .replace("b23.tv", "vxb23.tv")
                     valid_link_found = True
 
                 if valid_link_found:
@@ -1081,7 +1134,7 @@ async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube"],
+            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "YouTube", "Bilibili"],
             "mention_users": True,
             "delete_original": True,
             "language": "en"
@@ -1092,3 +1145,4 @@ async def on_guild_join(guild):
 load_dotenv()
 bot_token = os.getenv('BOT_TOKEN')
 client.run(bot_token)
+
