@@ -13,7 +13,7 @@
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
 
 # 🛠️ Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>YouTube</code> link, and the bot will remove your message or just the embed and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>YouTube</code>, <code>Bilibili</code> link, and the bot will remove your message or just the embed and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
 </p>
@@ -26,7 +26,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Right-click message → Apps → Fix Embed** - Convert links in any message
 
 # 🌟 Why Choose FixEmbed?
-- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, and more.
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, Bilibili, and more.
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
@@ -40,6 +40,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - **Pixiv**
     - **Bluesky**
     - **YouTube**
+    - **Bilibili**
 2. **User-Installable App**:
     - Install FixEmbed to your personal account
     - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere
@@ -85,3 +86,4 @@ If you need support or have any questions, you can join the [support server](htt
 - [phixiv](https://github.com/thelaao/phixiv), the service used to fix Pixiv embeds, created by thelaao
 - [VixBluesky](https://github.com/Rapougnac/VixBluesky), the service used to fix Bluesky embeds, created by Rapougnac
 - [koutube](https://github.com/iGerman00/koutube), the service used to fix YouTube embeds, created by iGerman00
+- [BiliFix](https://www.vxbilibili.com/), the service used to fix Bilibili embeds, created by BiliFix
