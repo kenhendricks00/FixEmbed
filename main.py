@@ -269,17 +269,29 @@ async def help_command(interaction: discord.Interaction):
         description="Here are all the commands you can use:",
         color=discord.Color(0x7289DA))
     
-    commands_list = [
-        ("`/help`", "Show this help message"),
-        ("`/about`", "Show information about the bot"),
-        ("`/settings`", "Configure bot settings for your server"),
-        ("`/activate [channel]`", "Activate link processing in a channel"),
-        ("`/deactivate [channel]`", "Deactivate link processing in a channel")
-    ]
+    embed.add_field(
+        name="🔧 Fix Links",
+        value=(
+            "`/fix [link]` - Convert a link to embed-friendly version\n"
+            "**Right-click message → Apps → Fix Embed** - Fix links in any message"
+        ),
+        inline=False)
     
     embed.add_field(
-        name="📋 Commands",
-        value="\n".join([f"{cmd} - {desc}" for cmd, desc in commands_list]),
+        name="⚙️ Server Settings",
+        value=(
+            "`/settings` - Configure bot settings for your server\n"
+            "`/activate [channel]` - Activate link processing\n"
+            "`/deactivate [channel]` - Deactivate link processing"
+        ),
+        inline=False)
+    
+    embed.add_field(
+        name="📋 Info",
+        value=(
+            "`/help` - Show this help message\n"
+            "`/about` - Show information about the bot"
+        ),
         inline=False)
     
     embed.add_field(
@@ -294,6 +306,79 @@ async def help_command(interaction: discord.Interaction):
     
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed)
+
+@client.tree.command(
+    name='fix',
+    description="Convert a social media link to an embed-friendly version")
+@app_commands.describe(link="The link to convert (Twitter, Instagram, Reddit, etc.)")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def fix_link(interaction: discord.Interaction, link: str):
+    """Convert a social media link to an embed-friendly version."""
+    # Standard link pattern to capture all the relevant links
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+)"
+    match = re.search(link_pattern, link)
+    
+    if not match:
+        await interaction.response.send_message("❌ No supported link found. Supported: Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube", ephemeral=True)
+        return
+    
+    original_link = match.group(1)
+    display_text = ""
+    modified_link = original_link
+    
+    if 'twitter.com' in original_link or 'x.com' in original_link:
+        user_match = re.findall(r"(?:twitter\.com|x\.com)/(\w+)/status/\d+", original_link)
+        user = user_match[0] if user_match else "Unknown"
+        display_text = f"Twitter • {user}"
+        modified_link = original_link.replace("twitter.com", "fxtwitter.com").replace("x.com", "fixupx.com")
+        
+    elif 'instagram.com' in original_link:
+        user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)", original_link)
+        user = user_match[0] if user_match else "Unknown"
+        display_text = f"Instagram • {user}"
+        modified_link = original_link.replace("instagram.com", "d.vxinstagram.com")
+        
+    elif 'reddit.com' in original_link or 'old.reddit.com' in original_link:
+        community_match = re.findall(r"(?:reddit\.com|old\.reddit\.com)/r/(\w+)", original_link)
+        community = community_match[0] if community_match else "Unknown"
+        display_text = f"Reddit • r/{community}"
+        modified_link = original_link.replace("reddit.com", "vxreddit.com").replace("old.reddit.com", "vxreddit.com")
+        
+    elif 'pixiv.net' in original_link:
+        id_match = re.findall(r"pixiv\.net/(?:en/)?artworks/(\d+)", original_link)
+        artwork_id = id_match[0] if id_match else "Unknown"
+        display_text = f"Pixiv • {artwork_id}"
+        modified_link = original_link.replace("pixiv.net", "phixiv.net")
+        
+    elif 'threads.net' in original_link:
+        user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
+        if user_match:
+            user = user_match[0][0]
+            display_text = f"Threads • @{user}"
+        modified_link = original_link.replace("threads.net", "fixthreads.net")
+        
+    elif 'bsky.app' in original_link:
+        bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
+        if bsky_match:
+            user = bsky_match[0][0]
+            display_text = f"Bluesky • {user}"
+        modified_link = original_link.replace("bsky.app", "bskyx.app")
+        
+    elif 'youtube.com' in original_link or 'youtu.be' in original_link:
+        if 'youtube.com' in original_link:
+            video_id_match = re.findall(r"youtube\.com/watch\?v=([\w-]+)", original_link)
+        else:
+            video_id_match = re.findall(r"youtu\.be/([\w-]+)", original_link)
+        if video_id_match:
+            video_id = video_id_match[0]
+            display_text = f"YouTube • {video_id}"
+            modified_link = f"koutube.com/watch?v={video_id}"
+    
+    if display_text and modified_link:
+        await interaction.response.send_message(f"[{display_text}](https://{modified_link})")
+    else:
+        await interaction.response.send_message("❌ Could not convert the link.", ephemeral=True)
 
 @client.tree.context_menu(name='Fix Embed')
 @app_commands.allowed_installs(guilds=True, users=True)
