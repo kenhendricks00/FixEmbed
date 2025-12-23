@@ -63,14 +63,12 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
         }
 
-        // Twitter player card for videos
-        html += `  <meta name="twitter:card" content="player">\n`;
-        html += `  <meta name="twitter:player" content="${escape(embed.video.url)}">\n`;
+        // Use summary_large_image for video files to get large preview
+        // 'player' card is for iframes, which we are not using for direct MP4s
+        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
 
-        if (embed.video.width && embed.video.height) {
-            html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
-            html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
-        }
+        // Remove twitter:player as it's meant for iframes
+        // Discord will use og:video for the actual playback
     }
 
     // Twitter-specific tags
