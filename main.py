@@ -15,7 +15,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.3.0"
+VERSION = "1.2.3"
 
 # Service configuration for link processing
 SERVICES = {
@@ -1092,4 +1092,3 @@ async def on_guild_join(guild):
 load_dotenv()
 bot_token = os.getenv('BOT_TOKEN')
 client.run(bot_token)
-
