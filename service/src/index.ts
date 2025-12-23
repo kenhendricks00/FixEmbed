@@ -159,11 +159,11 @@ app.get('/debug/instagram', async (c) => {
             embeddedImage: embeddedImageMatch ? embeddedImageMatch[1].substring(0, 100) + '...' : null,
         };
 
-        // Search for any video URLs in the entire page
-        const allVideoUrls = embedHtml.match(/https:\/\/[^"'\s]+\.mp4[^"'\s]*/g);
-        debugInfo.mp4UrlsFound = allVideoUrls ? allVideoUrls.length : 0;
-        if (allVideoUrls && allVideoUrls.length > 0) {
-            debugInfo.firstMp4Url = allVideoUrls[0].substring(0, 150);
+        // Search for actual CDN video URLs (scontent)
+        const cdnVideoUrls = embedHtml.match(/https:\/\/scontent[^"'\s]+\.mp4[^"'\s]*/g);
+        debugInfo.cdnVideoUrlsFound = cdnVideoUrls ? cdnVideoUrls.length : 0;
+        if (cdnVideoUrls && cdnVideoUrls.length > 0) {
+            debugInfo.firstCdnVideoUrl = cdnVideoUrls[0].substring(0, 200);
         }
 
         return c.json(debugInfo);

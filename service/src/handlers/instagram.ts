@@ -326,46 +326,55 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         let mediaUrl = '';
         let isVideo = false;
 
-        // Pattern 1: Video element with class
-        const videoPatterns = [
-            /class="[^"]*EmbeddedMediaVideo[^"]*"[^>]*src="([^"]+)"/i,
-            /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaVideo[^"]*"/i,
-            /<video[^>]*src="([^"]+)"/i,
-            /"video_url":"([^"]+)"/,
-        ];
-        for (const pattern of videoPatterns) {
-            const match = html.match(pattern);
-            if (match) {
-                mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
-                isVideo = true;
-                break;
-            }
+        // Pattern 1: Video from CDN (most reliable for actual videos)
+        const cdnVideoMatch = html.match(/https:\/\/scontent[^"'\s]+\.mp4[^"'\s]*/);
+        if (cdnVideoMatch) {
+            mediaUrl = cdnVideoMatch[0].replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
+            isVideo = true;
         }
 
-        // Pattern 2: Image element with class
+        // Pattern 2: Video element with class
         if (!mediaUrl) {
-            const imagePatterns = [
-                /class="[^"]*EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"/i,
-                /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaImage[^"]*"/i,
-                /<img[^>]*class="[^"]*Embed[^"]*"[^>]*src="([^"]+)"/i,
-                /"display_url":"([^"]+)"/,
-                /"thumbnail_src":"([^"]+)"/,
+            const videoPatterns = [
+                /class="[^"]*EmbeddedMediaVideo[^"]*"[^>]*src="([^"]+)"/i,
+                /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaVideo[^"]*"/i,
+                /<video[^>]*src="([^"]+)"/i,
+                /"video_url":"([^"]+)"/,
             ];
-            for (const pattern of imagePatterns) {
+            for (const pattern of videoPatterns) {
                 const match = html.match(pattern);
                 if (match) {
                     mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    isVideo = true;
                     break;
                 }
             }
         }
 
-        // Pattern 3: Look in the JSON data embedded in script tags
+        // Pattern 3: Image element with class
+        if (!mediaUrl) {
+            const imagePatterns = [
+                /class="[^"]*EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"/i,
+                /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaImage[^"]*"/i,
+                /<img[^>]*class="[^"]*Embed[^"]*"[^>]*src="([^"]+)"/i,
+                /https:\/\/scontent[^"'\s]+\.(?:jpg|jpeg|png|webp)[^"'\s]*/,
+            ];
+            for (const pattern of imagePatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    mediaUrl = (match[1] || match[0]).replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    break;
+                }
+            }
+        }
+
+        // Pattern 4: Look in the JSON data embedded in script tags
         if (!mediaUrl) {
             const jsonPatterns = [
                 /"display_url"\s*:\s*"([^"]+)"/,
-                /"src"\s*:\s*"(https:\/\/[^"]+scontent[^"]+)"/,
+                /"src"\s*:\s*"(https:\/\/scontent[^"]+)"/,
                 /"video_url"\s*:\s*"([^"]+)"/,
+                /"thumbnail_src":"([^"]+)"/,
             ];
             for (const pattern of jsonPatterns) {
                 const match = html.match(pattern);
