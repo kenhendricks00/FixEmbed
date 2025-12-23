@@ -258,10 +258,10 @@ export const instagramHandler: PlatformHandler = {
             // Add media
             if (firstMedia.type === 'video') {
                 // Use appropriate dimensions based on content type
-                // Reels are 9:16 vertical, posts are usually square or landscape
+                // Reels are 9:16 vertical (720x1280), posts are usually square
                 const isReel = parsed.type === 'reel';
-                const width = isReel ? 480 : 720;
-                const height = isReel ? 854 : 720;
+                const width = isReel ? 720 : 720;
+                const height = isReel ? 1280 : 720;
 
                 result.data!.video = {
                     url: firstMedia.url,
