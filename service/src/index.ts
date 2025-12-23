@@ -87,6 +87,68 @@ app.get('/embed', async (c) => {
     }
 });
 
+// Debug endpoint to test Instagram
+app.get('/debug/instagram', async (c) => {
+    const url = c.req.query('url') || 'https://www.instagram.com/reel/C05SEFntyFA/';
+
+    const debugInfo: Record<string, unknown> = {
+        inputUrl: url,
+        steps: [],
+    };
+
+    try {
+        // Step 1: Call Snapsave API
+        const formData = new URLSearchParams();
+        formData.append('url', url);
+
+        const response = await fetch('https://snapsave.app/action.php?lang=en', {
+            method: 'POST',
+            headers: {
+                'Accept': '*/*',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Origin': 'https://snapsave.app',
+                'Referer': 'https://snapsave.app/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            body: formData,
+        });
+
+        (debugInfo.steps as string[]).push(`1. Snapsave API call: ${response.status} ${response.statusText}`);
+        debugInfo.snapsaveStatus = response.status;
+
+        const rawHtml = await response.text();
+        debugInfo.rawHtmlLength = rawHtml.length;
+        debugInfo.rawHtmlPreview = rawHtml.substring(0, 500);
+
+        // Step 2: Check for decryption pattern
+        const hasDecryptPattern = rawHtml.includes('decodeURIComponent(escape(r))}(');
+        (debugInfo.steps as string[]).push(`2. Has decrypt pattern: ${hasDecryptPattern}`);
+        debugInfo.hasDecryptPattern = hasDecryptPattern;
+
+        // Step 3: Try embed HTML fallback
+        const embedUrl = `https://www.instagram.com/p/C05SEFntyFA/embed/captioned/`;
+        const embedResponse = await fetch(embedUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+        });
+
+        (debugInfo.steps as string[]).push(`3. Instagram embed page: ${embedResponse.status}`);
+        debugInfo.embedStatus = embedResponse.status;
+
+        const embedHtml = await embedResponse.text();
+        debugInfo.embedHtmlLength = embedHtml.length;
+        debugInfo.hasEmbeddedMedia = embedHtml.includes('EmbeddedMedia');
+        debugInfo.hasUsernameText = embedHtml.includes('UsernameText');
+        debugInfo.embedPreview = embedHtml.substring(0, 500);
+
+        return c.json(debugInfo);
+    } catch (error) {
+        debugInfo.error = error instanceof Error ? error.message : 'Unknown error';
+        return c.json(debugInfo);
+    }
+});
+
 // API endpoint for embed data (JSON)
 app.get('/api/embed', async (c) => {
     const url = c.req.query('url');
