@@ -256,32 +256,39 @@ export const instagramHandler: PlatformHandler = {
             };
 
             // Add media
-            if (firstMedia.type === 'video') {
-                // Use proxy URL for video like vxinstagram does
-                // This ensures Discord fetches the video properly
-                const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
-                const proxyVideoUrl = `https://${embedDomain}/video/instagram?url=${encodeURIComponent(firstMedia.url)}`;
+            // Use appropriate dimensions based on content type
+            // Reels are 9:16 vertical (720x1280), posts are usually square
+            const isReel = parsed.type === 'reel';
 
-                // Don't set fixed dimensions - let Discord determine from video file
-                result.data!.video = {
-                    url: proxyVideoUrl,
-                    width: 0,  // Discord will get from video metadata
-                    height: 0,
-                    thumbnail: preview || firstMedia.thumbnail,
-                };
-                result.data!.image = preview || firstMedia.thumbnail;
-            } else {
-                result.data!.image = firstMedia.url;
+            // Use proxy URL for video like vxinstagram does
+            // This ensures Discord fetches the video properly
+            const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+            const proxyVideoUrl = `https://${embedDomain}/video/instagram?url=${encodeURIComponent(firstMedia.url)}`;
+
+            result.data!.video = {
+                url: proxyVideoUrl,
+                width: isReel ? 720 : 720,  // Re-add dimensions to guide Discord
+                height: isReel ? 1280 : 720,
+                thumbnail: preview || firstMedia.thumbnail,
+            };
+            result.data!.image = preview || firstMedia.thumbnail;
+        } else {
+            result.data!.image = firstMedia.url;
+        }
+
+            // Clear description if it's just the default text
+            if(result.data!.description?.startsWith('View ')) {
+        result.data!.description = '';
             }
 
-            return result;
+return result;
 
         } catch (error) {
-            console.error('Instagram handler error:', error);
+    console.error('Instagram handler error:', error);
 
-            // Fallback: try embed HTML scraping
-            return await scrapeEmbedHtml(canonicalUrl, parsed);
-        }
+    // Fallback: try embed HTML scraping
+    return await scrapeEmbedHtml(canonicalUrl, parsed);
+}
     },
 };
 
