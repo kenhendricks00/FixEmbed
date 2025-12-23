@@ -1,0 +1,26 @@
+name = "fixembed-service"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Account ID - uncomment and add yours
+# account_id = "your-account-id-here"
+
+[vars]
+# Branding
+SITE_NAME = "FixEmbed"
+BRANDING_NAME = "FixEmbed Service"
+
+# Domain for embeds (update when you set up ken.tools)
+EMBED_DOMAIN = "embed.ken.tools"
+
+# Feature flags
+ENABLE_CACHE = true
+CACHE_TTL = 3600
+
+[dev]
+port = 8787
+
+# Optional: KV namespace for caching
+# [[kv_namespaces]]
+# binding = "EMBED_CACHE"
+# id = "your-kv-namespace-id"
