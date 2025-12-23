@@ -118,15 +118,15 @@ app.get('/debug/instagram', async (c) => {
 
         const rawHtml = await response.text();
         debugInfo.rawHtmlLength = rawHtml.length;
-        debugInfo.rawHtmlPreview = rawHtml.substring(0, 500);
 
-        // Step 2: Check for decryption pattern
+        // Step 2: Check for decryption pattern and try decrypt
         const hasDecryptPattern = rawHtml.includes('decodeURIComponent(escape(r))}(');
         (debugInfo.steps as string[]).push(`2. Has decrypt pattern: ${hasDecryptPattern}`);
         debugInfo.hasDecryptPattern = hasDecryptPattern;
 
         // Step 3: Try embed HTML fallback
-        const embedUrl = `https://www.instagram.com/p/C05SEFntyFA/embed/captioned/`;
+        const shortcode = url.match(/\/(p|reel|reels|tv)\/([^\/\?]+)/)?.[2] || 'C05SEFntyFA';
+        const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
         const embedResponse = await fetch(embedUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -138,9 +138,33 @@ app.get('/debug/instagram', async (c) => {
 
         const embedHtml = await embedResponse.text();
         debugInfo.embedHtmlLength = embedHtml.length;
+
+        // Check for media classes
         debugInfo.hasEmbeddedMedia = embedHtml.includes('EmbeddedMedia');
         debugInfo.hasUsernameText = embedHtml.includes('UsernameText');
-        debugInfo.embedPreview = embedHtml.substring(0, 500);
+        debugInfo.hasWatchOnInstagram = embedHtml.includes('WatchOnInstagram');
+
+        // Try to extract media URLs
+        const videoUrlMatch = embedHtml.match(/"video_url":"([^"]+)"/);
+        const displayUrlMatch = embedHtml.match(/"display_url"\s*:\s*"([^"]+)"/);
+        const thumbnailMatch = embedHtml.match(/"thumbnail_src":"([^"]+)"/);
+        const embeddedVideoMatch = embedHtml.match(/class="[^"]*EmbeddedMediaVideo[^"]*"[^>]*src="([^"]+)"/i);
+        const embeddedImageMatch = embedHtml.match(/class="[^"]*EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"/i);
+
+        debugInfo.extractedUrls = {
+            video_url: videoUrlMatch ? videoUrlMatch[1].substring(0, 100) + '...' : null,
+            display_url: displayUrlMatch ? displayUrlMatch[1].substring(0, 100) + '...' : null,
+            thumbnail_src: thumbnailMatch ? thumbnailMatch[1].substring(0, 100) + '...' : null,
+            embeddedVideo: embeddedVideoMatch ? embeddedVideoMatch[1].substring(0, 100) + '...' : null,
+            embeddedImage: embeddedImageMatch ? embeddedImageMatch[1].substring(0, 100) + '...' : null,
+        };
+
+        // Search for any video URLs in the entire page
+        const allVideoUrls = embedHtml.match(/https:\/\/[^"'\s]+\.mp4[^"'\s]*/g);
+        debugInfo.mp4UrlsFound = allVideoUrls ? allVideoUrls.length : 0;
+        if (allVideoUrls && allVideoUrls.length > 0) {
+            debugInfo.firstMp4Url = allVideoUrls[0].substring(0, 150);
+        }
 
         return c.json(debugInfo);
     } catch (error) {
