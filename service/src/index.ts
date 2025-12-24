@@ -91,25 +91,26 @@ app.get('/activity/:encodedData', (c) => {
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
         const author = embedData.a || 'FixEmbed';
 
-        // Build attachment based on media type (video or image)
+        // Build attachment - ONLY for images, not videos
+        // Videos are handled by OG tags, ActivityPub just provides branding
+        // This allows both video playback AND footer branding like FixupX
         let attachment: any[] = [];
-        if (embedData.v) {
-            // Video attachment
-            attachment = [{
-                'type': 'Document',
-                'mediaType': 'video/mp4',
-                'url': embedData.v,
-                'name': embedData.t || 'Video',
-                // Include poster/thumbnail if available
-                ...(embedData.p ? { 'preview': { 'type': 'Image', 'url': embedData.p } } : {})
-            }];
-        } else if (embedData.i) {
-            // Image attachment
+        if (embedData.i && !embedData.v) {
+            // Image attachment (only if no video)
             attachment = [{
                 'type': 'Document',
                 'mediaType': 'image/jpeg',
                 'url': embedData.i,
                 'name': embedData.t || 'Image'
+            }];
+        }
+        // For videos: use poster as image so Discord shows thumbnail with footer
+        else if (embedData.p) {
+            attachment = [{
+                'type': 'Document',
+                'mediaType': 'image/jpeg',
+                'url': embedData.p,
+                'name': embedData.t || 'Video thumbnail'
             }];
         }
 

@@ -31,7 +31,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
   <meta property="og:description" content="${escape(embed.description)}">
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
-  <meta property="og:type" content="${(embed.video && !isDiscord) ? 'video.other' : 'article'}">
+  <meta property="og:type" content="${embed.video ? 'video.other' : 'article'}">
 `;
 
     // Color theme
@@ -60,15 +60,10 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     // Video embed
     if (embed.video) {
-        // For Discord, we skip standard og:video tags to force it to use the ActivityPub response
-        // The ActivityPub response includes the video attachment, which renders with the custom footer
-        // For other platforms (Telegram, etc.), we include the standard video tags
-        if (!isDiscord) {
-            html += `  <meta property="og:video" content="${escape(embed.video.url)}">\n`;
-            html += `  <meta property="og:video:url" content="${escape(embed.video.url)}">\n`;
-            html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
-            html += `  <meta property="og:video:type" content="video/mp4">\n`;
-        }
+        html += `  <meta property="og:video" content="${escape(embed.video.url)}">\n`;
+        html += `  <meta property="og:video:url" content="${escape(embed.video.url)}">\n`;
+        html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
+        html += `  <meta property="og:video:type" content="video/mp4">\n`;
 
         // Only include dimensions if they're set (non-zero)
         if (embed.video.width && embed.video.height) {
