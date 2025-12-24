@@ -413,7 +413,7 @@ export const instagramHandler: PlatformHandler = {
             // Add media
             if (firstMedia.type === 'video') {
                 // Use appropriate dimensions based on content type
-                // Reels are 9:16 vertical (720x1280), posts are usually square
+                // Reels are 9:16 vertical (720x1280), posts are usually square (720x720)
                 const isReel = parsed.type === 'reel';
 
                 // Use proxy URL for video like vxinstagram does
@@ -423,8 +423,8 @@ export const instagramHandler: PlatformHandler = {
 
                 result.data!.video = {
                     url: proxyVideoUrl,
-                    width: isReel ? 720 : 1280, // Default dimensions to ensure player card works
-                    height: 1280,
+                    width: isReel ? 720 : 720,    // Default width
+                    height: isReel ? 1280 : 720,  // Reels are 9:16, posts are often square
                     thumbnail: preview || firstMedia.thumbnail,
                 };
                 result.data!.image = preview || firstMedia.thumbnail;
