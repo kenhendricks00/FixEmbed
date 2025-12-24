@@ -576,6 +576,116 @@ app.get('/debug/pixiv', async (c) => {
     return c.json(debugInfo);
 });
 
+// Debug endpoint to test YouTube
+app.get('/debug/youtube', async (c) => {
+    const url = c.req.query('url') || 'https://www.youtube.com/watch?v=JS4wtEen2EM';
+
+    // Extract video ID
+    const videoIdMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]+)/);
+    const videoId = videoIdMatch?.[1] || 'JS4wtEen2EM';
+
+    const debugInfo: Record<string, unknown> = {
+        inputUrl: url,
+        videoId,
+        tests: [],
+    };
+
+    // Test 1: YouTube oEmbed API
+    try {
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
+
+        const resp1 = await fetch(oembedUrl);
+        const body1 = await resp1.text();
+
+        (debugInfo.tests as any[]).push({
+            name: 'YouTube oEmbed',
+            status: resp1.status,
+            bodyPreview: body1.substring(0, 800),
+        });
+
+        if (resp1.ok) {
+            try {
+                debugInfo.oembedData = JSON.parse(body1);
+            } catch {
+                debugInfo.oembedParseError = 'Failed to parse JSON';
+            }
+        }
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'YouTube oEmbed', error: e.message });
+    }
+
+    // Test 2: YouTube noembed (alternative)
+    try {
+        const noembedUrl = `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
+        const resp2 = await fetch(noembedUrl);
+        const body2 = await resp2.text();
+
+        (debugInfo.tests as any[]).push({
+            name: 'Noembed API',
+            status: resp2.status,
+            bodyPreview: body2.substring(0, 800),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Noembed', error: e.message });
+    }
+
+    return c.json(debugInfo);
+});
+
+// Debug endpoint to test Bilibili
+app.get('/debug/bilibili', async (c) => {
+    const url = c.req.query('url') || 'https://www.bilibili.com/video/BV1YjBtBfE1q';
+
+    const bvMatch = url.match(/BV[a-zA-Z0-9]+/);
+    const bvid = bvMatch?.[0] || 'BV1YjBtBfE1q';
+
+    const debugInfo: Record<string, unknown> = {
+        inputUrl: url,
+        bvid,
+        tests: [],
+    };
+
+    // Test 1: Bilibili API
+    try {
+        const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
+        const resp1 = await fetch(apiUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0)',
+                'Referer': 'https://www.bilibili.com/',
+            },
+        });
+        const body1 = await resp1.text();
+
+        (debugInfo.tests as any[]).push({
+            name: 'Bilibili API',
+            status: resp1.status,
+            bodyLength: body1.length,
+        });
+
+        if (resp1.ok) {
+            try {
+                const data = JSON.parse(body1);
+                debugInfo.apiData = {
+                    code: data.code,
+                    title: data.data?.title,
+                    desc: data.data?.desc?.substring(0, 100),
+                    owner: data.data?.owner?.name,
+                    pic: data.data?.pic,
+                    views: data.data?.stat?.view,
+                    likes: data.data?.stat?.like,
+                };
+            } catch {
+                debugInfo.apiParseError = 'Failed to parse JSON';
+            }
+        }
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Bilibili API', error: e.message });
+    }
+
+    return c.json(debugInfo);
+});
+
 // API endpoint for embed data (JSON)
 app.get('/api/embed', async (c) => {
     const url = c.req.query('url');
