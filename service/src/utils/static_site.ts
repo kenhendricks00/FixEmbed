@@ -63,9 +63,8 @@ export const indexHtml = `<!DOCTYPE html>
                     </a>
                     <div class="nav-links">
                         <a href="#features">Features</a>
-                        <a href="#how-it-works">How It Works</a>
+                        <a href="/docs">Docs</a>
                         <a href="#platforms">Platforms</a>
-                        <a href="#hosting">Self-Host</a>
                         <a href="#support">Support</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
                             <i class="fab fa-github"></i>
@@ -127,7 +126,7 @@ export const indexHtml = `<!DOCTYPE html>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
                     <h3>Multi-Platform Support</h3>
-                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, Bilibili, and more to
+                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more to
                         come.</p>
                 </div>
                 <div class="feature-card">
@@ -177,7 +176,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Share social media links</h3>
-                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, or Bilibili.
+                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, or Bilibili.
                         </p>
                     </div>
                 </div>
@@ -228,11 +227,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <h3>Bluesky</h3>
                     <p>Embeds Bluesky posts with full media support.</p>
                 </div>
-                <div class="platform-card">
-                    <div class="platform-icon"><i class="fab fa-youtube"></i></div>
-                    <h3>YouTube</h3>
-                    <p>Converts YouTube links for proper embed playback.</p>
-                </div>
+
                 <div class="platform-card">
                     <div class="platform-icon"><i class="fas fa-play-circle"></i></div>
                     <h3>Bilibili</h3>
@@ -312,8 +307,7 @@ docker run -d kenhendricks00/fixembed</code></pre>
                 <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">phixiv by thelaao</a>
                 <a href="https://github.com/Rapougnac/VixBluesky" class="credit-link" target="_blank">VixBluesky by
                     Rapougnac</a>
-                <a href="https://github.com/iGerman00/koutube" class="credit-link" target="_blank">koutube by
-                    iGerman00</a>
+
                 <a href="https://www.vxbilibili.com/" class="credit-link" target="_blank">BiliFix by BiliFix</a>
             </div>
         </div>
@@ -328,13 +322,12 @@ docker run -d kenhendricks00/fixembed</code></pre>
                 </div>
                 <div class="footer-right">
                     <div class="footer-links">
-                        <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764"
-                            target="_blank">Invite Bot</a>
+                        <a href="/docs">Docs</a>
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank">GitHub</a>
-                        <a href="https://top.gg/bot/1173820242305224764" target="_blank">Top.gg</a>
-                        <a href="https://discord.gg/QFxTAmtZdn" target="_blank">Support Server</a>
                     </div>
-                    <p class="copyright">© 2023-2025 FixEmbed - Made with ❤️ for Discord users</p>
+                    <p class="copyright">© 2023-2025 FixEmbed</p>
                 </div>
             </div>
         </div>
@@ -1744,7 +1737,7 @@ export const docsHtml = `<!DOCTYPE html>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .docs-nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .docs-nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; justify-content: center; }
         .docs-nav a { padding: 0.75rem 1.5rem; background: var(--bg-tertiary); border-radius: 8px; color: var(--text-secondary); border: 1px solid var(--glass-border); }
         .docs-nav a:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
         .code-example { background: var(--bg-primary); padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid var(--glass-border); overflow-x: auto; margin: 1rem 0; }
