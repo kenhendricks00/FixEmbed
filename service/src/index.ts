@@ -13,6 +13,7 @@ import { logger } from 'hono/logger';
 import type { Env } from './types';
 import { findHandler } from './handlers';
 import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed';
+import { indexHtml, scriptJs, stylesCss } from './utils/static_site';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -21,19 +22,21 @@ app.use('*', cors());
 app.use('*', logger());
 
 // Health check
+// Serve static landing page
 app.get('/', (c) => {
-    return c.json({
-        name: 'FixEmbed Service',
-        version: '1.0.0',
-        status: 'running',
-        platforms: [
-            'twitter', 'reddit', 'bluesky',
-            'instagram', 'threads', 'pixiv', 'bilibili'
-        ],
-        usage: {
-            'Discord bot': 'Use this service as a proxy to fix embeds',
-            'Direct': 'GET /embed?url=<social-media-url>',
-        },
+    return c.html(indexHtml);
+});
+
+// Serve static assets
+app.get('/styles.css', (c) => {
+    return c.text(stylesCss, 200, {
+        'Content-Type': 'text/css',
+    });
+});
+
+app.get('/script.js', (c) => {
+    return c.text(scriptJs, 200, {
+        'Content-Type': 'application/javascript',
     });
 });
 
