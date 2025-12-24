@@ -1210,6 +1210,11 @@ footer {
     background-clip: text;
 }
 
+.footer-left p {
+    color: var(--text-secondary);
+    max-width: 300px;
+}
+
 .footer-links {
     display: flex;
     gap: 24px;
