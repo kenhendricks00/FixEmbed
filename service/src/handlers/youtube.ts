@@ -1,73 +1,28 @@
 /**
  * FixEmbed Service - YouTube Handler
  * 
- * Uses Invidious API instances to fetch YouTube video metadata.
- * Based on koutube implementation (https://github.com/iGerman00/koutube)
+ * Uses YouTube's oEmbed API since it works reliably from Cloudflare Workers.
  * 
  * Key features:
- * - Fetches from Invidious API instances (rotates for reliability)
- * - Gets title, description, views, likes, author info
- * - High quality thumbnails
+ * - Fetches title, author, thumbnail from oEmbed
+ * - Uses high-quality thumbnail (maxresdefault)
+ * - Provides embed URL for video player
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseYouTubeUrl, truncateText } from '../utils/fetch';
+import { parseYouTubeUrl } from '../utils/fetch';
 import { platformColors } from '../utils/embed';
 
-// Invidious API instances (from koutube)
-const INVIDIOUS_INSTANCES = [
-    'https://invidious.io.lol',
-    'https://iv.nboeck.de',
-    'https://invidious.einfachzocken.eu',
-];
-
-function getRandomInstance(): string {
-    return INVIDIOUS_INSTANCES[Math.floor(Math.random() * INVIDIOUS_INSTANCES.length)];
-}
-
-// Invidious video response type
-interface InvidiousVideo {
+interface YouTubeOEmbed {
     title: string;
-    videoId: string;
-    description: string;
-    descriptionHtml: string;
-    published: number;
-    publishedText: string;
-    viewCount: number;
-    likeCount: number;
-    dislikeCount: number;
-    author: string;
-    authorId: string;
-    authorUrl: string;
-    lengthSeconds: number;
-    videoThumbnails: Array<{
-        quality: string;
-        url: string;
-        width: number;
-        height: number;
-    }>;
-}
-
-// Format large numbers with K/M suffix
-function formatNumber(num: number): string {
-    if (num >= 1_000_000) {
-        return (num / 1_000_000).toFixed(1) + 'M';
-    } else if (num >= 1_000) {
-        return (num / 1_000).toFixed(1) + 'K';
-    }
-    return num.toLocaleString();
-}
-
-// Format duration from seconds to MM:SS or HH:MM:SS
-function formatDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    author_name: string;
+    author_url: string;
+    thumbnail_url: string;
+    thumbnail_width: number;
+    thumbnail_height: number;
+    html: string;
+    width: number;
+    height: number;
 }
 
 export const youtubeHandler: PlatformHandler = {
@@ -89,98 +44,67 @@ export const youtubeHandler: PlatformHandler = {
         const videoId = parsed.videoId;
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-        // Try Invidious API instances
-        for (let attempt = 0; attempt < 3; attempt++) {
-            const instance = getRandomInstance();
+        try {
+            // Use YouTube's oEmbed API (works reliably)
+            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
 
-            try {
-                const apiUrl = `${instance}/api/v1/videos/${videoId}`;
-                const response = await fetch(apiUrl, {
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                });
-
-                if (!response.ok) {
-                    console.log(`Invidious ${instance} returned ${response.status}`);
-                    continue;
-                }
-
-                const data = await response.json() as InvidiousVideo;
-
-                // Get best thumbnail (prefer maxres, fallback to lower quality)
-                let thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
-                if (data.videoThumbnails && data.videoThumbnails.length > 0) {
-                    // Find maxres or highest quality
-                    const maxres = data.videoThumbnails.find(t => t.quality === 'maxres');
-                    const hq = data.videoThumbnails.find(t => t.quality === 'hq720');
-                    const sd = data.videoThumbnails.find(t => t.quality === 'sddefault');
-                    thumbnail = (maxres || hq || sd || data.videoThumbnails[0]).url;
-                }
-
-                // Build stats string
-                const stats: string[] = [];
-                stats.push(`👁️ ${formatNumber(data.viewCount)}`);
-                if (data.likeCount) {
-                    stats.push(`👍 ${formatNumber(data.likeCount)}`);
-                }
-                const statsStr = stats.join(' • ');
-
-                // Build description
-                let description = data.description || '';
-                if (description.length > 200) {
-                    description = truncateText(description, 200);
-                }
-                description = `${description}\n\n${statsStr}`;
-
-                // Format duration
-                const duration = formatDuration(data.lengthSeconds);
-
-                return {
-                    success: true,
-                    data: {
-                        title: data.title,
-                        description,
-                        url: videoUrl,
-                        siteName: `YouTube • ${duration}`,
-                        authorName: data.author,
-                        authorUrl: `https://www.youtube.com${data.authorUrl}`,
-                        image: thumbnail,
-                        video: {
-                            url: `https://www.youtube.com/embed/${videoId}`,
-                            width: 1280,
-                            height: 720,
-                            thumbnail,
-                        },
-                        color: platformColors.youtube,
-                        platform: 'youtube',
-                    },
-                };
-            } catch (error) {
-                console.error(`Invidious ${instance} error:`, error);
-                continue;
-            }
-        }
-
-        // Fallback: Use YouTube's direct thumbnail
-        console.log('All Invidious instances failed, using fallback');
-        return {
-            success: true,
-            data: {
-                title: 'YouTube Video',
-                description: 'Watch on YouTube',
-                url: videoUrl,
-                siteName: 'YouTube',
-                image: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-                video: {
-                    url: `https://www.youtube.com/embed/${videoId}`,
-                    width: 1280,
-                    height: 720,
-                    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            const response = await fetch(oembedUrl, {
+                headers: {
+                    'Accept': 'application/json',
                 },
-                color: platformColors.youtube,
-                platform: 'youtube',
-            },
-        };
+            });
+
+            if (!response.ok) {
+                throw new Error(`oEmbed returned ${response.status}`);
+            }
+
+            const data = await response.json() as YouTubeOEmbed;
+
+            // Use maxresdefault for best quality thumbnail
+            const thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+
+            return {
+                success: true,
+                data: {
+                    title: data.title,
+                    description: `by ${data.author_name}`,
+                    url: videoUrl,
+                    siteName: 'YouTube',
+                    authorName: data.author_name,
+                    authorUrl: data.author_url,
+                    image: thumbnail,
+                    video: {
+                        url: `https://www.youtube.com/embed/${videoId}`,
+                        width: 1280,
+                        height: 720,
+                        thumbnail,
+                    },
+                    color: platformColors.youtube,
+                    platform: 'youtube',
+                },
+            };
+        } catch (error) {
+            console.error('YouTube handler error:', error);
+
+            // Fallback: still provide basic embed with thumbnail
+            return {
+                success: true,
+                data: {
+                    title: 'YouTube Video',
+                    description: 'Watch on YouTube',
+                    url: videoUrl,
+                    siteName: 'YouTube',
+                    image: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+                    video: {
+                        url: `https://www.youtube.com/embed/${videoId}`,
+                        width: 1280,
+                        height: 720,
+                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                    },
+                    color: platformColors.youtube,
+                    platform: 'youtube',
+                },
+            };
+        }
     },
 };
