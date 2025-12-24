@@ -423,8 +423,8 @@ export const instagramHandler: PlatformHandler = {
 
                 result.data!.video = {
                     url: proxyVideoUrl,
-                    width: 0,   // Remove dimensions - let Discord determine from video file
-                    height: 0,
+                    width: isReel ? 720 : 1280, // Default dimensions to ensure player card works
+                    height: 1280,
                     thumbnail: preview || firstMedia.thumbnail,
                 };
                 result.data!.image = preview || firstMedia.thumbnail;
