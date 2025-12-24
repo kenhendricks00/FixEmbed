@@ -31,7 +31,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
   <meta property="og:description" content="${escape(embed.description)}">
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
-  <meta property="og:type" content="${embed.video ? 'video.other' : 'article'}">
+  <meta property="og:type" content="${embed.video ? 'video.other' : 'website'}">
 `;
 
     // Color theme
