@@ -187,22 +187,24 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     }
 
     // Priority 1: Find rapidcdn /v2 video URL (this is the actual video)
+    // NOTE: /v2 URLs are ALWAYS videos regardless of button text
     const rapidcdnV2Match = html.match(/https:\/\/d\.rapidcdn\.app\/v2\?token=[^"'\s<>]+/);
     if (rapidcdnV2Match) {
         media.push({
             url: rapidcdnV2Match[0],
-            type: defaultType,
+            type: 'video', // FORCE video type for /v2 URLs
             thumbnail: preview,
         });
         return { media, description, preview };
     }
 
     // Priority 2: Find rapidcdn /d download URL
+    // NOTE: /d URLs are ALWAYS videos regardless of button text
     const rapidcdnDMatch = html.match(/https:\/\/d\.rapidcdn\.app\/d\?token=[^"'\s<>]+/);
     if (rapidcdnDMatch) {
         media.push({
             url: rapidcdnDMatch[0],
-            type: defaultType,
+            type: 'video', // FORCE video type for /d URLs
             thumbnail: preview,
         });
         return { media, description, preview };
