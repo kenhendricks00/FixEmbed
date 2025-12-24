@@ -11,7 +11,7 @@ SITE_NAME = "FixEmbed"
 BRANDING_NAME = "FixEmbed Service"
 
 # Domain for embeds (update when you set up ken.tools)
-EMBED_DOMAIN = "embed.ken.tools"
+EMBED_DOMAIN = "fixembed.app"
 
 # Feature flags
 ENABLE_CACHE = true

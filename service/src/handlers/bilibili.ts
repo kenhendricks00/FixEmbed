@@ -115,7 +115,7 @@ export const bilibiliHandler: PlatformHandler = {
         }
 
         const canonicalUrl = `https://www.bilibili.com/video/${bvid}`;
-        const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+        const embedDomain = (env as any).EMBED_DOMAIN || 'fixembed.app';
 
         try {
             // Scrape vxbilibili.com for OG tags (direct Bilibili API is blocked)

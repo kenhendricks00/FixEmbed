@@ -117,7 +117,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // By omitting oEmbed, we force Discord to rely on <meta name="twitter:card" content="summary_large_image">
     // which reliably produces a full-width image. vxinstagram works this way.
     if (embed.platform !== 'instagram') {
-        const oembedUrl = new URL('https://embed.ken.tools/oembed');
+        const oembedUrl = new URL('https://fixembed.app/oembed');
         oembedUrl.searchParams.set('url', embed.url);
         if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
         if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);

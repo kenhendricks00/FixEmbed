@@ -258,7 +258,7 @@ export const threadsHandler: PlatformHandler = {
                 // Add video if available
                 if (graphqlResult.videoUrl) {
                     // Use video proxy like we do for Instagram
-                    const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+                    const embedDomain = (env as any).EMBED_DOMAIN || 'fixembed.app';
                     const proxyVideoUrl = `https://${embedDomain}/video/threads?url=${encodeURIComponent(graphqlResult.videoUrl)}`;
 
                     const firstImage = graphqlResult.images?.[0];

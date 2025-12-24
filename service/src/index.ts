@@ -52,7 +52,7 @@ app.get('/oembed', (c) => {
         version: '1.0',
         type: 'rich',
         provider_name: provider || 'FixEmbed',  // Use branded name if available
-        provider_url: 'https://embed.ken.tools',
+        provider_url: 'https://fixembed.app',
         title: 'Post',
     };
 
@@ -60,10 +60,10 @@ app.get('/oembed', (c) => {
     // This prevents "FixEmbed" from showing twice
     if (stats) {
         oembedResponse.author_name = stats;
-        oembedResponse.author_url = originalUrl || 'https://embed.ken.tools';
+        oembedResponse.author_url = originalUrl || 'https://fixembed.app';
     } else if (author) {
         oembedResponse.author_name = author;
-        oembedResponse.author_url = originalUrl || 'https://embed.ken.tools';
+        oembedResponse.author_url = originalUrl || 'https://fixembed.app';
     }
 
     // Do NOT set thumbnail_url, thumbnail_width, or thumbnail_height
@@ -77,14 +77,14 @@ app.get('/oembed', (c) => {
         if (stats || author) {
             authorXml = `
     <author_name>${stats || author}</author_name>
-    <author_url>${originalUrl || 'https://embed.ken.tools'}</author_url>`;
+    <author_url>${originalUrl || 'https://fixembed.app'}</author_url>`;
         }
         const xml = `<?xml version="1.0" encoding="utf-8"?>
 <oembed>
     <version>1.0</version>
     <type>rich</type>
     <provider_name>${provider || 'FixEmbed'}</provider_name>
-    <provider_url>https://embed.ken.tools</provider_url>${authorXml}
+    <provider_url>https://fixembed.app</provider_url>${authorXml}
     <title>Post</title>
 </oembed>`;
         return c.text(xml, 200, { 'Content-Type': 'text/xml' });
@@ -153,13 +153,13 @@ app.get('/activity/:encodedData', (c) => {
                     'Emoji': 'toot:Emoji'
                 }
             ],
-            'id': `https://embed.ken.tools/activity/${encodedData}`,
+            'id': `https://fixembed.app/activity/${encodedData}`,
             'type': 'Note',
             'summary': embedData.s || null, // Stats row
             'content': `<p>${embedData.d || ''}</p>`,
-            'attributedTo': `https://embed.ken.tools/activity/${encodedData}/actor`,
+            'attributedTo': `https://fixembed.app/activity/${encodedData}/actor`,
             'published': new Date().toISOString(),
-            'url': embedData.u || 'https://embed.ken.tools',
+            'url': embedData.u || 'https://fixembed.app',
             ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
         };
 
@@ -172,7 +172,7 @@ app.get('/activity/:encodedData', (c) => {
     if (embedData.u) {
         return c.redirect(embedData.u, 302);
     }
-    return c.redirect('https://embed.ken.tools/', 302);
+    return c.redirect('https://fixembed.app/', 302);
 });
 
 // ActivityPub Actor endpoint to provide Author Name and Icon in header
@@ -205,12 +205,12 @@ app.get('/activity/:encodedData/actor', (c) => {
                 }
             }
         ],
-        'id': `https://embed.ken.tools/activity/${encodedData}/actor`,
+        'id': `https://fixembed.app/activity/${encodedData}/actor`,
         'type': 'Person',
         'name': authorName,
         'preferredUsername': authorHandle.replace('@', ''),
         'summary': 'FixEmbed Service',
-        'url': `https://embed.ken.tools/users/${encodeURIComponent(authorName)}`,
+        'url': `https://fixembed.app/users/${encodeURIComponent(authorName)}`,
         'icon': {
             'type': 'Image',
             'mediaType': 'image/jpeg',
@@ -232,12 +232,12 @@ app.get('/users/:author/statuses/:status', (c) => {
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
         const activityPubResponse = {
             '@context': ['https://www.w3.org/ns/activitystreams'],
-            'id': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+            'id': `https://fixembed.app/users/${author}/statuses/${status}`,
             'type': 'Note',
             'content': '',
-            'attributedTo': `https://embed.ken.tools/users/${author}`,
+            'attributedTo': `https://fixembed.app/users/${author}`,
             'published': new Date().toISOString(),
-            'url': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+            'url': `https://fixembed.app/users/${author}/statuses/${status}`,
         };
 
         return c.json(activityPubResponse, 200, {
@@ -245,7 +245,7 @@ app.get('/users/:author/statuses/:status', (c) => {
         });
     }
 
-    return c.redirect('https://embed.ken.tools/', 302);
+    return c.redirect('https://fixembed.app/', 302);
 });
 
 // ActivityPub actor endpoint for Discord to fetch branding info
@@ -259,12 +259,12 @@ app.get('/users/:author', (c) => {
                 'https://www.w3.org/ns/activitystreams',
                 'https://w3id.org/security/v1'
             ],
-            'id': `https://embed.ken.tools/users/${author}`,
+            'id': `https://fixembed.app/users/${author}`,
             'type': 'Person',
             'preferredUsername': author,
             'name': 'FixEmbed',
             'summary': 'Better embeds for social media links',
-            'url': 'https://embed.ken.tools',
+            'url': 'https://fixembed.app',
             'icon': {
                 'type': 'Image',
                 'mediaType': 'image/png',
@@ -282,7 +282,7 @@ app.get('/users/:author', (c) => {
         });
     }
 
-    return c.redirect('https://embed.ken.tools/', 302);
+    return c.redirect('https://fixembed.app/', 302);
 });
 
 // Main embed endpoint
