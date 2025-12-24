@@ -4,16 +4,24 @@ A unified embed service for Discord, built with Cloudflare Workers and Hono.
 
 ## Supported Platforms
 
-| Platform | Status | API Type |
-|----------|--------|----------|
+| Platform | Status | Method |
+|----------|--------|--------|
 | Twitter/X | ✅ | Syndication API |
 | Reddit | ✅ | JSON API |
 | YouTube | ✅ | oEmbed |
 | Bluesky | ✅ | AT Protocol |
-| Instagram | ⚠️ | oEmbed (limited) |
+| Instagram | ✅ | Snapsave API + Video Proxy |
 | Threads | ⚠️ | oEmbed + fallback |
 | Pixiv | ✅ | Phixiv proxy |
 | Bilibili | ✅ | Public API |
+
+## Features
+
+- **Video Embedding**: Full video playback support for Instagram Reels, Twitter videos, Reddit videos, and more
+- **Smart Proxying**: Video proxy endpoints for platforms that require special handling
+- **Metadata Extraction**: Author names, descriptions, thumbnails, and engagement stats
+- **Discord Optimized**: Proper OG tags for rich embeds with correct aspect ratios
+- **Fast**: Built on Cloudflare Workers for global low-latency responses
 
 ## Setup
 
@@ -23,7 +31,7 @@ cd service
 npm install
 ```
 
-2. Configure wrangler.toml with your Cloudflare account ID
+2. Configure `wrangler.toml` with your Cloudflare account ID
 
 3. Deploy:
 ```bash
@@ -46,11 +54,20 @@ GET /api/embed?url=https://twitter.com/user/status/123
 
 Returns JSON with embed data.
 
+### Video Proxy (Instagram)
+```
+GET /video/instagram?url=<encoded-video-url>
+```
+
+Streams video content with proper headers for Discord playback.
+
 ### Platform Routes
 ```
 GET /twitter/user/status/123
 GET /reddit/r/subreddit/comments/id
 GET /youtube/watch?v=videoId
+GET /instagram/reel/shortcode
+GET /bilibili/video/BVxxxxxxxx
 ```
 
 ## Development
@@ -60,6 +77,28 @@ npm run dev
 ```
 
 This starts a local dev server at http://localhost:8787
+
+## Architecture
+
+```
+service/
+├── src/
+│   ├── index.ts          # Main router and endpoints
+│   ├── handlers/         # Platform-specific handlers
+│   │   ├── twitter.ts
+│   │   ├── reddit.ts
+│   │   ├── youtube.ts
+│   │   ├── bluesky.ts
+│   │   ├── instagram.ts  # Snapsave + embed scraping
+│   │   ├── threads.ts
+│   │   ├── pixiv.ts
+│   │   └── bilibili.ts
+│   ├── utils/
+│   │   └── embed.ts      # OG tag generation
+│   └── types.ts          # TypeScript definitions
+├── wrangler.toml         # Cloudflare Workers config
+└── package.json
+```
 
 ## License
 
