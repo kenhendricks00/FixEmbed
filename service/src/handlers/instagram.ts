@@ -164,9 +164,11 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     let description = '';
     let preview = '';
 
-    // Check if it's a photo or video based on button text
-    const isPhoto = html.includes('Download Photo');
-    const defaultType = isPhoto ? 'image' : 'video';
+    // Check if it's a photo or video based on button text AND URL content
+    const hasDownloadPhoto = html.includes('Download Photo');
+    const hasDownloadVideo = html.includes('Download Video');
+    // Default to video unless explicitly photo-only
+    let defaultType: 'video' | 'image' = hasDownloadPhoto && !hasDownloadVideo ? 'image' : 'video';
 
     // Extract description
     const descMatch = html.match(/class="video-des"[^>]*>([^<]*)</) ||
@@ -182,12 +184,37 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
         if (previewMatch) preview = previewMatch[1];
     }
 
+    // Helper to determine type based on URL content
+    const getMediaType = (url: string): 'video' | 'image' => {
+        // Decode JWT token to check actual content
+        try {
+            const tokenMatch = url.match(/token=([^&]+)/);
+            if (tokenMatch) {
+                const payload = JSON.parse(atob(tokenMatch[1].split('.')[1]));
+                if (payload.url && payload.url.includes('.mp4')) {
+                    return 'video';
+                }
+                if (payload.filename && payload.filename.includes('.mp4')) {
+                    return 'video';
+                }
+            }
+        } catch (e) {
+            // Ignore decode errors
+        }
+        // If URL path contains video indicators
+        if (url.includes('.mp4') || url.includes('/v2?')) {
+            return 'video';
+        }
+        return defaultType;
+    };
+
     // Priority 1: Find rapidcdn /v2 video URL (this is the actual video)
     const rapidcdnV2Match = html.match(/https:\/\/d\.rapidcdn\.app\/v2\?token=[^"'\s<>]+/);
     if (rapidcdnV2Match) {
+        const actualType = getMediaType(rapidcdnV2Match[0]);
         media.push({
             url: rapidcdnV2Match[0],
-            type: defaultType,
+            type: actualType,
             thumbnail: preview,
         });
         return { media, description, preview };
