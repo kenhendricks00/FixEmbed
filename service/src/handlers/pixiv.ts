@@ -1,125 +1,68 @@
 /**
  * FixEmbed Service - Pixiv Handler
  * 
- * Implements Pixiv embed support using their internal Ajax API.
- * Based on phixiv implementation (https://github.com/thelaao/phixiv)
+ * Implements Pixiv embed support by scraping phixiv.net HTML.
+ * Direct Pixiv API calls are blocked by Cloudflare (403), so we use
+ * phixiv.net as our data source - they provide OG tags we can scrape.
  * 
  * Key features:
- * - Fetches artwork metadata via Pixiv's Ajax API
- * - Proxies images with proper Referer header
- * - Supports multi-page artworks (carousel)
- * - Shows engagement stats (likes, bookmarks, views)
+ * - Scrapes phixiv.net HTML for OG metadata
+ * - Uses phixiv's image proxy URLs (they handle Pixiv's Referer requirement)
+ * - Falls back to basic embed if phixiv is unavailable
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { truncateText } from '../utils/fetch';
 import { platformColors } from '../utils/embed';
 
-// Response types from Pixiv Ajax API
-interface PixivAjaxResponse {
-    error: boolean;
-    message?: string;
-    body?: PixivArtwork;
-}
-
-interface PixivArtwork {
-    title: string;
-    description: string;
-    userId: string;
-    userName: string;
-    illustType: number; // 0=illust, 1=manga, 2=ugoira
-    createDate: string;
-    pageCount: number;
-    bookmarkCount: number;
-    likeCount: number;
-    viewCount: number;
-    commentCount: number;
-    xRestrict: number; // 0=SFW, 1=R-18, 2=R-18G
-    urls: {
-        mini?: string;
-        thumb?: string;
-        small?: string;
-        regular?: string;
-        original?: string;
-    };
-    tags: {
-        tags: Array<{
-            tag: string;
-            translation?: Record<string, string>;
-        }>;
-    };
-}
-
-interface PixivPagesResponse {
-    error: boolean;
-    body?: Array<{
-        urls: {
-            thumb_mini?: string;
-            small?: string;
-            regular?: string;
-            original?: string;
-        };
-    }>;
-}
-
-// Fetch artwork info from Pixiv Ajax API
-async function fetchPixivArtwork(illustId: string): Promise<{
+// Scrape phixiv.net HTML for OG tags
+async function scrapePhixivHtml(illustId: string): Promise<{
     success: boolean;
-    data?: PixivArtwork;
+    title?: string;
+    image?: string;
+    description?: string;
+    author?: string;
     error?: string;
 }> {
     try {
-        const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
+        const phixivUrl = `https://www.phixiv.net/artworks/${illustId}`;
+        const response = await fetch(phixivUrl, {
             headers: {
-                'User-Agent': 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)',
-                'App-Os': 'iOS',
-                'App-Os-Version': '14.6',
-                'Accept': 'application/json',
-                'Accept-Language': 'en-US,en;q=0.9',
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+                'Accept': 'text/html',
             },
         });
 
         if (!response.ok) {
-            return { success: false, error: `Pixiv returned ${response.status}` };
+            return { success: false, error: `Phixiv returned ${response.status}` };
         }
 
-        const data = await response.json() as PixivAjaxResponse;
+        const html = await response.text();
 
-        if (data.error || !data.body) {
-            return { success: false, error: data.message || 'Unknown error' };
+        // Extract OG tags
+        const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+        const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+        const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
+
+        // Parse title to extract author: "Title by (@Author)"
+        let title = ogTitle || 'Pixiv Artwork';
+        let author: string | undefined;
+
+        const authorMatch = ogTitle?.match(/(.+?) by \(@([^)]+)\)/);
+        if (authorMatch) {
+            title = authorMatch[1];
+            author = authorMatch[2];
         }
 
-        return { success: true, data: data.body };
+        return {
+            success: true,
+            title,
+            image: ogImage,
+            description: ogDesc,
+            author,
+        };
     } catch (error) {
-        console.error('Pixiv fetch error:', error);
+        console.error('Phixiv scrape error:', error);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-}
-
-// Fetch all pages for multi-page artwork
-async function fetchPixivPages(illustId: string): Promise<string[]> {
-    try {
-        const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}/pages`, {
-            headers: {
-                'User-Agent': 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)',
-                'App-Os': 'iOS',
-                'App-Os-Version': '14.6',
-                'Accept': 'application/json',
-            },
-        });
-
-        if (!response.ok) return [];
-
-        const data = await response.json() as PixivPagesResponse;
-
-        if (data.error || !data.body) return [];
-
-        // Return regular URLs for each page
-        return data.body
-            .map(page => page.urls.regular || page.urls.small || '')
-            .filter(url => url.length > 0);
-    } catch {
-        return [];
     }
 }
 
@@ -131,7 +74,7 @@ export const pixivHandler: PlatformHandler = {
         /pixiv\.net\/i\/(\d+)/i,
     ],
 
-    async handle(url: string, env: Env): Promise<HandlerResponse> {
+    async handle(url: string, _env: Env): Promise<HandlerResponse> {
         // Parse artwork ID from URL
         let illustId: string | null = null;
 
@@ -148,112 +91,27 @@ export const pixivHandler: PlatformHandler = {
         const canonicalUrl = `https://www.pixiv.net/artworks/${illustId}`;
 
         try {
-            // Fetch artwork data
-            const artworkResult = await fetchPixivArtwork(illustId);
+            // Scrape phixiv.net HTML for OG tags (direct Pixiv API is blocked)
+            const scrapeResult = await scrapePhixivHtml(illustId);
 
-            if (artworkResult.success && artworkResult.data) {
-                const artwork = artworkResult.data;
-
-                // Build stats string
-                const stats: string[] = [];
-                if (artwork.likeCount > 0) {
-                    stats.push(`❤️ ${artwork.likeCount.toLocaleString()}`);
-                }
-                if (artwork.bookmarkCount > 0) {
-                    stats.push(`🔖 ${artwork.bookmarkCount.toLocaleString()}`);
-                }
-                if (artwork.viewCount > 0) {
-                    stats.push(`👁️ ${artwork.viewCount.toLocaleString()}`);
-                }
-                const statsStr = stats.length > 0 ? ` · ${stats.join(' ')}` : '';
-
-                // Clean description (remove HTML tags)
-                let description = artwork.description
-                    .replace(/<br\s*\/?>/gi, '\n')
-                    .replace(/<[^>]+>/g, '')
-                    .trim();
-
-                // Use image proxy for the artwork image
-                const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
-
-                // Get image URL and proxy it
-                const originalImageUrl = artwork.urls.regular || artwork.urls.original || artwork.urls.small;
-                let proxyImageUrl: string | undefined;
-
-                if (originalImageUrl) {
-                    // Pixiv images require Referer header, so we proxy through our domain
-                    proxyImageUrl = `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(originalImageUrl)}`;
-                }
-
-                // Build response
-                const result: HandlerResponse = {
-                    success: true,
-                    data: {
-                        title: artwork.title || 'Untitled',
-                        description: description ? truncateText(description, 280) : '',
-                        url: canonicalUrl,
-                        siteName: `Pixiv${statsStr}`,
-                        authorName: artwork.userName,
-                        authorUrl: `https://www.pixiv.net/users/${artwork.userId}`,
-                        color: platformColors.pixiv,
-                        platform: 'pixiv',
-                    },
-                };
-
-                // Add NSFW warning if restricted
-                if (artwork.xRestrict > 0) {
-                    result.data!.title = `🔞 ${result.data!.title}`;
-                }
-
-                // Handle multi-page artworks (carousel)
-                if (artwork.pageCount > 1) {
-                    // Fetch all page URLs
-                    const pageUrls = await fetchPixivPages(illustId);
-
-                    if (pageUrls.length > 0) {
-                        // Proxy all images
-                        result.data!.images = pageUrls.map(imgUrl =>
-                            `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(imgUrl)}`
-                        );
-                        result.data!.image = result.data!.images[0];
-                    } else if (proxyImageUrl) {
-                        result.data!.image = proxyImageUrl;
-                    }
-
-                    // Add page count to description
-                    result.data!.description = `[${artwork.pageCount} images] ${result.data!.description}`;
-                } else if (proxyImageUrl) {
-                    result.data!.image = proxyImageUrl;
-                }
-
-                return result;
-            }
-
-            // Fallback: Try phixiv.net oEmbed API
-            console.log('Direct Pixiv fetch failed, trying phixiv fallback');
-            const oembedUrl = `https://www.phixiv.net/oembed?url=${encodeURIComponent(canonicalUrl)}`;
-            const response = await fetch(oembedUrl);
-
-            if (response.ok) {
-                const data = await response.json() as any;
-
+            if (scrapeResult.success && scrapeResult.image) {
                 return {
                     success: true,
                     data: {
-                        title: data.title || 'Pixiv Artwork',
-                        description: data.author_name ? `by ${data.author_name}` : '',
+                        title: scrapeResult.title || 'Pixiv Artwork',
+                        description: scrapeResult.description || '',
                         url: canonicalUrl,
                         siteName: 'Pixiv',
-                        authorName: data.author_name,
-                        authorUrl: data.author_url,
-                        image: data.url, // Phixiv returns a proxy URL
+                        authorName: scrapeResult.author,
+                        authorUrl: scrapeResult.author ? `https://www.pixiv.net/users/${scrapeResult.author}` : undefined,
+                        image: scrapeResult.image,
                         color: platformColors.pixiv,
                         platform: 'pixiv',
                     },
                 };
             }
 
-            // Final fallback to basic redirect
+            // Fallback to basic redirect
             return {
                 success: true,
                 data: {
