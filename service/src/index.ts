@@ -390,6 +390,135 @@ app.get('/debug/instagram', async (c) => {
     }
 });
 
+// Debug endpoint to test Pixiv
+app.get('/debug/pixiv', async (c) => {
+    const url = c.req.query('url') || 'https://www.pixiv.net/artworks/98188712';
+
+    // Extract artwork ID
+    const artworkMatch = url.match(/artworks\/(\d+)/);
+    const illustId = artworkMatch?.[1] || '98188712';
+
+    const debugInfo: Record<string, unknown> = {
+        inputUrl: url,
+        illustId,
+        tests: [],
+    };
+
+    // Test 1: Desktop browser headers
+    try {
+        const resp1 = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.pixiv.net/',
+            },
+        });
+        const body1 = await resp1.text();
+        (debugInfo.tests as any[]).push({
+            name: 'Desktop Browser Headers',
+            status: resp1.status,
+            bodyPreview: body1.substring(0, 500),
+            hasError: body1.includes('"error":true'),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Desktop Browser', error: e.message });
+    }
+
+    // Test 2: iOS App headers (like phixiv)
+    try {
+        const resp2 = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
+            headers: {
+                'User-Agent': 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)',
+                'App-Os': 'iOS',
+                'App-Os-Version': '14.6',
+                'Accept': 'application/json',
+            },
+        });
+        const body2 = await resp2.text();
+        (debugInfo.tests as any[]).push({
+            name: 'iOS App Headers',
+            status: resp2.status,
+            bodyPreview: body2.substring(0, 500),
+            hasError: body2.includes('"error":true'),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'iOS App', error: e.message });
+    }
+
+    // Test 3: TelegramBot User-Agent
+    try {
+        const resp3 = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
+            headers: {
+                'User-Agent': 'TelegramBot (like TwitterBot)',
+                'Accept': 'application/json',
+            },
+        });
+        const body3 = await resp3.text();
+        (debugInfo.tests as any[]).push({
+            name: 'TelegramBot Headers',
+            status: resp3.status,
+            bodyPreview: body3.substring(0, 500),
+            hasError: body3.includes('"error":true'),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'TelegramBot', error: e.message });
+    }
+
+    // Test 4: Try fetching the artwork page HTML directly
+    try {
+        const resp4 = await fetch(`https://www.pixiv.net/artworks/${illustId}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+                'Accept': 'text/html',
+            },
+        });
+        const body4 = await resp4.text();
+
+        // Try to find OG tags
+        const ogTitle = body4.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+        const ogImage = body4.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+        const ogDesc = body4.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
+
+        (debugInfo.tests as any[]).push({
+            name: 'Artwork Page (Discordbot)',
+            status: resp4.status,
+            htmlLength: body4.length,
+            ogTitle,
+            ogImage,
+            ogDesc: ogDesc?.substring(0, 100),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Artwork Page', error: e.message });
+    }
+
+    // Test 5: Check artwork page with mobile UA
+    try {
+        const resp5 = await fetch(`https://www.pixiv.net/artworks/${illustId}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15',
+                'Accept': 'text/html',
+            },
+        });
+        const body5 = await resp5.text();
+
+        const ogTitle = body5.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+        const ogImage = body5.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+
+        (debugInfo.tests as any[]).push({
+            name: 'Artwork Page (Mobile)',
+            status: resp5.status,
+            htmlLength: body5.length,
+            ogTitle,
+            ogImage,
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Mobile Page', error: e.message });
+    }
+
+    return c.json(debugInfo);
+});
+
 // API endpoint for embed data (JSON)
 app.get('/api/embed', async (c) => {
     const url = c.req.query('url');
