@@ -364,7 +364,12 @@ export const instagramHandler: PlatformHandler = {
                 };
                 result.data!.image = preview || firstMedia.thumbnail;
             } else {
+                // Single image post
+                // Use the full resolution URL from Snapsave
                 result.data!.image = firstMedia.url;
+
+                // Explicitly ensure we don't have video data that might confuse Discord
+                result.data!.video = undefined;
             }
 
             // Try to get better metadata (username) from the embed page
