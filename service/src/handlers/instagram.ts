@@ -165,12 +165,8 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     let preview = '';
 
     // Check if it's a photo or video based on button text
-    const hasDownloadVideo = html.includes('Download Video');
-    const hasDownloadPhoto = html.includes('Download Photo');
-
-    // Default to video if Download Video exists (even if Photo exists, e.g. for cover)
-    // Only default to image if Photo exists AND Video does not
-    const defaultType = (hasDownloadPhoto && !hasDownloadVideo) ? 'image' : 'video';
+    const isPhoto = html.includes('Download Photo');
+    const defaultType = isPhoto ? 'image' : 'video';
 
     // Extract description
     const descMatch = html.match(/class="video-des"[^>]*>([^<]*)</) ||
@@ -187,33 +183,22 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     }
 
     // Priority 1: Find rapidcdn /v2 video URL (this is the actual video)
-    // NOTE: /v2 URLs can be videos OR images. Detect by checking URL content for .mp4 vs .jpg/.png
     const rapidcdnV2Match = html.match(/https:\/\/d\.rapidcdn\.app\/v2\?token=[^"'\s<>]+/);
     if (rapidcdnV2Match) {
-        const url = rapidcdnV2Match[0];
-        // Check if URL/token contains video indicators (.mp4) or image indicators (.jpg/.png)
-        const isVideo = url.includes('.mp4') || url.includes('video');
-        const isImage = url.includes('.jpg') || url.includes('.png') || url.includes('.jpeg');
-
         media.push({
-            url,
-            type: isVideo ? 'video' : (isImage ? 'image' : defaultType),
+            url: rapidcdnV2Match[0],
+            type: defaultType,
             thumbnail: preview,
         });
         return { media, description, preview };
     }
 
     // Priority 2: Find rapidcdn /d download URL
-    // NOTE: /d URLs can be videos OR images. Detect by checking URL content.
     const rapidcdnDMatch = html.match(/https:\/\/d\.rapidcdn\.app\/d\?token=[^"'\s<>]+/);
     if (rapidcdnDMatch) {
-        const url = rapidcdnDMatch[0];
-        const isVideo = url.includes('.mp4') || url.includes('video');
-        const isImage = url.includes('.jpg') || url.includes('.png') || url.includes('.jpeg');
-
         media.push({
-            url,
-            type: isVideo ? 'video' : (isImage ? 'image' : defaultType),
+            url: rapidcdnDMatch[0],
+            type: defaultType,
             thumbnail: preview,
         });
         return { media, description, preview };
