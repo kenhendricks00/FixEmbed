@@ -27,7 +27,7 @@ export type Platform =
 export interface EmbedData {
     // Basic info
     title: string;
-    description?: string;
+    description: string;
     url: string;
     siteName: string;
 
