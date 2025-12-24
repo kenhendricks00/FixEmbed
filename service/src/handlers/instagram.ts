@@ -187,24 +187,33 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     }
 
     // Priority 1: Find rapidcdn /v2 video URL (this is the actual video)
-    // NOTE: /v2 URLs are ALWAYS videos regardless of button text
+    // NOTE: /v2 URLs can be videos OR images. Detect by checking URL content for .mp4 vs .jpg/.png
     const rapidcdnV2Match = html.match(/https:\/\/d\.rapidcdn\.app\/v2\?token=[^"'\s<>]+/);
     if (rapidcdnV2Match) {
+        const url = rapidcdnV2Match[0];
+        // Check if URL/token contains video indicators (.mp4) or image indicators (.jpg/.png)
+        const isVideo = url.includes('.mp4') || url.includes('video');
+        const isImage = url.includes('.jpg') || url.includes('.png') || url.includes('.jpeg');
+
         media.push({
-            url: rapidcdnV2Match[0],
-            type: 'video', // FORCE video type for /v2 URLs
+            url,
+            type: isVideo ? 'video' : (isImage ? 'image' : defaultType),
             thumbnail: preview,
         });
         return { media, description, preview };
     }
 
     // Priority 2: Find rapidcdn /d download URL
-    // NOTE: /d URLs are ALWAYS videos regardless of button text
+    // NOTE: /d URLs can be videos OR images. Detect by checking URL content.
     const rapidcdnDMatch = html.match(/https:\/\/d\.rapidcdn\.app\/d\?token=[^"'\s<>]+/);
     if (rapidcdnDMatch) {
+        const url = rapidcdnDMatch[0];
+        const isVideo = url.includes('.mp4') || url.includes('video');
+        const isImage = url.includes('.jpg') || url.includes('.png') || url.includes('.jpeg');
+
         media.push({
-            url: rapidcdnDMatch[0],
-            type: 'video', // FORCE video type for /d URLs
+            url,
+            type: isVideo ? 'video' : (isImage ? 'image' : defaultType),
             thumbnail: preview,
         });
         return { media, description, preview };
