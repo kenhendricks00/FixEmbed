@@ -111,19 +111,13 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <link rel="apple-touch-icon" href="${FIXEMBED_LOGO}">\n`;
 
     // 3. oEmbed link for Discord to fetch provider and engagement info
-    // Add oEmbed link for platforms that need it for stats or extra metadata
-    // INSTAGRAM NOTE: We explicitly EXCLUDE oEmbed for Instagram.
-    // Why? Discord prefers "Rich" embeds when oEmbed is present, which often forces a small thumbnail layout.
-    // By omitting oEmbed, we force Discord to rely on <meta name="twitter:card" content="summary_large_image">
-    // which reliably produces a full-width image. vxinstagram works this way.
-    if (embed.platform !== 'instagram') {
-        const oembedUrl = new URL('https://fixembed.app/oembed');
-        oembedUrl.searchParams.set('url', embed.url);
-        if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
-        if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
-        if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
-        html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
-    }
+    // Note: Previously excluded Instagram to force large images, but testing if it still works with oEmbed
+    const oembedUrl = new URL('https://fixembed.app/oembed');
+    oembedUrl.searchParams.set('url', embed.url);
+    if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
+    if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
+    if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
+    html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
 
     // Close head and add redirect body
