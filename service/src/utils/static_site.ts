@@ -72,7 +72,7 @@ export const indexHtml = `<!DOCTYPE html>
                         <a href="#features">Features</a>
                         <a href="/docs">Docs</a>
                         <a href="#platforms">Platforms</a>
-                        <a href="#support">Support</a>
+                        <a href="/support">Support</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
                             <i class="fab fa-github"></i>
                         </a>
@@ -1567,7 +1567,11 @@ export const tosHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
                         <a href="/support">Support</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
+                            <i class="fab fa-github"></i>
+                        </a>
                     </div>
+                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
                 </div>
             </div>
         </nav>
@@ -1675,7 +1679,11 @@ export const privacyHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
                         <a href="/support">Support</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
+                            <i class="fab fa-github"></i>
+                        </a>
                     </div>
+                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
                 </div>
             </div>
         </nav>
@@ -1792,7 +1800,11 @@ export const docsHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
                         <a href="/support">Support</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
+                            <i class="fab fa-github"></i>
+                        </a>
                     </div>
+                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
                 </div>
             </div>
         </nav>
@@ -2003,7 +2015,11 @@ export const supportHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
                         <a href="/support">Support</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
+                            <i class="fab fa-github"></i>
+                        </a>
                     </div>
+                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
                 </div>
             </div>
         </nav>
@@ -2018,9 +2034,17 @@ export const supportHtml = `<!DOCTYPE html>
                 <div class="support-card">
                     <i class="fas fa-heart" style="color: #ff5e5b;"></i>
                     <h3>Donate on Ko-fi</h3>
-                    <p>Help cover server costs and support development. Every coffee counts!</p>
+                    <p>Help cover server costs and support development!</p>
                     <a href="https://ko-fi.com/kenhendricks" target="_blank" class="btn" style="background: linear-gradient(135deg, #ff5e5b, #ff9966); color: white;">
-                        <i class="fas fa-mug-hot"></i> Buy a Coffee
+                        <i class="fas fa-mug-hot"></i> Ko-fi
+                    </a>
+                </div>
+                <div class="support-card">
+                    <i class="fas fa-coffee" style="color: #FFDD00;"></i>
+                    <h3>Buy Me a Coffee</h3>
+                    <p>Another way to support FixEmbed development!</p>
+                    <a href="https://buymeacoffee.com/kenhendricks" target="_blank" class="btn" style="background: #FFDD00; color: #000;">
+                        <i class="fas fa-coffee"></i> Buy a Coffee
                     </a>
                 </div>
                 <div class="support-card">
