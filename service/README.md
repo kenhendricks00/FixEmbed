@@ -14,7 +14,7 @@ A unified embed service for Discord, built with Cloudflare Workers and Hono.
 | Pixiv | ✅ | Phixiv HTML scraping |
 | Bilibili | ✅ | VxBilibili HTML scraping |
 
-> **Note**: YouTube is not supported as Discord and other platforms have excellent native YouTube embedding.
+> **Note**: YouTube & TikTok are not supported as Discord and other platforms have excellent native YouTube embedding.
 
 ## Features
 
