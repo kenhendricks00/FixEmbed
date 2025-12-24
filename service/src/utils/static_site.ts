@@ -922,8 +922,9 @@ nav {
 }
 
 .platforms-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 24px;
     margin-top: 60px;
 }
@@ -939,6 +940,8 @@ nav {
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    flex: 1 1 220px;
+    max-width: 320px;
 }
 
 .platform-card:hover {
