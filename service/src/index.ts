@@ -516,6 +516,63 @@ app.get('/debug/pixiv', async (c) => {
         (debugInfo.tests as any[]).push({ name: 'Mobile Page', error: e.message });
     }
 
+    // Test 6: Try Pixiv's native oEmbed endpoint
+    try {
+        const oembedUrl = `https://embed.pixiv.net/oembed?url=https://www.pixiv.net/artworks/${illustId}&format=json`;
+        const resp6 = await fetch(oembedUrl, {
+            headers: { 'Accept': 'application/json' },
+        });
+        const body6 = await resp6.text();
+        (debugInfo.tests as any[]).push({
+            name: 'Pixiv oEmbed',
+            status: resp6.status,
+            bodyPreview: body6.substring(0, 500),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Pixiv oEmbed', error: e.message });
+    }
+
+    // Test 7: Try scraping phixiv.net HTML for OG tags
+    try {
+        const phixivUrl = `https://www.phixiv.net/artworks/${illustId}`;
+        const resp7 = await fetch(phixivUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0)',
+                'Accept': 'text/html',
+            },
+        });
+        const body7 = await resp7.text();
+
+        const ogTitle = body7.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+        const ogImage = body7.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+        const ogDesc = body7.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
+
+        (debugInfo.tests as any[]).push({
+            name: 'Phixiv HTML Scrape',
+            status: resp7.status,
+            htmlLength: body7.length,
+            ogTitle,
+            ogImage,
+            ogDesc: ogDesc?.substring(0, 100),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Phixiv HTML', error: e.message });
+    }
+
+    // Test 8: Try phixiv oEmbed JSON
+    try {
+        const phixivOembed = `https://www.phixiv.net/oembed?url=https://www.pixiv.net/artworks/${illustId}`;
+        const resp8 = await fetch(phixivOembed);
+        const body8 = await resp8.text();
+        (debugInfo.tests as any[]).push({
+            name: 'Phixiv oEmbed JSON',
+            status: resp8.status,
+            bodyPreview: body8.substring(0, 500),
+        });
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'Phixiv oEmbed', error: e.message });
+    }
+
     return c.json(debugInfo);
 });
 
