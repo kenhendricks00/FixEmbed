@@ -281,14 +281,43 @@ export const instagramHandler: PlatformHandler = {
 
             if (vxResult.success && vxResult.image && !vxResult.isVideo) {
                 // VxInstagram found an image (possibly composite carousel)
+
+                // Fetch author metadata since vxinstagram doesn't provide it reliably
+                let authorName = undefined;
+                try {
+                    const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
+                    if (embedInfo.success && embedInfo.data) {
+                        // Logic to extract best author name (Name + Handle)
+                        if (embedInfo.data.title && embedInfo.data.title.includes('@')) {
+                            const authorMatch = embedInfo.data.title.match(/^([^\(]+)/);
+                            if (authorMatch) authorName = authorMatch[1].trim();
+
+                            const handleMatch = embedInfo.data.title.match(/\(@([^\)]+)\)/);
+                            if (handleMatch) {
+                                const handle = `@${handleMatch[1]}`;
+                                if (!authorName || authorName === 'Instagram') {
+                                    authorName = handle;
+                                } else {
+                                    authorName = `${authorName} (${handle})`;
+                                }
+                            }
+                        }
+                        if (!authorName && embedInfo.data.authorName) {
+                            authorName = embedInfo.data.authorName;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch carousel metadata:', e);
+                }
+
                 return {
                     success: true,
                     data: {
-                        title: vxResult.description ? truncateText(vxResult.description, 100) : 'Post',
+                        title: authorName || 'Post',
                         description: vxResult.description ? truncateText(vxResult.description, 280) : '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
-                        authorName: vxResult.username ? `@${vxResult.username}` : undefined,
+                        authorName: authorName,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
