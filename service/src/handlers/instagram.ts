@@ -317,7 +317,7 @@ export const instagramHandler: PlatformHandler = {
                         description: vxResult.description ? truncateText(vxResult.description, 280) : '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
-                        authorName: authorName,
+                        // authorName: authorName, // OLD: Don't set author field to avoid duplication
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
@@ -441,7 +441,7 @@ export const instagramHandler: PlatformHandler = {
                     }
 
                     if (authorName) {
-                        result.data!.authorName = authorName;
+                        // result.data!.authorName = authorName; // Don't set author field to avoid duplication
                         result.data!.title = authorName; // User requested: Author Name as Title
                     }
 
@@ -458,6 +458,7 @@ export const instagramHandler: PlatformHandler = {
             // Fallback: If we still have generic title but have authorName (e.g. from existing logic), set it
             if ((result.data!.title === 'Post' || result.data!.title === 'Reel') && result.data!.authorName) {
                 result.data!.title = result.data!.authorName;
+                result.data!.authorName = undefined; // Clear author field to avoid duplication
             }
             return result;
 
