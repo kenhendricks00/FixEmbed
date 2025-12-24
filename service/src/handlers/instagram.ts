@@ -164,6 +164,10 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     let description = '';
     let preview = '';
 
+    // Check if it's a photo or video based on button text
+    const isPhoto = html.includes('Download Photo');
+    const defaultType = isPhoto ? 'image' : 'video';
+
     // Extract description
     const descMatch = html.match(/class="video-des"[^>]*>([^<]*)</) ||
         html.match(/<span[^>]*class="[^"]*video-des[^"]*"[^>]*>([^<]*)</);
@@ -183,7 +187,7 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     if (rapidcdnV2Match) {
         media.push({
             url: rapidcdnV2Match[0],
-            type: 'video',
+            type: defaultType,
             thumbnail: preview,
         });
         return { media, description, preview };
@@ -194,7 +198,7 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     if (rapidcdnDMatch) {
         media.push({
             url: rapidcdnDMatch[0],
-            type: 'video',
+            type: defaultType,
             thumbnail: preview,
         });
         return { media, description, preview };
@@ -207,7 +211,7 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
             if (!url.includes('/thumb?')) {
                 media.push({
                     url,
-                    type: 'video',
+                    type: defaultType,
                     thumbnail: preview,
                 });
                 return { media, description, preview };
