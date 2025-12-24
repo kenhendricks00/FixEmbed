@@ -212,6 +212,51 @@ app.get('/proxy/pixiv', async (c) => {
     }
 });
 
+// Video proxy endpoint for YouTube - streams video from Invidious
+app.get('/proxy/youtube', async (c) => {
+    const videoUrl = c.req.query('url');
+
+    if (!videoUrl) {
+        return c.json({ error: 'Missing video URL' }, 400);
+    }
+
+    try {
+        // Fetch the video stream from Invidious
+        const response = await fetch(videoUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'video/*,*/*',
+                'Range': c.req.header('Range') || 'bytes=0-',
+            },
+        });
+
+        if (!response.ok && response.status !== 206) {
+            return c.redirect(videoUrl, 302);
+        }
+
+        // Forward the response with appropriate headers
+        const headers = new Headers();
+        const contentType = response.headers.get('Content-Type') || 'video/mp4';
+        headers.set('Content-Type', contentType);
+        headers.set('Accept-Ranges', 'bytes');
+        headers.set('Cache-Control', 'public, max-age=3600');
+
+        // Forward Content-Range and Content-Length for range requests
+        const contentLength = response.headers.get('Content-Length');
+        const contentRange = response.headers.get('Content-Range');
+        if (contentLength) headers.set('Content-Length', contentLength);
+        if (contentRange) headers.set('Content-Range', contentRange);
+
+        return new Response(response.body, {
+            status: response.status,
+            headers,
+        });
+    } catch (error) {
+        // Fallback to redirect
+        return c.redirect(videoUrl, 302);
+    }
+});
+
 // Debug endpoint to test Instagram
 app.get('/debug/instagram', async (c) => {
     const url = c.req.query('url') || 'https://www.instagram.com/reel/C05SEFntyFA/';
