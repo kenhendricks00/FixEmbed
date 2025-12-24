@@ -76,7 +76,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
     caption?: string;
     likes?: number;
     replies?: number;
-    imageUrl?: string;
+    images?: string[];
     videoUrl?: string;
     profilePic?: string;
     error?: string;
@@ -153,10 +153,21 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
         const replies = post.text_post_app_info?.direct_reply_count || 0;
         const profilePic = post.user?.profile_pic_url;
 
-        // Get image URL
-        let imageUrl: string | undefined;
-        if (post.image_versions2?.candidates && post.image_versions2.candidates.length > 0) {
-            imageUrl = post.image_versions2.candidates[0].url;
+        // Get all images (for carousel support)
+        const images: string[] = [];
+
+        // Check carousel_media first for multiple images
+        if (post.carousel_media && post.carousel_media.length > 0) {
+            for (const item of post.carousel_media) {
+                if (item.image_versions2?.candidates && item.image_versions2.candidates.length > 0) {
+                    images.push(item.image_versions2.candidates[0].url!);
+                }
+            }
+        }
+
+        // Fallback to single image from post
+        if (images.length === 0 && post.image_versions2?.candidates && post.image_versions2.candidates.length > 0) {
+            images.push(post.image_versions2.candidates[0].url!);
         }
 
         // Get video URL
@@ -181,7 +192,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
             caption,
             likes,
             replies,
-            imageUrl,
+            images,
             videoUrl,
             profilePic,
         };
@@ -253,16 +264,19 @@ export const threadsHandler: PlatformHandler = {
                     const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
                     const proxyVideoUrl = `https://${embedDomain}/video/threads?url=${encodeURIComponent(graphqlResult.videoUrl)}`;
 
+                    const firstImage = graphqlResult.images?.[0];
+
                     result.data!.video = {
                         url: proxyVideoUrl,
                         width: 0,
                         height: 0,
-                        thumbnail: graphqlResult.imageUrl,
+                        thumbnail: firstImage,
                     };
-                    result.data!.image = graphqlResult.imageUrl;
-                } else if (graphqlResult.imageUrl) {
-                    // Just image
-                    result.data!.image = graphqlResult.imageUrl;
+                    result.data!.image = firstImage;
+                } else if (graphqlResult.images && graphqlResult.images.length > 0) {
+                    // Multiple images (carousel) - use images array
+                    result.data!.images = graphqlResult.images;
+                    result.data!.image = graphqlResult.images[0]; // Also set single image as fallback
                 } else if (graphqlResult.profilePic) {
                     // Fallback to profile pic
                     result.data!.image = graphqlResult.profilePic;

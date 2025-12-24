@@ -38,6 +38,7 @@ export interface EmbedData {
 
     // Media
     image?: string;
+    images?: string[];  // For carousel/multiple images
     video?: VideoEmbed;
 
     // Metadata

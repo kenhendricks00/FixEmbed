@@ -39,8 +39,15 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         html += `  <meta property="og:article:author" content="${escape(embed.authorName)}">\n`;
     }
 
-    // Image embed
-    if (embed.image) {
+    // Image embed - support single image or carousel
+    if (embed.images && embed.images.length > 0) {
+        // Multiple images (carousel) - output all og:image tags
+        for (const imgUrl of embed.images) {
+            html += `  <meta property="og:image" content="${escape(imgUrl)}">\n`;
+        }
+        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+        html += `  <meta name="twitter:image" content="${escape(embed.images[0])}">\n`;
+    } else if (embed.image) {
         html += `  <meta property="og:image" content="${escape(embed.image)}">\n`;
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
         html += `  <meta name="twitter:image" content="${escape(embed.image)}">\n`;
