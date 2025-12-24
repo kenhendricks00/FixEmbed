@@ -94,10 +94,10 @@ service/
 │   │   ├── twitter.ts    # Twitter/X via Syndication API
 │   │   ├── reddit.ts     # Reddit JSON API
 │   │   ├── bluesky.ts    # AT Protocol
-│   │   ├── instagram.ts  # Snapsave + embed scraping
+│   │   ├── instagram.ts  # VxInstagram + Snapsave API
 │   │   ├── threads.ts    # GraphQL API + carousel
 │   │   ├── pixiv.ts      # Phixiv HTML scraping
-│   │   └── bilibili.ts   # Public API
+│   │   └── bilibili.ts   # VxBilibili HTML scraping
 │   ├── utils/
 │   │   ├── embed.ts      # OG tag generation, stats formatting
 │   │   └── fetch.ts      # HTTP utilities
