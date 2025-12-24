@@ -65,6 +65,12 @@ app.get('/oembed', (c) => {
         oembedResponse.author_url = originalUrl || 'https://embed.ken.tools';
     }
 
+    // Do NOT set thumbnail_url, thumbnail_width, or thumbnail_height
+    // Setting these forces Discord to use the "Rich Embed" (thumbnail on right) layout
+    // By omitting them, Discord will use the oEmbed metadata (author/provider) 
+    // BUT rely on twitter:card/og:image for the visual (Large Image)
+
+
     if (format === 'xml') {
         let authorXml = '';
         if (stats || author) {
