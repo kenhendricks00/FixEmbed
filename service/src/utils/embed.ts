@@ -100,13 +100,8 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // 3. oEmbed link for Discord to fetch provider info
     html += `  <link rel="alternate" type="application/json+oembed" href="https://embed.ken.tools/oembed?url=${encodeURIComponent(embed.url)}&amp;format=json">\n`;
 
-    // 4. ActivityPub-style link - This is key for Discord's enhanced footer format!
-    // Discord treats ActivityPub/Mastodon-compatible links specially, showing footer with icon
-    if (embed.authorName) {
-        const authorId = encodeURIComponent(embed.authorName.replace(/^@/, ''));
-        const statusId = encodeURIComponent(embed.url.split('/').pop() || 'status');
-        html += `  <link href="https://embed.ken.tools/users/${authorId}/statuses/${statusId}" rel="alternate" type="application/activity+json">\n`;
-    }
+    // NOTE: ActivityPub link was removed - it caused Discord to prioritize empty ActivityPub
+    // content over OG tags, losing the embed description/image/video.
 
     // Close head and add redirect body
     html += `</head>
