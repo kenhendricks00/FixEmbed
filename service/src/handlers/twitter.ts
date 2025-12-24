@@ -21,6 +21,7 @@ interface SyndicationTweet {
     retweet_count?: number;
     quote_count?: number;
     conversation_count?: number;
+    view_count_info?: { count: string };
     entities?: {
         media?: Array<{
             type: string;
@@ -125,8 +126,9 @@ export const twitterHandler: PlatformHandler = {
             // Build stats for oEmbed/ActivityPub row
             const stats = formatStats({
                 comments: tweet.conversation_count,
-                retweets: tweet.retweet_count,
+                retweets: (tweet.retweet_count || 0) + (tweet.quote_count || 0),
                 likes: tweet.favorite_count,
+                views: tweet.view_count_info?.count ? parseInt(tweet.view_count_info.count) : undefined,
             });
 
             // Check for media - try multiple sources

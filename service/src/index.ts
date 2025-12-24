@@ -12,7 +12,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { Env } from './types';
 import { findHandler } from './handlers';
-import { generateEmbedHTML, generateErrorHTML } from './utils/embed';
+import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -80,7 +80,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; s?: string; u?: string } = {};
+    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -96,22 +96,14 @@ app.get('/activity/:encodedData', (c) => {
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
         const authorName = embedData.a || 'FixEmbed';
-        const displayAuthor = embedData.h ? `${authorName} (${embedData.h})` : authorName;
 
         // Build attachment
         let attachment: any[] = [];
         if (embedData.v) {
-            // For videos, we only provide a thumbnail to Discord in ActivityPub
-            // This prevents Discord from trying to use AP for playback (which it's bad at)
-            // and lets the OG tags handle the native video player.
-            if (embedData.p) {
-                attachment = [{
-                    'type': 'Document',
-                    'mediaType': 'image/jpeg',
-                    'url': embedData.p,
-                    'name': embedData.t || 'Video thumbnail'
-                }];
-            }
+            // CRITICAL: For videos, providing NO attachment in ActivityPub is often best 
+            // to allow Discord to fall back to our high-quality OG tags for playback.
+            // If we provide a thumbnail here, Discord might treat it as an image post.
+            attachment = [];
         } else if (embedData.i) {
             // Image attachment
             attachment = [{
@@ -133,9 +125,9 @@ app.get('/activity/:encodedData', (c) => {
             ],
             'id': `https://embed.ken.tools/activity/${encodedData}`,
             'type': 'Note',
-            'summary': embedData.s || null, // Stats in summary
+            'summary': embedData.s || null, // Stats row
             'content': `<p>${embedData.d || ''}</p>`,
-            'attributedTo': `https://embed.ken.tools/users/${encodeURIComponent(authorName)}`,
+            'attributedTo': `https://embed.ken.tools/activity/${encodedData}/actor`,
             'published': new Date().toISOString(),
             'url': embedData.u || 'https://embed.ken.tools',
             ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
@@ -151,6 +143,54 @@ app.get('/activity/:encodedData', (c) => {
         return c.redirect(embedData.u, 302);
     }
     return c.redirect('https://embed.ken.tools/', 302);
+});
+
+// ActivityPub Actor endpoint to provide Author Name and Icon in header
+app.get('/activity/:encodedData/actor', (c) => {
+    const encodedData = c.req.param('encodedData');
+
+    // Decode data
+    let embedData: { a?: string; h?: string; ic?: string } = {};
+    try {
+        let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        const decoded = atob(base64);
+        const jsonStr = decodeURIComponent(decoded);
+        embedData = JSON.parse(jsonStr);
+    } catch (e) { }
+
+    const authorName = embedData.a || 'FixEmbed';
+    const authorHandle = embedData.h || 'fixembed';
+    const authorIcon = embedData.ic || FIXEMBED_LOGO;
+
+    const actor = {
+        '@context': [
+            'https://www.w3.org/ns/activitystreams',
+            {
+                'manuallyApprovesFollowers': 'as:manuallyApprovesFollowers',
+                'toot': 'http://joinmastodon.org/ns#',
+                'featured': {
+                    '@id': 'toot:featured',
+                    '@type': '@id'
+                }
+            }
+        ],
+        'id': `https://embed.ken.tools/activity/${encodedData}/actor`,
+        'type': 'Person',
+        'name': authorName,
+        'preferredUsername': authorHandle.replace('@', ''),
+        'summary': 'FixEmbed Service',
+        'url': `https://embed.ken.tools/users/${encodeURIComponent(authorName)}`,
+        'icon': {
+            'type': 'Image',
+            'mediaType': 'image/jpeg',
+            'url': authorIcon
+        }
+    };
+
+    return c.json(actor, 200, {
+        'Content-Type': 'application/activity+json; charset=utf-8',
+    });
 });
 
 // Legacy ActivityPub endpoint (keep for backwards compatibility)

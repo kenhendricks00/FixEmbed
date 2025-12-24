@@ -74,13 +74,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
         }
 
-        // Use player card for videos for better native playback experience
-        html += `  <meta name="twitter:card" content="player">\n`;
-        html += `  <meta name="twitter:player" content="${escape(embed.video.url)}">\n`;
-        if (embed.video.width && embed.video.height) {
-            html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
-            html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
-        }
+        // Using summary_large_image for direct MP4 links is more reliable for inline playback in some Discord clients
+        // than 'player' which expects an iframe. Discord will auto-add the play button for og:video.
+        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
     } else {
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
     }
@@ -106,13 +102,14 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // 4. ActivityPub-style link for Discord's enhanced footer format
     // Encode essential embed data so the ActivityPub endpoint can return proper content
     const activityData = {
-        t: embed.title.substring(0, 100),       // title (truncated)
-        d: embed.description.substring(0, 500), // description (more text for AP)
+        t: embed.title.substring(0, 100),       // title
+        d: embed.description.substring(0, 500), // description
         i: embed.image || '',                   // image
         v: embed.video?.url || '',              // video URL
         p: embed.video?.thumbnail || '',        // video poster/thumbnail
         a: embed.authorName || '',              // author name
         h: embed.authorHandle || '',            // author handle
+        ic: embed.authorAvatar || '',           // author icon/avatar
         s: embed.stats || '',                   // engagement stats
         u: embed.url,                           // original URL
     };
