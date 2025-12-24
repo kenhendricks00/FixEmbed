@@ -310,11 +310,28 @@ export const instagramHandler: PlatformHandler = {
                     console.warn('Failed to fetch carousel metadata:', e);
                 }
 
+                let desc = vxResult.description || '';
+
+                // Clean description: Remove author name if it appears at the start
+                if (desc && authorName) {
+                    const simpleAuthor = authorName.split('(')[0].trim();
+                    const handleMatch = authorName.match(/\(@([^\)]+)\)/);
+                    const handle = handleMatch ? handleMatch[1] : null;
+
+                    if (desc.toLowerCase().startsWith(simpleAuthor.toLowerCase())) {
+                        desc = desc.substring(simpleAuthor.length).trim();
+                    } else if (handle && desc.toLowerCase().startsWith(handle.toLowerCase())) {
+                        desc = desc.substring(handle.length).trim();
+                    } else if (handle && desc.toLowerCase().startsWith(`@${handle.toLowerCase()}`)) {
+                        desc = desc.substring(handle.length + 1).trim();
+                    }
+                }
+
                 return {
                     success: true,
                     data: {
                         title: authorName || 'Post',
-                        description: vxResult.description ? truncateText(vxResult.description, 280) : '',
+                        description: desc ? truncateText(desc, 280) : '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         // authorName: authorName, // OLD: Don't set author field to avoid duplication
@@ -460,6 +477,32 @@ export const instagramHandler: PlatformHandler = {
                 result.data!.title = result.data!.authorName;
                 result.data!.authorName = undefined; // Clear author field to avoid duplication
             }
+            // Clean description: Remove author name if it appears at the start
+            // This happens often (e.g. "username Caption text")
+            if (result.data!.description && result.data!.title) {
+                // Get the simple author name (without handle in parens if applicable)
+                const simpleAuthor = result.data!.title.split('(')[0].trim();
+                const handleMatch = result.data!.title.match(/\(@([^\)]+)\)/);
+                const handle = handleMatch ? handleMatch[1] : null;
+
+                let desc = result.data!.description;
+
+                // Check and remove simple author name
+                if (desc.toLowerCase().startsWith(simpleAuthor.toLowerCase())) {
+                    desc = desc.substring(simpleAuthor.length).trim();
+                }
+                // Check and remove handle if different
+                else if (handle && desc.toLowerCase().startsWith(handle.toLowerCase())) {
+                    desc = desc.substring(handle.length).trim();
+                }
+                // Check and remove handle with @
+                else if (handle && desc.toLowerCase().startsWith(`@${handle.toLowerCase()}`)) {
+                    desc = desc.substring(handle.length + 1).trim();
+                }
+
+                result.data!.description = desc;
+            }
+
             return result;
 
         } catch (error) {
