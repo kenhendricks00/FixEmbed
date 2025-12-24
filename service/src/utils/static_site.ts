@@ -1156,6 +1156,7 @@ code {
    =================================== */
 .credits-section {
     padding: 80px 0;
+    background: var(--bg-secondary);
     border-top: 1px solid var(--glass-border);
 }
 
