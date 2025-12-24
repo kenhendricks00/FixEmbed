@@ -314,16 +314,31 @@ export const instagramHandler: PlatformHandler = {
 
                 // Clean description: Remove author name if it appears at the start
                 if (desc && authorName) {
-                    const simpleAuthor = authorName.split('(')[0].trim();
+                    let simpleAuthor = authorName.split('(')[0].trim();
+                    // Strip leading @ from simpleAuthor if present
+                    if (simpleAuthor.startsWith('@')) {
+                        simpleAuthor = simpleAuthor.substring(1);
+                    }
+
                     const handleMatch = authorName.match(/\(@([^\)]+)\)/);
                     const handle = handleMatch ? handleMatch[1] : null;
 
-                    if (desc.toLowerCase().startsWith(simpleAuthor.toLowerCase())) {
-                        desc = desc.substring(simpleAuthor.length).trim();
-                    } else if (handle && desc.toLowerCase().startsWith(handle.toLowerCase())) {
-                        desc = desc.substring(handle.length).trim();
-                    } else if (handle && desc.toLowerCase().startsWith(`@${handle.toLowerCase()}`)) {
-                        desc = desc.substring(handle.length + 1).trim();
+                    // Helper to remove prefix case-insensitively
+                    const removePrefix = (text: string, prefix: string) => {
+                        if (text.toLowerCase().startsWith(prefix.toLowerCase())) {
+                            return text.substring(prefix.length).trim();
+                        }
+                        if (text.toLowerCase().startsWith(`@${prefix.toLowerCase()}`)) {
+                            return text.substring(prefix.length + 1).trim();
+                        }
+                        return text;
+                    };
+
+                    if (simpleAuthor) {
+                        desc = removePrefix(desc, simpleAuthor);
+                    }
+                    if (handle && handle.toLowerCase() !== simpleAuthor.toLowerCase()) {
+                        desc = removePrefix(desc, handle);
                     }
                 }
 
@@ -479,25 +494,40 @@ export const instagramHandler: PlatformHandler = {
             }
             // Clean description: Remove author name if it appears at the start
             // This happens often (e.g. "username Caption text")
+            // Clean description: Remove author name if it appears at the start
+            // This happens often (e.g. "username Caption text")
             if (result.data!.description && result.data!.title) {
                 // Get the simple author name (without handle in parens if applicable)
-                const simpleAuthor = result.data!.title.split('(')[0].trim();
+                let simpleAuthor = result.data!.title.split('(')[0].trim();
+                // Strip leading @ from simpleAuthor if present
+                if (simpleAuthor.startsWith('@')) {
+                    simpleAuthor = simpleAuthor.substring(1);
+                }
+
                 const handleMatch = result.data!.title.match(/\(@([^\)]+)\)/);
                 const handle = handleMatch ? handleMatch[1] : null;
 
                 let desc = result.data!.description;
 
+                // Helper to remove prefix case-insensitively
+                const removePrefix = (text: string, prefix: string) => {
+                    if (text.toLowerCase().startsWith(prefix.toLowerCase())) {
+                        return text.substring(prefix.length).trim();
+                    }
+                    if (text.toLowerCase().startsWith(`@${prefix.toLowerCase()}`)) {
+                        return text.substring(prefix.length + 1).trim();
+                    }
+                    return text;
+                };
+
                 // Check and remove simple author name
-                if (desc.toLowerCase().startsWith(simpleAuthor.toLowerCase())) {
-                    desc = desc.substring(simpleAuthor.length).trim();
+                if (simpleAuthor) {
+                    desc = removePrefix(desc, simpleAuthor);
                 }
+
                 // Check and remove handle if different
-                else if (handle && desc.toLowerCase().startsWith(handle.toLowerCase())) {
-                    desc = desc.substring(handle.length).trim();
-                }
-                // Check and remove handle with @
-                else if (handle && desc.toLowerCase().startsWith(`@${handle.toLowerCase()}`)) {
-                    desc = desc.substring(handle.length + 1).trim();
+                if (handle && handle.toLowerCase() !== simpleAuthor.toLowerCase()) {
+                    desc = removePrefix(desc, handle);
                 }
 
                 result.data!.description = desc;
