@@ -71,10 +71,11 @@ async function fetchPixivArtwork(illustId: string): Promise<{
     try {
         const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)',
+                'App-Os': 'iOS',
+                'App-Os-Version': '14.6',
                 'Accept': 'application/json',
                 'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://www.pixiv.net/',
             },
         });
 
@@ -100,9 +101,10 @@ async function fetchPixivPages(illustId: string): Promise<string[]> {
     try {
         const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}/pages`, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)',
+                'App-Os': 'iOS',
+                'App-Os-Version': '14.6',
                 'Accept': 'application/json',
-                'Referer': 'https://www.pixiv.net/',
             },
         });
 
