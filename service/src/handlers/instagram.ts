@@ -165,8 +165,12 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     let preview = '';
 
     // Check if it's a photo or video based on button text
-    const isPhoto = html.includes('Download Photo');
-    const defaultType = isPhoto ? 'image' : 'video';
+    const hasDownloadVideo = html.includes('Download Video');
+    const hasDownloadPhoto = html.includes('Download Photo');
+
+    // Default to video if Download Video exists (even if Photo exists, e.g. for cover)
+    // Only default to image if Photo exists AND Video does not
+    const defaultType = (hasDownloadPhoto && !hasDownloadVideo) ? 'image' : 'video';
 
     // Extract description
     const descMatch = html.match(/class="video-des"[^>]*>([^<]*)</) ||
