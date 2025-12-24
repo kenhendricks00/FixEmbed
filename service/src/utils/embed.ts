@@ -105,7 +105,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const activityData = {
         t: embed.title.substring(0, 100),       // title (truncated)
         d: embed.description.substring(0, 200), // description (truncated)
-        i: embed.image || embed.video?.thumbnail || '', // image
+        i: embed.image || '',                   // image (only if no video)
+        v: embed.video?.url || '',              // video URL
+        p: embed.video?.thumbnail || '',        // video poster/thumbnail
         a: embed.authorName || '',              // author
         u: embed.url,                           // original URL
     };

@@ -74,7 +74,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; a?: string; u?: string } = {};
+    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; u?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -90,6 +90,29 @@ app.get('/activity/:encodedData', (c) => {
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
         const author = embedData.a || 'FixEmbed';
+
+        // Build attachment based on media type (video or image)
+        let attachment: any[] = [];
+        if (embedData.v) {
+            // Video attachment
+            attachment = [{
+                'type': 'Document',
+                'mediaType': 'video/mp4',
+                'url': embedData.v,
+                'name': embedData.t || 'Video',
+                // Include poster/thumbnail if available
+                ...(embedData.p ? { 'preview': { 'type': 'Image', 'url': embedData.p } } : {})
+            }];
+        } else if (embedData.i) {
+            // Image attachment
+            attachment = [{
+                'type': 'Document',
+                'mediaType': 'image/jpeg',
+                'url': embedData.i,
+                'name': embedData.t || 'Image'
+            }];
+        }
+
         const activityPubResponse = {
             '@context': [
                 'https://www.w3.org/ns/activitystreams',
@@ -106,15 +129,8 @@ app.get('/activity/:encodedData', (c) => {
             'attributedTo': `https://embed.ken.tools/users/${encodeURIComponent(author)}`,
             'published': new Date().toISOString(),
             'url': embedData.u || 'https://embed.ken.tools',
-            // Include attachment for image if present
-            ...(embedData.i ? {
-                'attachment': [{
-                    'type': 'Document',
-                    'mediaType': 'image/jpeg',
-                    'url': embedData.i,
-                    'name': embedData.t || 'Image'
-                }]
-            } : {}),
+            // Include attachment if present
+            ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
         };
 
         return c.json(activityPubResponse, 200, {
