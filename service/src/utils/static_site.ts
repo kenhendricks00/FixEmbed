@@ -1591,7 +1591,7 @@ export const tosHtml = `<!DOCTYPE html>
                     <p>The Service is provided "as is" without warranties of any kind, either express or implied. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
-                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, Bilibili). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Modifications to Terms</h3>
                     <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the new terms.</p>
@@ -1865,7 +1865,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>Threads</td><td>threads.net</td></tr>
                             <tr><td>Pixiv</td><td>pixiv.net</td></tr>
                             <tr><td>Bluesky</td><td>bsky.app</td></tr>
-                            <tr><td>YouTube</td><td>youtube.com, youtu.be</td></tr>
+
                             <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
                         </tbody>
                     </table>
