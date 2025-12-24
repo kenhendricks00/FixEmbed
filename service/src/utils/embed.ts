@@ -104,24 +104,27 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
     // 4. ActivityPub-style link for Discord's enhanced footer format
-    // Encode essential embed data so the ActivityPub endpoint can return proper content
-    const activityData = {
-        t: embed.title.substring(0, 100),       // title
-        d: embed.description.substring(0, 500), // description
-        i: embed.image || '',                   // image
-        v: embed.video?.url || '',              // video URL
-        p: embed.video?.thumbnail || '',        // video poster/thumbnail
-        a: embed.authorName || '',              // author name
-        h: embed.authorHandle || '',            // author handle
-        ic: embed.authorAvatar || '',           // author icon/avatar
-        s: embed.stats || '',                   // engagement stats
-        u: embed.url,                           // original URL
-    };
-    // Use encodeURIComponent to handle UTF-8 (emojis, Japanese, etc.) before btoa
-    const jsonStr = JSON.stringify(activityData);
-    const utf8Encoded = encodeURIComponent(jsonStr);
-    const encodedData = btoa(utf8Encoded).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    html += `  <link href="https://embed.ken.tools/activity/${encodedData}" rel="alternate" type="application/activity+json">\n`;
+    // CRITICAL: Only add ActivityPub for non-video embeds!
+    // When ActivityPub is present, Discord prioritizes it over OG tags and breaks video playback.
+    // For videos, we rely on og:site_name for the footer branding instead.
+    if (!embed.video) {
+        const activityData = {
+            t: embed.title.substring(0, 100),       // title
+            d: embed.description.substring(0, 500), // description
+            i: embed.image || '',                   // image
+            a: embed.authorName || '',              // author name
+            h: embed.authorHandle || '',            // author handle
+            ic: embed.authorAvatar || '',           // author icon/avatar
+            s: embed.stats || '',                   // engagement stats
+            u: embed.url,                           // original URL
+        };
+        // Use encodeURIComponent to handle UTF-8 (emojis, Japanese, etc.) before btoa
+        const jsonStr = JSON.stringify(activityData);
+        const utf8Encoded = encodeURIComponent(jsonStr);
+        const encodedData = btoa(utf8Encoded).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        html += `  <link href="https://embed.ken.tools/activity/${encodedData}" rel="alternate" type="application/activity+json">\n`;
+    }
+
 
     // Close head and add redirect body
     html += `</head>
