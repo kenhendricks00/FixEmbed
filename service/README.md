@@ -101,7 +101,7 @@ service/
 │   └── types.ts          # TypeScript definitions
 ├── wrangler.toml         # Cloudflare Workers config
 └── package.json
-``` 
+```
 
 ## License
 

@@ -167,6 +167,51 @@ app.get('/video/threads', async (c) => {
     }
 });
 
+// Image proxy endpoint for Pixiv - adds required Referer header
+app.get('/proxy/pixiv', async (c) => {
+    const imageUrl = c.req.query('url');
+
+    if (!imageUrl) {
+        return c.json({ error: 'Missing image URL' }, 400);
+    }
+
+    try {
+        // Pixiv requires Referer header to serve images
+        const response = await fetch(imageUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.pixiv.net/',
+                'Accept': 'image/*',
+            },
+        });
+
+        if (!response.ok) {
+            return c.redirect(imageUrl, 302);
+        }
+
+        // Get content type from response or default to image/jpeg
+        const contentType = response.headers.get('Content-Type') || 'image/jpeg';
+
+        // Stream the image back with proper headers and long cache
+        const headers = new Headers();
+        headers.set('Content-Type', contentType);
+        headers.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+
+        const contentLength = response.headers.get('Content-Length');
+        if (contentLength) {
+            headers.set('Content-Length', contentLength);
+        }
+
+        return new Response(response.body, {
+            status: 200,
+            headers,
+        });
+    } catch (error) {
+        // Fallback to redirect
+        return c.redirect(imageUrl, 302);
+    }
+});
+
 // Debug endpoint to test Instagram
 app.get('/debug/instagram', async (c) => {
     const url = c.req.query('url') || 'https://www.instagram.com/reel/C05SEFntyFA/';
