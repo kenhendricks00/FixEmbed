@@ -304,18 +304,10 @@ docker run -d kenhendricks00/fixembed</code></pre>
             <h2>Credits</h2>
             <p>FixEmbed relies on these amazing services:</p>
             <div class="credits-grid">
-                <a href="https://github.com/FxEmbed/FxEmbed" class="credit-link" target="_blank">FxEmbed by FxEmbed</a>
-                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link"
-                    target="_blank">InstagramEmbed by Lainmode</a>
-                <a href="https://github.com/dylanpdx/vxReddit" class="credit-link" target="_blank">vxReddit by
-                    dylanpdx</a>
-                <a href="https://github.com/milanmdev/fixthreads" class="credit-link" target="_blank">fixthreads by
-                    milanmdev</a>
-                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">phixiv by thelaao</a>
-                <a href="https://github.com/Rapougnac/VixBluesky" class="credit-link" target="_blank">VixBluesky by
-                    Rapougnac</a>
-
-                <a href="https://www.vxbilibili.com/" class="credit-link" target="_blank">BiliFix by BiliFix</a>
+                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link" target="_blank">VxInstagram by Lainmode</a>
+                <a href="https://snapsave.app" class="credit-link" target="_blank">Snapsave</a>
+                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">Phixiv by thelaao</a>
+                <a href="https://github.com/niconi21/vxBilibili" class="credit-link" target="_blank">VxBilibili by niconi21</a>
             </div>
         </div>
     </section>
