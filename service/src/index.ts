@@ -67,6 +67,80 @@ app.get('/oembed', (c) => {
     return c.json(oembedResponse);
 });
 
+// ActivityPub-style endpoint for Discord enhanced embeds
+// Discord treats ActivityPub/Mastodon links specially, showing enhanced footer with icon
+// This mimics the Mastodon ActivityPub status format
+app.get('/users/:author/statuses/:status', (c) => {
+    const author = c.req.param('author');
+    const status = c.req.param('status');
+    const accept = c.req.header('Accept') || '';
+
+    // Only respond with ActivityPub JSON if client requests it
+    if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
+        const activityPubResponse = {
+            '@context': [
+                'https://www.w3.org/ns/activitystreams',
+                {
+                    'sensitive': 'as:sensitive',
+                    'toot': 'http://joinmastodon.org/ns#',
+                    'Emoji': 'toot:Emoji'
+                }
+            ],
+            'id': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+            'type': 'Note',
+            'summary': null,
+            'content': '',
+            'attributedTo': `https://embed.ken.tools/users/${author}`,
+            'published': new Date().toISOString(),
+            'url': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+        };
+
+        return c.json(activityPubResponse, 200, {
+            'Content-Type': 'application/activity+json; charset=utf-8',
+        });
+    }
+
+    // For regular browser requests, redirect to the embed service
+    return c.redirect('https://embed.ken.tools/', 302);
+});
+
+// ActivityPub actor endpoint for Discord to fetch branding info
+app.get('/users/:author', (c) => {
+    const author = c.req.param('author');
+    const accept = c.req.header('Accept') || '';
+
+    if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
+        const actorResponse = {
+            '@context': [
+                'https://www.w3.org/ns/activitystreams',
+                'https://w3id.org/security/v1'
+            ],
+            'id': `https://embed.ken.tools/users/${author}`,
+            'type': 'Person',
+            'preferredUsername': author,
+            'name': 'FixEmbed',
+            'summary': 'Better embeds for social media links',
+            'url': 'https://embed.ken.tools',
+            'icon': {
+                'type': 'Image',
+                'mediaType': 'image/png',
+                'url': 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png'
+            },
+            'image': {
+                'type': 'Image',
+                'mediaType': 'image/png',
+                'url': 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png'
+            },
+        };
+
+        return c.json(actorResponse, 200, {
+            'Content-Type': 'application/activity+json; charset=utf-8',
+        });
+    }
+
+    return c.redirect('https://embed.ken.tools/', 302);
+});
+
 // Main embed endpoint
 app.get('/embed', async (c) => {
     const url = c.req.query('url');

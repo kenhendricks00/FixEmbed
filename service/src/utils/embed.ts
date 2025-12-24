@@ -87,10 +87,26 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <meta name="twitter:title" content="${escape(embed.title)}">\n`;
     html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
 
-    // FixEmbed branding - add oEmbed link for Discord to fetch provider icon
-    // This enables the small icon next to the site name
+    // FixEmbed branding - multiple approaches for Discord enhanced embeds
+    // 1. Multiple icon sizes (like FxEmbed)
+    const iconSizes = ['16', '24', '32', '48', '64'];
+    for (const size of iconSizes) {
+        html += `  <link href="${FIXEMBED_LOGO}" rel="icon" sizes="${size}x${size}" type="image/png">\n`;
+    }
+
+    // 2. Apple touch icon for mobile
+    html += `  <link rel="apple-touch-icon" href="${FIXEMBED_LOGO}">\n`;
+
+    // 3. oEmbed link for Discord to fetch provider info
     html += `  <link rel="alternate" type="application/json+oembed" href="https://embed.ken.tools/oembed?url=${encodeURIComponent(embed.url)}&amp;format=json">\n`;
-    html += `  <link rel="icon" type="image/png" href="${FIXEMBED_LOGO}">\n`;
+
+    // 4. ActivityPub-style link - This is key for Discord's enhanced footer format!
+    // Discord treats ActivityPub/Mastodon-compatible links specially, showing footer with icon
+    if (embed.authorName) {
+        const authorId = encodeURIComponent(embed.authorName.replace(/^@/, ''));
+        const statusId = encodeURIComponent(embed.url.split('/').pop() || 'status');
+        html += `  <link href="https://embed.ken.tools/users/${authorId}/statuses/${statusId}" rel="alternate" type="application/activity+json">\n`;
+    }
 
     // Close head and add redirect body
     html += `</head>
