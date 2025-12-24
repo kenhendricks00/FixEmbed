@@ -45,26 +45,39 @@ app.get('/oembed', (c) => {
     const format = c.req.query('format') || 'json';
 
     // Discord handles 'rich' type well for custom metadata
-    const oembedResponse = {
+    // 'author_name' is used by Discord for the engagement stats row
+    // Only include it if we have actual stats or author info to show
+    const oembedResponse: any = {
         version: '1.0',
         type: 'rich',
         provider_name: 'FixEmbed',
         provider_url: 'https://embed.ken.tools',
-        // 'author_name' is used by Discord for the "enhanced" engagement row
-        author_name: stats || author || 'FixEmbed',
-        author_url: originalUrl || 'https://embed.ken.tools',
         title: 'Post',
     };
 
+    // Only add author_name if we have stats (preferred) or author
+    // This prevents "FixEmbed" from showing twice
+    if (stats) {
+        oembedResponse.author_name = stats;
+        oembedResponse.author_url = originalUrl || 'https://embed.ken.tools';
+    } else if (author) {
+        oembedResponse.author_name = author;
+        oembedResponse.author_url = originalUrl || 'https://embed.ken.tools';
+    }
+
     if (format === 'xml') {
+        let authorXml = '';
+        if (stats || author) {
+            authorXml = `
+    <author_name>${stats || author}</author_name>
+    <author_url>${originalUrl || 'https://embed.ken.tools'}</author_url>`;
+        }
         const xml = `<?xml version="1.0" encoding="utf-8"?>
 <oembed>
     <version>1.0</version>
     <type>rich</type>
     <provider_name>FixEmbed</provider_name>
-    <provider_url>https://embed.ken.tools</provider_url>
-    <author_name>${stats || author || 'FixEmbed'}</author_name>
-    <author_url>${originalUrl || 'https://embed.ken.tools'}</author_url>
+    <provider_url>https://embed.ken.tools</provider_url>${authorXml}
     <title>Post</title>
 </oembed>`;
         return c.text(xml, 200, { 'Content-Type': 'text/xml' });

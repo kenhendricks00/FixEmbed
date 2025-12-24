@@ -244,14 +244,14 @@ export const threadsHandler: PlatformHandler = {
                     success: true,
                     data: {
                         title: description || 'Thread',
-                        description: statsStr || '',
+                        description: '', // Stats go via oEmbed, not in description
                         url: url,
                         siteName: getBrandedSiteName('threads'),
                         authorName: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
                         color: platformColors.threads,
                         platform: 'threads',
-                        stats: statsStr,
+                        stats: statsStr, // Stats shown via oEmbed author_name
                     },
                 };
 
