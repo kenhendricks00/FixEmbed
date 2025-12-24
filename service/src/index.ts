@@ -73,6 +73,12 @@ app.get('/oembed', (c) => {
     return c.json(oembedResponse);
 });
 
+// Alias for owoembed (used by FxTwitter/FixupX)
+app.get('/owoembed', (c) => {
+    const query = c.req.raw.url.split('?')[1] || '';
+    return c.redirect(`/oembed?${query}`, 301);
+});
+
 // ActivityPub endpoint with encoded embed data for Discord footer branding
 // The embed data is base64 encoded in the URL, decoded here to return proper content
 app.get('/activity/:encodedData', (c) => {

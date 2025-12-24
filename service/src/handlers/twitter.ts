@@ -22,6 +22,7 @@ interface SyndicationTweet {
     quote_count?: number;
     conversation_count?: number;
     view_count_info?: { count: string };
+    video?: { viewCount: string };
     entities?: {
         media?: Array<{
             type: string;
@@ -128,7 +129,7 @@ export const twitterHandler: PlatformHandler = {
                 comments: tweet.conversation_count,
                 retweets: (tweet.retweet_count || 0) + (tweet.quote_count || 0),
                 likes: tweet.favorite_count,
-                views: tweet.view_count_info?.count ? parseInt(tweet.view_count_info.count) : undefined,
+                views: tweet.video?.viewCount ? parseInt(tweet.video.viewCount) : (tweet.view_count_info?.count ? parseInt(tweet.view_count_info.count) : undefined),
             });
 
             // Check for media - try multiple sources
