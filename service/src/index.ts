@@ -13,7 +13,7 @@ import { logger } from 'hono/logger';
 import type { Env } from './types';
 import { findHandler } from './handlers';
 import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed';
-import { indexHtml, scriptJs, stylesCss } from './utils/static_site';
+import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml } from './utils/static_site';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -38,6 +38,14 @@ app.get('/script.js', (c) => {
     return c.text(scriptJs, 200, {
         'Content-Type': 'application/javascript',
     });
+});
+
+app.get('/tos', (c) => {
+    return c.html(tosHtml);
+});
+
+app.get('/privacy', (c) => {
+    return c.html(privacyHtml);
 });
 
 // oEmbed endpoint - provides provider info with FixEmbed logo for Discord

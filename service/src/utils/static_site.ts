@@ -1530,3 +1530,195 @@ export const scriptJs = `document.addEventListener('DOMContentLoaded', function 
         }, 3000);
     }
 });`;
+
+export const tosHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - FixEmbed</title>
+    <meta name="description" content="Terms of Service for FixEmbed">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
+    <meta name="color-scheme" content="dark">
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+
+    <header>
+        <nav>
+            <div class="container">
+                <div class="nav-container">
+                    <a href="/" class="logo">
+                        <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img">
+                        <span>FixEmbed</span>
+                    </a>
+                    <div class="nav-links">
+                        <a href="/#features">Features</a>
+                        <a href="/#how-it-works">How It Works</a>
+                        <a href="/#platforms">Platforms</a>
+                        <a href="/#hosting">Self-Host</a>
+                        <a href="/#support">Support</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="features-section" style="padding-top: 100px; min-height: 80vh;">
+        <div class="container">
+            <div class="glass-card">
+                <h1>Terms of Service</h1>
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2025</p>
+                
+                <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Acceptance of Terms</h3>
+                    <p>By accessing and using FixEmbed ("the Service"), you accept and agree to be bound by the terms and provision of this agreement.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Description of Service</h3>
+                    <p>FixEmbed is a utility service that generates link previews (embeds) for various social media platforms on Discord. The Service acts as a proxy to format publicly available metadata.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">3. User Conduct</h3>
+                    <p>You agree not to use the Service to:</p>
+                    <ul style="list-style-position: inside; margin-left: 1rem;">
+                        <li>Violate any applicable laws or regulations</li>
+                        <li>Infringe upon the rights of others</li>
+                        <li>Interfere with or disrupt the Service operation</li>
+                        <li>Send automated queries that excessively burden specific platforms</li>
+                    </ul>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Disclaimer</h3>
+                    <p>The Service is provided "as is" without warranties of any kind. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
+                    <p>FixEmbed interacts with third-party platforms (Twitter, Instagram, Reddit, etc.). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <span class="footer-logo">FixEmbed</span>
+                    <p>A Discord bot that fixes the lack of embed support in Discord.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://discord.gg/QFxTAmtZdn">Support</a>
+                    </div>
+                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script src="/script.js"></script>
+</body>
+</html>`;
+
+export const privacyHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - FixEmbed</title>
+    <meta name="description" content="Privacy Policy for FixEmbed">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
+    <meta name="color-scheme" content="dark">
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+
+    <header>
+        <nav>
+            <div class="container">
+                <div class="nav-container">
+                    <a href="/" class="logo">
+                        <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img">
+                        <span>FixEmbed</span>
+                    </a>
+                    <div class="nav-links">
+                        <a href="/#features">Features</a>
+                        <a href="/#how-it-works">How It Works</a>
+                        <a href="/#platforms">Platforms</a>
+                        <a href="/#hosting">Self-Host</a>
+                        <a href="/#support">Support</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="features-section" style="padding-top: 100px; min-height: 80vh;">
+        <div class="container">
+            <div class="glass-card">
+                <h1>Privacy Policy</h1>
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2025</p>
+                
+                <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Data Collection</h3>
+                    <p>FixEmbed is designed to be privacy-focused. We do not persist or store personal user data.</p>
+                    <ul style="list-style-position: inside; margin-left: 1rem;">
+                        <li><strong>Ephemeral Processing:</strong> URLs sent to our service are processed in-memory to generate embeds and are not permanently stored in a database.</li>
+                        <li><strong>Logs:</strong> We may keep temporary technical logs (e.g., Cloudflare request logs) for debugging and preventing abuse. These logs are rotated regularly.</li>
+                    </ul>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Cookies and Tracking</h3>
+                    <p>We do not use tracking cookies or third-party analytics trackers on our service.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">3. Data Sharing</h3>
+                    <p>We do not sell, trade, or otherwise transfer your information to outside parties. Metadata fetching involves making requests to public social media pages on your behalf.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Third-Party Links</h3>
+                    <p>Our service generates links to third-party content. We are not responsible for the privacy practices of those external sites.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Contact</h3>
+                    <p>If you have questions about this privacy policy, you can reach out on our <a href="https://discord.gg/QFxTAmtZdn" style="color: var(--primary-light);">Discord Support Server</a>.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <span class="footer-logo">FixEmbed</span>
+                    <p>A Discord bot that fixes the lack of embed support in Discord.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://discord.gg/QFxTAmtZdn">Support</a>
+                    </div>
+                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script src="/script.js"></script>
+</body>
+</html>`;
