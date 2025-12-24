@@ -94,18 +94,15 @@ export const blueskyHandler: PlatformHandler = {
             const author = post.author;
             const record = post.record;
 
-            // Build description
-            let description = truncateText(record.text, 280);
+            // Build description - just the post text, no stats
+            const description = truncateText(record.text, 280);
 
-            // Add engagement stats if available
+            // Stats go to oEmbed row, not description
             const statsStr = formatStats({
                 likes: post.likeCount,
                 retweets: post.repostCount,
                 comments: post.replyCount,
             });
-            if (statsStr) {
-                description += `\n\n${statsStr}`;
-            }
 
             // Check for images
             let image: string | undefined;
@@ -118,16 +115,20 @@ export const blueskyHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    title: `${author.displayName || author.handle} (@${author.handle})`,
-                    description,
+                    // Title is the post content (or handle if empty)
+                    title: description || `@${author.handle}`,
+                    // Description shows the full post if title was truncated
+                    description: '',
                     url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
                     siteName: getBrandedSiteName('bluesky'),
-                    authorName: author.displayName || author.handle,
+                    // authorName shows handle - don't duplicate display name
+                    authorName: `@${author.handle}`,
                     authorUrl: `https://bsky.app/profile/${author.handle}`,
                     authorAvatar: author.avatar,
                     image,
                     color: platformColors.bluesky,
                     platform: 'bluesky',
+                    stats: statsStr, // Stats shown via oEmbed author_name row
                 },
             };
         } catch (error) {

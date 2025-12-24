@@ -168,19 +168,21 @@ export const twitterHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    title: `${authorName} (@${authorHandle})`,
-                    description,
+                    // Title is the tweet content (consistent with other platforms)
+                    title: description || `@${authorHandle}`,
+                    // Description is empty - content is in title
+                    description: '',
                     url: `https://twitter.com/${authorHandle}/status/${parsed.tweetId}`,
                     siteName: getBrandedSiteName('twitter'),
-                    authorName: authorName,
-                    authorHandle: `@${authorHandle}`,
+                    // AuthorName is just the handle (consistent with Bluesky/Threads)
+                    authorName: `@${authorHandle}`,
                     authorUrl: `https://twitter.com/${authorHandle}`,
                     authorAvatar: tweet.user.profile_image_url_https,
                     image,
                     video,
                     color: platformColors.twitter,
                     platform: 'twitter',
-                    stats,
+                    stats, // Stats via oEmbed row
                 },
             };
         } catch (error) {
