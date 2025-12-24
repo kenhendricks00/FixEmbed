@@ -1203,8 +1203,8 @@ footer {
     font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 16px;
-    display: block;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    display: inline-block;
+    background: linear-gradient(135deg, #7c3aed, #ec4899);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
