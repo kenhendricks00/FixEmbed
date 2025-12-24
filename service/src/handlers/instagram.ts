@@ -277,6 +277,41 @@ export const instagramHandler: PlatformHandler = {
                 result.data!.image = firstMedia.url;
             }
 
+            // Try to get better metadata (username) from the embed page
+            // Snapsave gives us the video, but often misses the username
+            try {
+                const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
+                if (embedInfo.success && embedInfo.data) {
+                    // Update Title with author if found
+                    if (embedInfo.data.title && embedInfo.data.title.includes('@')) {
+                        // Parse "Username (@handle)" from title
+                        result.data!.title = embedInfo.data.title;
+                        const authorMatch = embedInfo.data.title.match(/^([^\(]+)/);
+                        if (authorMatch) {
+                            result.data!.authorName = authorMatch[1].trim();
+                        }
+                    }
+
+                    // Update description if we have a better one
+                    if (!description && embedInfo.data.description) {
+                        result.data!.description = embedInfo.data.description;
+                    }
+                }
+            } catch (e) {
+                // Ignore metadata fetch errors, we have the video at least
+                console.warn('Failed to fetch extra metadata:', e);
+            }
+
+            // Consolidate title display
+            if (result.data!.title && result.data!.title.includes('(@')) {
+                // If title is "Name (@handle) on Instagram: ...", let's extract handle
+                const handleMatch = result.data!.title.match(/\(@([^\)]+)\)/);
+                if (handleMatch) {
+                    result.data!.authorName = `@${handleMatch[1]}`;
+                    result.data!.title = 'Instagram'; // clean title
+                }
+            }
+
             // Clear description if it's just the default text
             if (result.data!.description?.startsWith('View ')) {
                 result.data!.description = '';
