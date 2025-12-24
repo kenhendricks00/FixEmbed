@@ -79,7 +79,10 @@ app.get('/activity/:encodedData', (c) => {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4) base64 += '=';
-        embedData = JSON.parse(atob(base64));
+        // Decode base64, then decodeURIComponent for UTF-8 support
+        const decoded = atob(base64);
+        const jsonStr = decodeURIComponent(decoded);
+        embedData = JSON.parse(jsonStr);
     } catch (e) {
         console.error('Failed to decode activity data:', e);
     }

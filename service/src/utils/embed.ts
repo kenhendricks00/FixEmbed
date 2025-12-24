@@ -109,7 +109,10 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         a: embed.authorName || '',              // author
         u: embed.url,                           // original URL
     };
-    const encodedData = btoa(JSON.stringify(activityData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    // Use encodeURIComponent to handle UTF-8 (emojis, Japanese, etc.) before btoa
+    const jsonStr = JSON.stringify(activityData);
+    const utf8Encoded = encodeURIComponent(jsonStr);
+    const encodedData = btoa(utf8Encoded).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     html += `  <link href="https://embed.ken.tools/activity/${encodedData}" rel="alternate" type="application/activity+json">\n`;
 
     // Close head and add redirect body
