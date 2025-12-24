@@ -12,7 +12,7 @@
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName } from '../utils/embed';
 
 // Scrape vxbilibili.com HTML for OG tags
 async function scrapeVxBilibili(bvid: string): Promise<{
@@ -122,21 +122,27 @@ export const bilibiliHandler: PlatformHandler = {
             const scrapeResult = await scrapeVxBilibili(bvid);
 
             if (scrapeResult.success && (scrapeResult.title || scrapeResult.image)) {
+                // Ensure image URL uses HTTPS
+                let imageUrl = scrapeResult.image;
+                if (imageUrl && imageUrl.startsWith('http://')) {
+                    imageUrl = imageUrl.replace('http://', 'https://');
+                }
+
                 return {
                     success: true,
                     data: {
                         title: scrapeResult.title || 'Bilibili Video',
                         description: scrapeResult.description || '',
                         url: canonicalUrl,
-                        siteName: 'Bilibili',
+                        siteName: getBrandedSiteName('bilibili'),
                         authorName: scrapeResult.author,
                         authorUrl: scrapeResult.author ? undefined : undefined,
-                        image: scrapeResult.image,
+                        image: imageUrl,
                         video: scrapeResult.video ? {
                             url: `https://${embedDomain}/proxy/bilibili?url=${encodeURIComponent(scrapeResult.video)}`,
                             width: 1920,
                             height: 1080,
-                            thumbnail: scrapeResult.image,
+                            thumbnail: imageUrl,
                         } : undefined,
                         color: platformColors.bilibili,
                         platform: 'bilibili',
@@ -151,7 +157,7 @@ export const bilibiliHandler: PlatformHandler = {
                     title: 'Bilibili Video',
                     description: `Watch on Bilibili`,
                     url: canonicalUrl,
-                    siteName: 'Bilibili',
+                    siteName: getBrandedSiteName('bilibili'),
                     color: platformColors.bilibili,
                     platform: 'bilibili',
                 },

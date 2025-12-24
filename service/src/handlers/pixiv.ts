@@ -12,7 +12,7 @@
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName } from '../utils/embed';
 
 // Scrape phixiv.net HTML for OG tags
 async function scrapePhixivHtml(illustId: string): Promise<{
@@ -101,7 +101,7 @@ export const pixivHandler: PlatformHandler = {
                         title: scrapeResult.title || 'Pixiv Artwork',
                         description: scrapeResult.description || '',
                         url: canonicalUrl,
-                        siteName: 'Pixiv',
+                        siteName: getBrandedSiteName('pixiv'),
                         authorName: scrapeResult.author,
                         authorUrl: scrapeResult.author ? `https://www.pixiv.net/users/${scrapeResult.author}` : undefined,
                         image: scrapeResult.image,
@@ -118,7 +118,7 @@ export const pixivHandler: PlatformHandler = {
                     title: 'Pixiv Artwork',
                     description: `View artwork #${illustId} on Pixiv`,
                     url: canonicalUrl,
-                    siteName: 'Pixiv',
+                    siteName: getBrandedSiteName('pixiv'),
                     color: platformColors.pixiv,
                     platform: 'pixiv',
                 },

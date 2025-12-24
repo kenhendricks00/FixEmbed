@@ -5,7 +5,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseTwitterUrl, truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
 
 interface SyndicationTweet {
     __typename: string;
@@ -117,13 +117,14 @@ export const twitterHandler: PlatformHandler = {
             const authorName = tweet.user.name;
             const authorHandle = tweet.user.screen_name;
 
-            // Build description
+            // Build description with stats
             let description = truncateText(tweet.text, 280);
-            if (tweet.favorite_count !== undefined) {
-                description += `\n\n❤️ ${tweet.favorite_count.toLocaleString()}`;
-                if (tweet.conversation_count !== undefined) {
-                    description += ` • 💬 ${tweet.conversation_count.toLocaleString()}`;
-                }
+            const statsStr = formatStats({
+                comments: tweet.conversation_count,
+                likes: tweet.favorite_count,
+            });
+            if (statsStr) {
+                description += `\n\n${statsStr}`;
             }
 
             // Check for media - try multiple sources
@@ -165,7 +166,7 @@ export const twitterHandler: PlatformHandler = {
                     title: `${authorName} (@${authorHandle})`,
                     description,
                     url: `https://twitter.com/${authorHandle}/status/${parsed.tweetId}`,
-                    siteName: 'Twitter',
+                    siteName: getBrandedSiteName('twitter'),
                     authorName: authorName,
                     authorUrl: `https://twitter.com/${authorHandle}`,
                     authorAvatar: tweet.user.profile_image_url_https,

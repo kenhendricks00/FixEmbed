@@ -27,7 +27,7 @@ app.get('/', (c) => {
         version: '1.0.0',
         status: 'running',
         platforms: [
-            'twitter', 'reddit', 'youtube', 'bluesky',
+            'twitter', 'reddit', 'bluesky',
             'instagram', 'threads', 'pixiv', 'bilibili'
         ],
         usage: {
@@ -35,6 +35,36 @@ app.get('/', (c) => {
             'Direct': 'GET /embed?url=<social-media-url>',
         },
     });
+});
+
+// oEmbed endpoint - provides provider info with FixEmbed logo for Discord
+app.get('/oembed', (c) => {
+    const url = c.req.query('url');
+    const format = c.req.query('format') || 'json';
+
+    // Return oEmbed response with FixEmbed branding
+    const oembedResponse = {
+        version: '1.0',
+        type: 'link',
+        provider_name: 'FixEmbed',
+        provider_url: 'https://embed.ken.tools',
+        // Logo for the provider icon in Discord embeds
+        author_name: 'FixEmbed',
+        author_url: 'https://embed.ken.tools',
+    };
+
+    if (format === 'xml') {
+        const xml = `<?xml version="1.0" encoding="utf-8"?>
+<oembed>
+    <version>1.0</version>
+    <type>link</type>
+    <provider_name>FixEmbed</provider_name>
+    <provider_url>https://embed.ken.tools</provider_url>
+</oembed>`;
+        return c.text(xml, 200, { 'Content-Type': 'text/xml' });
+    }
+
+    return c.json(oembedResponse);
 });
 
 // Main embed endpoint

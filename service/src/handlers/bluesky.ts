@@ -4,7 +4,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseBlueskyUrl, fetchJSON, truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
 
 interface BlueskyPost {
     thread: {
@@ -98,8 +98,13 @@ export const blueskyHandler: PlatformHandler = {
             let description = truncateText(record.text, 280);
 
             // Add engagement stats if available
-            if (post.likeCount !== undefined) {
-                description += `\n\n❤️ ${post.likeCount} • 🔁 ${post.repostCount || 0} • 💬 ${post.replyCount || 0}`;
+            const statsStr = formatStats({
+                likes: post.likeCount,
+                retweets: post.repostCount,
+                comments: post.replyCount,
+            });
+            if (statsStr) {
+                description += `\n\n${statsStr}`;
             }
 
             // Check for images
@@ -116,7 +121,7 @@ export const blueskyHandler: PlatformHandler = {
                     title: `${author.displayName || author.handle} (@${author.handle})`,
                     description,
                     url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
-                    siteName: 'Bluesky',
+                    siteName: getBrandedSiteName('bluesky'),
                     authorName: author.displayName || author.handle,
                     authorUrl: `https://bsky.app/profile/${author.handle}`,
                     authorAvatar: author.avatar,

@@ -4,7 +4,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName, formatNumber } from '../utils/embed';
 
 interface RedditPost {
     title: string;
@@ -90,7 +90,7 @@ export const redditHandler: PlatformHandler = {
                 : post.title;
 
             // Add stats
-            description += `\n\n⬆️ ${post.score.toLocaleString()} | 💬 ${post.num_comments.toLocaleString()}`;
+            description += `\n\n⬆️ ${formatNumber(post.score)} 💬 ${formatNumber(post.num_comments)}`;
 
             // Check for media
             let image: string | undefined;
@@ -123,7 +123,7 @@ export const redditHandler: PlatformHandler = {
                     title: `r/${post.subreddit} • ${truncateText(post.title, 100)}`,
                     description,
                     url: `https://reddit.com${post.permalink}`,
-                    siteName: 'Reddit',
+                    siteName: getBrandedSiteName('reddit'),
                     authorName: `u/${post.author}`,
                     authorUrl: `https://reddit.com/u/${post.author}`,
                     image,

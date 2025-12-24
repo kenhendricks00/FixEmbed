@@ -7,7 +7,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseInstagramUrl, truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName } from '../utils/embed';
 
 // ========== Snapsave Decryption Logic ==========
 // Ported from https://github.com/ahmedrangel/snapsave-media-downloader
@@ -249,7 +249,7 @@ export const instagramHandler: PlatformHandler = {
                         ? truncateText(description, 280)
                         : `View ${parsed.type === 'reel' ? 'Reel' : 'Post'} on Instagram`,
                     url: canonicalUrl,
-                    siteName: 'Instagram',
+                    siteName: getBrandedSiteName('instagram'),
                     color: platformColors.instagram,
                     platform: 'instagram',
                 },
@@ -452,7 +452,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 title: username ? `@${username} on Instagram` : 'Instagram',
                 description: caption ? truncateText(caption, 280) : `View on Instagram`,
                 url: canonicalUrl,
-                siteName: 'Instagram',
+                siteName: getBrandedSiteName('instagram'),
                 authorName: username || undefined,
                 color: platformColors.instagram,
                 platform: 'instagram',

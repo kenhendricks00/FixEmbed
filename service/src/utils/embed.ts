@@ -5,6 +5,11 @@
 import { EmbedData } from '../types';
 
 /**
+ * FixEmbed logo URL for branding in embeds
+ */
+export const FIXEMBED_LOGO = 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png';
+
+/**
  * Generate Open Graph meta tags for Discord/Telegram embeds
  */
 export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
@@ -82,6 +87,11 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <meta name="twitter:title" content="${escape(embed.title)}">\n`;
     html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
 
+    // FixEmbed branding - add oEmbed link for Discord to fetch provider icon
+    // This enables the small icon next to the site name
+    html += `  <link rel="alternate" type="application/json+oembed" href="https://embed.ken.tools/oembed?url=${encodeURIComponent(embed.url)}&amp;format=json">\n`;
+    html += `  <link rel="icon" type="image/png" href="${FIXEMBED_LOGO}">\n`;
+
     // Close head and add redirect body
     html += `</head>
 <body>
@@ -123,6 +133,87 @@ export const platformColors: Record<string, string> = {
     threads: '#000000',
     pixiv: '#0096FA',
     bluesky: '#1185FE',
-    youtube: '#FF0000',
     bilibili: '#00A1D6',
 };
+
+/**
+ * Platform display names for branding
+ */
+export const platformNames: Record<string, string> = {
+    twitter: '𝕏',
+    instagram: '📷 Instagram',
+    reddit: '🔗 Reddit',
+    threads: '🧵 Threads',
+    pixiv: '🎨 Pixiv',
+    bluesky: '🦋 Bluesky',
+    bilibili: '📺 Bilibili',
+};
+
+/**
+ * Generate branded site name for consistent FixEmbed branding
+ * Format: "FixEmbed • Platform" or "FixEmbed • Platform • Duration"
+ */
+export function getBrandedSiteName(platform: string, extra?: string): string {
+    const platformDisplay = platformNames[platform] || platform;
+    if (extra) {
+        return `FixEmbed • ${platformDisplay} • ${extra}`;
+    }
+    return `FixEmbed • ${platformDisplay}`;
+}
+
+/**
+ * Format large numbers consistently (e.g., 1.2K, 3.5M)
+ */
+export function formatNumber(num: number): string {
+    if (num >= 1_000_000) {
+        return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    } else if (num >= 1_000) {
+        return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+    }
+    return num.toLocaleString();
+}
+
+/**
+ * Format stats line with emojis for consistent display
+ */
+export function formatStats(stats: {
+    likes?: number;
+    comments?: number;
+    retweets?: number;
+    views?: number;
+    shares?: number;
+}): string {
+    const parts: string[] = [];
+
+    if (stats.comments !== undefined) {
+        parts.push(`💬 ${formatNumber(stats.comments)}`);
+    }
+    if (stats.retweets !== undefined) {
+        parts.push(`🔁 ${formatNumber(stats.retweets)}`);
+    }
+    if (stats.likes !== undefined) {
+        parts.push(`❤️ ${formatNumber(stats.likes)}`);
+    }
+    if (stats.views !== undefined) {
+        parts.push(`👁 ${formatNumber(stats.views)}`);
+    }
+    if (stats.shares !== undefined) {
+        parts.push(`↗️ ${formatNumber(stats.shares)}`);
+    }
+
+    return parts.join(' ');
+}
+
+/**
+ * Format duration (seconds to MM:SS or HH:MM:SS)
+ */
+export function formatDuration(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}

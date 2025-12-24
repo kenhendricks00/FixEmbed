@@ -7,7 +7,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
 
 // Convert Threads short code to numeric post ID
 function decodeThreadsPostId(shortcode: string): string {
@@ -235,22 +235,25 @@ export const threadsHandler: PlatformHandler = {
                     : '';
 
                 // Build stats string for site name
-                const stats: string[] = [];
-                if (graphqlResult.likes !== undefined) {
-                    stats.push(`❤️ ${graphqlResult.likes.toLocaleString()}`);
+                // Format stats line
+                const statsStr = formatStats({
+                    likes: graphqlResult.likes,
+                    comments: graphqlResult.replies,
+                });
+
+                // Build description with stats at the end
+                let fullDescription = description || '';
+                if (statsStr) {
+                    fullDescription = fullDescription ? `${fullDescription}\n\n${statsStr}` : statsStr;
                 }
-                if (graphqlResult.replies !== undefined) {
-                    stats.push(`💬 ${graphqlResult.replies.toLocaleString()}`);
-                }
-                const statsStr = stats.length > 0 ? ` · ${stats.join(' ')}` : '';
 
                 const result: HandlerResponse = {
                     success: true,
                     data: {
                         title: `@${displayUsername}`,
-                        description: description || '',
+                        description: fullDescription,
                         url: url,
-                        siteName: `Threads${statsStr}`,
+                        siteName: getBrandedSiteName('threads'),
                         authorName: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
                         color: platformColors.threads,
@@ -307,7 +310,7 @@ export const threadsHandler: PlatformHandler = {
                             title: `@${data.author_name || username}`,
                             description: data.title ? truncateText(data.title, 280) : '',
                             url: url,
-                            siteName: 'Threads',
+                            siteName: getBrandedSiteName('threads'),
                             authorName: `@${data.author_name || username}`,
                             authorUrl: `https://threads.net/@${username}`,
                             image: data.thumbnail_url,
@@ -327,7 +330,7 @@ export const threadsHandler: PlatformHandler = {
                     title: `@${username}`,
                     description: 'View thread on Threads',
                     url: url,
-                    siteName: 'Threads',
+                    siteName: getBrandedSiteName('threads'),
                     authorName: `@${username}`,
                     authorUrl: `https://threads.net/@${username}`,
                     color: platformColors.threads,
