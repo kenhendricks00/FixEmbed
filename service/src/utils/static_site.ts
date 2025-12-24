@@ -1916,3 +1916,151 @@ export const docsHtml = `<!DOCTYPE html>
     <script src="/script.js"></script>
 </body>
 </html>`;
+
+export const supportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support FixEmbed</title>
+    <meta name="description" content="Support FixEmbed - Vote, donate, or contribute to the project">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
+    <meta name="color-scheme" content="dark">
+    <style>
+        html, body { background-color: #0d1117; }
+        body { opacity: 0; transition: opacity 0.1s ease-in; }
+        body.loaded { opacity: 1; }
+        .support-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .support-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .support-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 40px rgba(124, 58, 237, 0.2);
+        }
+        .support-card i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .support-card h3 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        .support-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+        .support-card .btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .btn-topgg { background: linear-gradient(135deg, #ff3366, #ff6b9d); color: white; }
+        .btn-discord { background: #5865F2; color: white; }
+        .btn-github { background: #333; color: white; }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3); }
+        .topgg-icon { color: #ff3366; }
+        .discord-icon { color: #5865F2; }
+        .github-icon { color: #f0f0f0; }
+    </style>
+    <link rel="stylesheet" href="/styles.css" onload="document.body.classList.add('loaded')">
+    <noscript><style>body { opacity: 1; }</style></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+    <header>
+        <nav>
+            <div class="container">
+                <div class="nav-container">
+                    <a href="/" class="logo">
+                        <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img">
+                        <span>FixEmbed</span>
+                    </a>
+                    <div class="nav-links">
+                        <a href="/#features">Features</a>
+                        <a href="/docs">Docs</a>
+                        <a href="/#platforms">Platforms</a>
+                        <a href="/support">Support</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <section class="features-section" style="padding-top: 100px; min-height: 80vh;">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 3rem;">
+                <h1 style="margin-bottom: 0.5rem;">Support FixEmbed</h1>
+                <p class="section-subtitle">Help us keep FixEmbed running and improving!</p>
+            </div>
+            <div class="support-grid">
+                <div class="support-card">
+                    <i class="fas fa-star topgg-icon"></i>
+                    <h3>Vote on Top.gg</h3>
+                    <p>Voting helps us reach more users and grow the community. It's free and takes just a few seconds!</p>
+                    <a href="https://top.gg/bot/1173820242305224764" target="_blank" class="btn btn-topgg">
+                        <i class="fas fa-arrow-up"></i> Vote Now
+                    </a>
+                </div>
+                <div class="support-card">
+                    <i class="fab fa-discord discord-icon"></i>
+                    <h3>Join Discord</h3>
+                    <p>Get help, report issues, suggest features, and hang out with the community!</p>
+                    <a href="https://discord.gg/QFxTAmtZdn" target="_blank" class="btn btn-discord">
+                        <i class="fab fa-discord"></i> Join Server
+                    </a>
+                </div>
+                <div class="support-card">
+                    <i class="fab fa-github github-icon"></i>
+                    <h3>Contribute</h3>
+                    <p>FixEmbed is open source! Star the repo, report bugs, or submit pull requests.</p>
+                    <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank" class="btn btn-github">
+                        <i class="fab fa-github"></i> View on GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <span class="footer-logo">FixEmbed</span>
+                    <p>A Discord bot that fixes the lack of embed support in Discord.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="/docs">Docs</a>
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                    </div>
+                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script src="/script.js"></script>
+</body>
+</html>`;
