@@ -197,14 +197,19 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
                 if (payload.filename && payload.filename.includes('.mp4')) {
                     return 'video';
                 }
+                // If payload exists but no .mp4 found, it's likely an image
+                if (payload.url || payload.filename) {
+                    return 'image';
+                }
             }
         } catch (e) {
             // Ignore decode errors
         }
-        // If URL path contains video indicators
-        if (url.includes('.mp4') || url.includes('/v2?')) {
+        // Only treat as video if URL directly contains .mp4 extension
+        if (url.includes('.mp4')) {
             return 'video';
         }
+        // Fall back to button text detection
         return defaultType;
     };
 
