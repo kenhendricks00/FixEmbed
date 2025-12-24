@@ -1204,6 +1204,10 @@ footer {
     font-weight: 700;
     margin-bottom: 16px;
     display: block;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .footer-links {
