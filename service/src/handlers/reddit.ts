@@ -4,7 +4,7 @@
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch';
-import { platformColors, getBrandedSiteName, formatNumber } from '../utils/embed';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
 
 interface RedditPost {
     title: string;
@@ -84,13 +84,16 @@ export const redditHandler: PlatformHandler = {
 
             const post = response[0].data.children[0].data;
 
-            // Build description
-            let description = post.selftext
+            // Build description (no stats here - moved to oEmbed row)
+            const description = post.selftext
                 ? truncateText(post.selftext, 280)
                 : post.title;
 
-            // Add stats
-            description += `\n\n⬆️ ${formatNumber(post.score)} 💬 ${formatNumber(post.num_comments)}`;
+            // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
+            const stats = formatStats({
+                comments: post.num_comments,
+                likes: post.score, // Reddit uses score/upvotes as "likes"
+            });
 
             // Check for media
             let image: string | undefined;
@@ -130,6 +133,7 @@ export const redditHandler: PlatformHandler = {
                     video,
                     color: platformColors.reddit,
                     platform: 'reddit',
+                    stats, // Consistent stats via oEmbed like other platforms
                 },
             };
         } catch (error) {

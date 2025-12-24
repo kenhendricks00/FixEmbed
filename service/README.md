@@ -18,10 +18,11 @@ A unified embed service for Discord, built with Cloudflare Workers and Hono.
 
 ## Features
 
-- **Video Embedding**: Full video playback support for Instagram Reels, Twitter videos, Reddit videos, Threads videos, and more
+- **Video Embedding**: Native video playback for Twitter, Reddit, Instagram Reels, Threads, and more
 - **Carousel Images**: Multi-image posts display as grids (Threads, Instagram)
+- **Consistent Stats**: Engagement metrics (💬 comments, ❤️ likes, 🔄 reposts, 👁️ views) displayed via oEmbed row
 - **Smart Proxying**: Video proxy endpoints for platforms that require special handling
-- **Metadata Extraction**: Author names, descriptions, thumbnails, and engagement stats
+- **Metadata Extraction**: Author names, avatars, descriptions, and thumbnails
 - **Discord Optimized**: Proper OG tags for rich embeds with correct aspect ratios
 - **Fast**: Built on Cloudflare Workers for global low-latency responses
 
@@ -68,9 +69,10 @@ Streams video content with proper headers for Discord playback.
 ```
 GET /twitter/user/status/123
 GET /reddit/r/subreddit/comments/id
-GET /youtube/watch?v=videoId
 GET /instagram/reel/shortcode
 GET /threads/@username/post/shortcode
+GET /bluesky/profile/handle/post/id
+GET /pixiv/artworks/12345678
 GET /bilibili/video/BVxxxxxxxx
 ```
 
@@ -89,16 +91,16 @@ service/
 ├── src/
 │   ├── index.ts          # Main router and endpoints
 │   ├── handlers/         # Platform-specific handlers
-│   │   ├── twitter.ts
-│   │   ├── reddit.ts
-│   │   ├── youtube.ts
-│   │   ├── bluesky.ts
+│   │   ├── twitter.ts    # Twitter/X via Syndication API
+│   │   ├── reddit.ts     # Reddit JSON API
+│   │   ├── bluesky.ts    # AT Protocol
 │   │   ├── instagram.ts  # Snapsave + embed scraping
 │   │   ├── threads.ts    # GraphQL API + carousel
-│   │   ├── pixiv.ts
-│   │   └── bilibili.ts
+│   │   ├── pixiv.ts      # Phixiv HTML scraping
+│   │   └── bilibili.ts   # Public API
 │   ├── utils/
-│   │   └── embed.ts      # OG tag generation
+│   │   ├── embed.ts      # OG tag generation, stats formatting
+│   │   └── fetch.ts      # HTTP utilities
 │   └── types.ts          # TypeScript definitions
 ├── wrangler.toml         # Cloudflare Workers config
 └── package.json
