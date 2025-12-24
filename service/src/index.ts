@@ -731,49 +731,41 @@ app.get('/debug/bilibili', async (c) => {
             }
         }
     } catch (e: any) {
-        (debugInfo.tests as any[]).push({ name: 'Bilibili Info API', error: e.message });
+        (debugInfo.tests as any[]).push({ name: 'Bilibili Info API (blocked)', error: e.message });
     }
 
-    // Test 2: Bilibili PlayURL API (video stream)
-    if (cid) {
-        try {
-            const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=64&fnval=1&platform=html5&high_quality=1`;
-            const resp2 = await fetch(playUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
-                    'Referer': 'https://www.bilibili.com/',
-                },
-            });
-            const body2 = await resp2.text();
+    // Test 2: vxbilibili.com HTML scraping (our actual approach)
+    try {
+        const vxUrl = `https://www.vxbilibili.com/video/${bvid}`;
+        const resp2 = await fetch(vxUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+                'Accept': 'text/html',
+            },
+        });
+        const html = await resp2.text();
 
-            (debugInfo.tests as any[]).push({
-                name: 'Bilibili PlayURL API',
-                status: resp2.status,
-                bodyLength: body2.length,
-            });
+        (debugInfo.tests as any[]).push({
+            name: 'vxbilibili HTML Scrape',
+            status: resp2.status,
+            bodyLength: html.length,
+        });
 
-            if (resp2.ok) {
-                try {
-                    const data = JSON.parse(body2);
-                    debugInfo.playUrlData = {
-                        code: data.code,
-                        message: data.message,
-                        quality: data.data?.quality,
-                        format: data.data?.format,
-                        hasVideo: !!(data.data?.durl && data.data.durl.length > 0),
-                        videoUrl: data.data?.durl?.[0]?.url?.substring(0, 100) + '...',
-                        videoSize: data.data?.durl?.[0]?.size,
-                    };
-                } catch {
-                    debugInfo.playUrlParseError = 'Failed to parse JSON';
-                    debugInfo.playUrlRaw = body2.substring(0, 500);
-                }
-            }
-        } catch (e: any) {
-            (debugInfo.tests as any[]).push({ name: 'Bilibili PlayURL API', error: e.message });
+        if (resp2.ok) {
+            const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+            const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+            const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
+            const ogVideo = html.match(/<meta property="og:video(?::url)?" content="([^"]+)"/)?.[1];
+
+            debugInfo.vxbilibiliData = {
+                title: ogTitle,
+                image: ogImage,
+                description: ogDesc?.substring(0, 100),
+                video: ogVideo?.substring(0, 100),
+            };
         }
-    } else {
-        debugInfo.playUrlSkipped = 'No CID found from info API';
+    } catch (e: any) {
+        (debugInfo.tests as any[]).push({ name: 'vxbilibili HTML Scrape', error: e.message });
     }
 
     return c.json(debugInfo);
