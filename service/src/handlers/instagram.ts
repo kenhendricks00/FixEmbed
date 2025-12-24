@@ -378,17 +378,42 @@ export const instagramHandler: PlatformHandler = {
 
             // Try to get better metadata (username) from the embed page
             // Snapsave gives us the video, but often misses the username
+            // Try to get better metadata (username) from the embed page
+            // Snapsave gives us the video, but often misses the username
             try {
                 const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
                 if (embedInfo.success && embedInfo.data) {
+                    let authorName = '';
+
                     // Update Title with author if found
                     if (embedInfo.data.title && embedInfo.data.title.includes('@')) {
                         // Parse "Username (@handle)" from title
-                        result.data!.title = embedInfo.data.title;
                         const authorMatch = embedInfo.data.title.match(/^([^\(]+)/);
                         if (authorMatch) {
-                            result.data!.authorName = authorMatch[1].trim();
+                            authorName = authorMatch[1].trim();
                         }
+                        // Also try to get handle
+                        const handleMatch = embedInfo.data.title.match(/\(@([^\)]+)\)/);
+                        if (handleMatch) {
+                            const handle = `@${handleMatch[1]}`;
+                            // Prefer handle if name is just "Instagram" or empty
+                            if (!authorName || authorName === 'Instagram') {
+                                authorName = handle;
+                            } else {
+                                // Combine if both exist: Name (@handle)
+                                authorName = `${authorName} (${handle})`;
+                            }
+                        }
+                    }
+
+                    // Fallback to simpler username scraping
+                    if (!authorName && embedInfo.data.authorName) {
+                        authorName = embedInfo.data.authorName;
+                    }
+
+                    if (authorName) {
+                        result.data!.authorName = authorName;
+                        result.data!.title = authorName; // User requested: Author Name as Title
                     }
 
                     // Update description if we have a better one
@@ -401,16 +426,10 @@ export const instagramHandler: PlatformHandler = {
                 console.warn('Failed to fetch extra metadata:', e);
             }
 
-            // Set author from embed metadata
-            if (result.data!.title && result.data!.title.includes('(@')) {
-                // If title was set to "Name (@handle) on Instagram", extract just the handle for author
-                const handleMatch = result.data!.title.match(/\(@([^\)]+)\)/);
-                if (handleMatch) {
-                    result.data!.authorName = `@${handleMatch[1]}`;
-                    result.data!.title = parsed.type === 'reel' ? 'Reel' : 'Post'; // clean title
-                }
+            // Fallback: If we still have generic title but have authorName (e.g. from existing logic), set it
+            if ((result.data!.title === 'Post' || result.data!.title === 'Reel') && result.data!.authorName) {
+                result.data!.title = result.data!.authorName;
             }
-
             return result;
 
         } catch (error) {
