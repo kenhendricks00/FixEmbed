@@ -244,10 +244,10 @@ export const instagramHandler: PlatformHandler = {
             const result: HandlerResponse = {
                 success: true,
                 data: {
-                    title: 'Instagram',
+                    title: parsed.type === 'reel' ? 'Reel' : 'Post',
                     description: description
                         ? truncateText(description, 280)
-                        : `View ${parsed.type === 'reel' ? 'Reel' : 'Post'} on Instagram`,
+                        : '',
                     url: canonicalUrl,
                     siteName: getBrandedSiteName('instagram'),
                     color: platformColors.instagram,
@@ -302,19 +302,14 @@ export const instagramHandler: PlatformHandler = {
                 console.warn('Failed to fetch extra metadata:', e);
             }
 
-            // Consolidate title display
+            // Set author from embed metadata
             if (result.data!.title && result.data!.title.includes('(@')) {
-                // If title is "Name (@handle) on Instagram: ...", let's extract handle
+                // If title was set to "Name (@handle) on Instagram", extract just the handle for author
                 const handleMatch = result.data!.title.match(/\(@([^\)]+)\)/);
                 if (handleMatch) {
                     result.data!.authorName = `@${handleMatch[1]}`;
-                    result.data!.title = 'Instagram'; // clean title
+                    result.data!.title = parsed.type === 'reel' ? 'Reel' : 'Post'; // clean title
                 }
-            }
-
-            // Clear description if it's just the default text
-            if (result.data!.description?.startsWith('View ')) {
-                result.data!.description = '';
             }
 
             return result;
@@ -449,11 +444,11 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         const result: HandlerResponse = {
             success: true,
             data: {
-                title: username ? `@${username} on Instagram` : 'Instagram',
-                description: caption ? truncateText(caption, 280) : `View on Instagram`,
+                title: caption ? truncateText(caption, 100) : 'Post',
+                description: caption ? truncateText(caption, 280) : '',
                 url: canonicalUrl,
                 siteName: getBrandedSiteName('instagram'),
-                authorName: username || undefined,
+                authorName: username ? `@${username}` : undefined,
                 color: platformColors.instagram,
                 platform: 'instagram',
             },

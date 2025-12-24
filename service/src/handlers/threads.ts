@@ -234,30 +234,24 @@ export const threadsHandler: PlatformHandler = {
                     ? truncateText(graphqlResult.caption, 280)
                     : '';
 
-                // Build stats string for site name
-                // Format stats line
+                // Build stats for oEmbed row
                 const statsStr = formatStats({
                     likes: graphqlResult.likes,
                     comments: graphqlResult.replies,
                 });
 
-                // Build description with stats at the end
-                let fullDescription = description || '';
-                if (statsStr) {
-                    fullDescription = fullDescription ? `${fullDescription}\n\n${statsStr}` : statsStr;
-                }
-
                 const result: HandlerResponse = {
                     success: true,
                     data: {
-                        title: `@${displayUsername}`,
-                        description: fullDescription,
+                        title: description || 'Thread',
+                        description: statsStr || '',
                         url: url,
                         siteName: getBrandedSiteName('threads'),
                         authorName: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
                         color: platformColors.threads,
                         platform: 'threads',
+                        stats: statsStr,
                     },
                 };
 
@@ -307,7 +301,7 @@ export const threadsHandler: PlatformHandler = {
                     return {
                         success: true,
                         data: {
-                            title: `@${data.author_name || username}`,
+                            title: data.title ? truncateText(data.title, 100) : 'Thread',
                             description: data.title ? truncateText(data.title, 280) : '',
                             url: url,
                             siteName: getBrandedSiteName('threads'),
@@ -327,8 +321,8 @@ export const threadsHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    title: `@${username}`,
-                    description: 'View thread on Threads',
+                    title: 'Thread',
+                    description: '',
                     url: url,
                     siteName: getBrandedSiteName('threads'),
                     authorName: `@${username}`,
