@@ -220,19 +220,20 @@ export function formatStats(stats: {
 }): string {
     const parts: string[] = [];
 
-    if (stats.comments !== undefined) {
+    // Only show stats that are defined AND greater than 0
+    if (stats.comments !== undefined && stats.comments > 0) {
         parts.push(`💬 ${formatNumber(stats.comments)}`);
     }
-    if (stats.retweets !== undefined) {
+    if (stats.retweets !== undefined && stats.retweets > 0) {
         parts.push(`🔁 ${formatNumber(stats.retweets)}`);
     }
-    if (stats.likes !== undefined) {
+    if (stats.likes !== undefined && stats.likes > 0) {
         parts.push(`❤️ ${formatNumber(stats.likes)}`);
     }
-    if (stats.views !== undefined) {
+    if (stats.views !== undefined && stats.views > 0) {
         parts.push(`👁 ${formatNumber(stats.views)}`);
     }
-    if (stats.shares !== undefined) {
+    if (stats.shares !== undefined && stats.shares > 0) {
         parts.push(`↗️ ${formatNumber(stats.shares)}`);
     }
 
