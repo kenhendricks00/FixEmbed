@@ -36,7 +36,14 @@ export const indexHtml = `<!DOCTYPE html>
     <!-- Prevent dark mode extensions from modifying styles -->
     <meta name="color-scheme" content="dark">
     <meta name="darkreader-lock">
-    <link rel="stylesheet" href="/styles.css">
+    <style>
+        /* Critical CSS to prevent FOUC */
+        html, body { background-color: #0d1117; }
+        body { opacity: 0; transition: opacity 0.1s ease-in; }
+        body.loaded { opacity: 1; }
+    </style>
+    <link rel="stylesheet" href="/styles.css" onload="document.body.classList.add('loaded')">
+    <noscript><style>body { opacity: 1; }</style></noscript>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1537,7 +1544,13 @@ export const tosHtml = `<!DOCTYPE html>
     <meta name="theme-color" content="#7c3aed">
     <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
     <meta name="color-scheme" content="dark">
-    <link rel="stylesheet" href="/styles.css">
+    <style>
+        html, body { background-color: #0d1117; }
+        body { opacity: 0; transition: opacity 0.1s ease-in; }
+        body.loaded { opacity: 1; }
+    </style>
+    <link rel="stylesheet" href="/styles.css" onload="document.body.classList.add('loaded')">
+    <noscript><style>body { opacity: 1; }</style></noscript>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -1639,7 +1652,13 @@ export const privacyHtml = `<!DOCTYPE html>
     <meta name="theme-color" content="#7c3aed">
     <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
     <meta name="color-scheme" content="dark">
-    <link rel="stylesheet" href="/styles.css">
+    <style>
+        html, body { background-color: #0d1117; }
+        body { opacity: 0; transition: opacity 0.1s ease-in; }
+        body.loaded { opacity: 1; }
+    </style>
+    <link rel="stylesheet" href="/styles.css" onload="document.body.classList.add('loaded')">
+    <noscript><style>body { opacity: 1; }</style></noscript>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -1736,7 +1755,13 @@ export const docsHtml = `<!DOCTYPE html>
     <meta name="theme-color" content="#7c3aed">
     <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
     <meta name="color-scheme" content="dark">
-    <link rel="stylesheet" href="/styles.css">
+    <style>
+        html, body { background-color: #0d1117; }
+        body { opacity: 0; transition: opacity 0.1s ease-in; }
+        body.loaded { opacity: 1; }
+    </style>
+    <link rel="stylesheet" href="/styles.css" onload="document.body.classList.add('loaded')">
+    <noscript><style>body { opacity: 1; }</style></noscript>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
