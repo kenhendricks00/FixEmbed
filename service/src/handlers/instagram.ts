@@ -16,11 +16,11 @@ import { platformColors, getBrandedSiteName } from '../utils/embed';
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata
-// Note: VxInstagram doesn't expose Instagram usernames reliably, so we don't extract them here
 
 async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
     success: boolean;
     image?: string;
+    username?: string;
     description?: string;
     isVideo?: boolean;
     error?: string;
@@ -46,22 +46,30 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
 
         // Extract OG tags
         const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+        const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
         const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
         const ogType = html.match(/<meta property="og:type" content="([^"]+)"/)?.[1];
 
         // Check if it's a video (vxinstagram typically redirects videos to snapsave)
         const isVideo = ogType?.includes('video') || html.includes('og:video');
 
-        // Only return success if we have an actual image
-        // The /generated/{shortcode}.jpg URL is what we want for carousels
-        if (!ogImage) {
-            return { success: false, error: 'No image found' };
+        // Only use image if it's a generated composite (carousel)
+        // Standard single images use a proxy link that often fails or expires
+        const isComposite = ogImage?.includes('/generated/');
+
+        if (!isComposite) {
+            return { success: false, error: 'Not a carousel/composite image' };
         }
+
+        // Note: vxinstagram doesn't expose the actual author username in metadata
+        // The @realAlita in the HTML is a developer credit, so we don't extract it.
+        // We'll rely on the fallback scraper (Snapsave) to get the author if needed.
 
         return {
             success: true,
             image: ogImage,
-            description: ogDesc,
+            username: undefined, // Don't return username from vxinstagram to avoid wrong attribution
+            description: ogDesc || ogTitle,
             isVideo,
         };
     } catch (error) {
@@ -276,6 +284,7 @@ export const instagramHandler: PlatformHandler = {
                         description: vxResult.description ? truncateText(vxResult.description, 280) : '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
+                        authorName: vxResult.username ? `@${vxResult.username}` : undefined,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
