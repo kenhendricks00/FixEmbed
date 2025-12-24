@@ -173,13 +173,14 @@ export const platformColors: Record<string, string> = {
  * Platform display names for branding
  */
 export const platformNames: Record<string, string> = {
-    twitter: '𝕏',
+    twitter: '𝕏 Twitter',
     instagram: '📷 Instagram',
     reddit: '🔗 Reddit',
     threads: '🧵 Threads',
     pixiv: '🎨 Pixiv',
     bluesky: '🦋 Bluesky',
     bilibili: '📺 Bilibili',
+    youtube: '▶️ YouTube',
 };
 
 /**
