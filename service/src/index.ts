@@ -212,8 +212,8 @@ app.get('/proxy/pixiv', async (c) => {
     }
 });
 
-// Video proxy endpoint for YouTube - streams video from Invidious
-app.get('/proxy/youtube', async (c) => {
+// Video proxy endpoint for Bilibili - streams video with proper Referer
+app.get('/proxy/bilibili', async (c) => {
     const videoUrl = c.req.query('url');
 
     if (!videoUrl) {
@@ -221,10 +221,11 @@ app.get('/proxy/youtube', async (c) => {
     }
 
     try {
-        // Fetch the video stream from Invidious
+        // Bilibili requires Referer header
         const response = await fetch(videoUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.bilibili.com/',
                 'Accept': 'video/*,*/*',
                 'Range': c.req.header('Range') || 'bytes=0-',
             },

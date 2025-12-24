@@ -8,12 +8,13 @@ A unified embed service for Discord, built with Cloudflare Workers and Hono.
 |----------|--------|--------|
 | Twitter/X | ✅ | Syndication API |
 | Reddit | ✅ | JSON API |
-| YouTube | ✅ | oEmbed |
 | Bluesky | ✅ | AT Protocol |
 | Instagram | ✅ | Snapsave API + Video Proxy |
 | Threads | ✅ | GraphQL API + Carousel Support |
-| Pixiv | ✅ | Phixiv proxy |
+| Pixiv | ✅ | Phixiv HTML scraping |
 | Bilibili | ✅ | Public API |
+
+> **Note**: YouTube is not supported as Discord and other platforms have excellent native YouTube embedding.
 
 ## Features
 
@@ -101,7 +102,7 @@ service/
 │   └── types.ts          # TypeScript definitions
 ├── wrangler.toml         # Cloudflare Workers config
 └── package.json
-```
+``` 
 
 ## License
 

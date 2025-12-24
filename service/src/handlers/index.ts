@@ -5,7 +5,6 @@
 
 export { twitterHandler } from './twitter';
 export { redditHandler } from './reddit';
-export { youtubeHandler } from './youtube';
 export { blueskyHandler } from './bluesky';
 export { instagramHandler } from './instagram';
 export { threadsHandler } from './threads';
@@ -14,7 +13,6 @@ export { bilibiliHandler } from './bilibili';
 
 import { twitterHandler } from './twitter';
 import { redditHandler } from './reddit';
-import { youtubeHandler } from './youtube';
 import { blueskyHandler } from './bluesky';
 import { instagramHandler } from './instagram';
 import { threadsHandler } from './threads';
@@ -26,7 +24,6 @@ import type { PlatformHandler } from '../types';
 export const handlers: PlatformHandler[] = [
     twitterHandler,
     redditHandler,
-    youtubeHandler,
     blueskyHandler,
     instagramHandler,
     threadsHandler,
