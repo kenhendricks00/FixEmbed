@@ -127,6 +127,46 @@ app.get('/video/instagram', async (c) => {
     }
 });
 
+// Video proxy endpoint for Threads - streams the video with proper headers
+app.get('/video/threads', async (c) => {
+    const videoUrl = c.req.query('url');
+
+    if (!videoUrl) {
+        return c.json({ error: 'Missing video URL' }, 400);
+    }
+
+    try {
+        // Fetch the video from the source
+        const response = await fetch(videoUrl, {
+            headers: {
+                'User-Agent': 'TelegramBot (like TwitterBot)',
+            },
+        });
+
+        if (!response.ok) {
+            return c.redirect(videoUrl, 302);
+        }
+
+        // Stream the video back with proper headers
+        const headers = new Headers();
+        headers.set('Content-Type', 'video/mp4');
+        headers.set('Accept-Ranges', 'bytes');
+
+        const contentLength = response.headers.get('Content-Length');
+        if (contentLength) {
+            headers.set('Content-Length', contentLength);
+        }
+
+        return new Response(response.body, {
+            status: 200,
+            headers,
+        });
+    } catch (error) {
+        // Fallback to redirect
+        return c.redirect(videoUrl, 302);
+    }
+});
+
 // Debug endpoint to test Instagram
 app.get('/debug/instagram', async (c) => {
     const url = c.req.query('url') || 'https://www.instagram.com/reel/C05SEFntyFA/';
