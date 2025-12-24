@@ -9,10 +9,10 @@ A unified embed service for Discord, built with Cloudflare Workers and Hono.
 | Twitter/X | ✅ | Syndication API |
 | Reddit | ✅ | JSON API |
 | Bluesky | ✅ | AT Protocol |
-| Instagram | ✅ | Snapsave API + Video Proxy |
+| Instagram | ✅ | VxInstagram + Snapsave API |
 | Threads | ✅ | GraphQL API + Carousel Support |
 | Pixiv | ✅ | Phixiv HTML scraping |
-| Bilibili | ✅ | Public API |
+| Bilibili | ✅ | VxBilibili HTML scraping |
 
 > **Note**: YouTube is not supported as Discord and other platforms have excellent native YouTube embedding.
 
@@ -106,6 +106,14 @@ service/
 └── package.json
 ``` 
 
+## Credits
+
+- Instagram carousel images via [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram)
+- Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
+- Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
+- Uses [Hono](https://hono.dev/) framework
+- Deployed on [Cloudflare Workers](https://workers.cloudflare.com/)
+
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details

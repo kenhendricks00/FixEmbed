@@ -1,13 +1,77 @@
 /**
  * FixEmbed Service - Instagram Handler
  * 
- * Uses Snapsave API with proper decryption.
- * Based on snapsave-media-downloader implementation.
+ * Uses two methods for Instagram content:
+ * 1. VxInstagram (vxinstagram.com) - For posts/carousel images with composite grid
+ * 2. Snapsave API - For reels/videos with direct playback
+ * 
+ * Credits:
+ * - VxInstagram by Lainmode (MIT License): https://github.com/Lainmode/InstagramEmbed-vxinstagram
+ * - Snapsave decryption based on: https://github.com/ahmedrangel/snapsave-media-downloader
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
 import { parseInstagramUrl, truncateText } from '../utils/fetch';
 import { platformColors, getBrandedSiteName } from '../utils/embed';
+
+// ========== VxInstagram Scraper ==========
+// Scrapes vxinstagram.com for composite carousel images and metadata
+
+async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
+    success: boolean;
+    image?: string;
+    username?: string;
+    description?: string;
+    isVideo?: boolean;
+    error?: string;
+}> {
+    try {
+        // Build vxinstagram URL based on content type
+        const vxUrl = type === 'reel'
+            ? `https://vxinstagram.com/reel/${shortcode}/`
+            : `https://vxinstagram.com/p/${shortcode}/`;
+
+        const response = await fetch(vxUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+                'Accept': 'text/html',
+            },
+        });
+
+        if (!response.ok) {
+            return { success: false, error: `vxinstagram returned ${response.status}` };
+        }
+
+        const html = await response.text();
+
+        // Extract OG tags
+        const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+        const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
+        const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
+        const ogType = html.match(/<meta property="og:type" content="([^"]+)"/)?.[1];
+
+        // Check if it's a video (vxinstagram typically redirects videos to snapsave)
+        const isVideo = ogType?.includes('video') || html.includes('og:video');
+
+        // Extract username from the page content or title
+        let username: string | undefined;
+        const usernameMatch = html.match(/@([a-zA-Z0-9._]+)/);
+        if (usernameMatch) {
+            username = usernameMatch[1];
+        }
+
+        return {
+            success: true,
+            image: ogImage,
+            username,
+            description: ogDesc || ogTitle,
+            isVideo,
+        };
+    } catch (error) {
+        console.error('VxInstagram scrape error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
 
 // ========== Snapsave Decryption Logic ==========
 // Ported from https://github.com/ahmedrangel/snapsave-media-downloader
@@ -203,6 +267,27 @@ export const instagramHandler: PlatformHandler = {
         }
 
         try {
+            // Try VxInstagram first for better image/carousel support
+            const vxResult = await scrapeVxInstagram(parsed.shortcode, parsed.type);
+
+            if (vxResult.success && vxResult.image && !vxResult.isVideo) {
+                // VxInstagram found an image (possibly composite carousel)
+                return {
+                    success: true,
+                    data: {
+                        title: vxResult.description ? truncateText(vxResult.description, 100) : 'Post',
+                        description: vxResult.description ? truncateText(vxResult.description, 280) : '',
+                        url: canonicalUrl,
+                        siteName: getBrandedSiteName('instagram'),
+                        authorName: vxResult.username ? `@${vxResult.username}` : undefined,
+                        image: vxResult.image, // This is the composite carousel image from vxinstagram
+                        color: platformColors.instagram,
+                        platform: 'instagram',
+                    },
+                };
+            }
+
+            // For videos/reels or if vxinstagram failed, use Snapsave
             // Call Snapsave API
             const formData = new URLSearchParams();
             formData.append('url', canonicalUrl);
