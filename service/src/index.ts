@@ -681,10 +681,10 @@ app.get('/debug/youtube', async (c) => {
 
 // Debug endpoint to test Bilibili
 app.get('/debug/bilibili', async (c) => {
-    const url = c.req.query('url') || 'https://www.bilibili.com/video/BV1YjBtBfE1q';
+    const url = c.req.query('url') || 'https://www.bilibili.com/video/BV1nhZ2YHEtL';
 
     const bvMatch = url.match(/BV[a-zA-Z0-9]+/);
-    const bvid = bvMatch?.[0] || 'BV1YjBtBfE1q';
+    const bvid = bvMatch?.[0] || 'BV1nhZ2YHEtL';
 
     const debugInfo: Record<string, unknown> = {
         inputUrl: url,
@@ -692,19 +692,21 @@ app.get('/debug/bilibili', async (c) => {
         tests: [],
     };
 
-    // Test 1: Bilibili API
+    let cid: number | null = null;
+
+    // Test 1: Bilibili Info API
     try {
         const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
         const resp1 = await fetch(apiUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0)',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Referer': 'https://www.bilibili.com/',
             },
         });
         const body1 = await resp1.text();
 
         (debugInfo.tests as any[]).push({
-            name: 'Bilibili API',
+            name: 'Bilibili Info API',
             status: resp1.status,
             bodyLength: body1.length,
         });
@@ -712,21 +714,66 @@ app.get('/debug/bilibili', async (c) => {
         if (resp1.ok) {
             try {
                 const data = JSON.parse(body1);
-                debugInfo.apiData = {
+                cid = data.data?.cid;
+                debugInfo.infoApiData = {
                     code: data.code,
+                    message: data.message,
                     title: data.data?.title,
-                    desc: data.data?.desc?.substring(0, 100),
+                    cid: data.data?.cid,
                     owner: data.data?.owner?.name,
                     pic: data.data?.pic,
                     views: data.data?.stat?.view,
                     likes: data.data?.stat?.like,
+                    duration: data.data?.duration,
                 };
             } catch {
-                debugInfo.apiParseError = 'Failed to parse JSON';
+                debugInfo.infoParseError = 'Failed to parse JSON';
             }
         }
     } catch (e: any) {
-        (debugInfo.tests as any[]).push({ name: 'Bilibili API', error: e.message });
+        (debugInfo.tests as any[]).push({ name: 'Bilibili Info API', error: e.message });
+    }
+
+    // Test 2: Bilibili PlayURL API (video stream)
+    if (cid) {
+        try {
+            const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=64&fnval=1&platform=html5&high_quality=1`;
+            const resp2 = await fetch(playUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
+                    'Referer': 'https://www.bilibili.com/',
+                },
+            });
+            const body2 = await resp2.text();
+
+            (debugInfo.tests as any[]).push({
+                name: 'Bilibili PlayURL API',
+                status: resp2.status,
+                bodyLength: body2.length,
+            });
+
+            if (resp2.ok) {
+                try {
+                    const data = JSON.parse(body2);
+                    debugInfo.playUrlData = {
+                        code: data.code,
+                        message: data.message,
+                        quality: data.data?.quality,
+                        format: data.data?.format,
+                        hasVideo: !!(data.data?.durl && data.data.durl.length > 0),
+                        videoUrl: data.data?.durl?.[0]?.url?.substring(0, 100) + '...',
+                        videoSize: data.data?.durl?.[0]?.size,
+                    };
+                } catch {
+                    debugInfo.playUrlParseError = 'Failed to parse JSON';
+                    debugInfo.playUrlRaw = body2.substring(0, 500);
+                }
+            }
+        } catch (e: any) {
+            (debugInfo.tests as any[]).push({ name: 'Bilibili PlayURL API', error: e.message });
+        }
+    } else {
+        debugInfo.playUrlSkipped = 'No CID found from info API';
     }
 
     return c.json(debugInfo);
