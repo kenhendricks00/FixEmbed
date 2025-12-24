@@ -18,6 +18,8 @@ interface SyndicationTweet {
     };
     created_at: string;
     favorite_count?: number;
+    retweet_count?: number;
+    quote_count?: number;
     conversation_count?: number;
     entities?: {
         media?: Array<{
@@ -117,15 +119,15 @@ export const twitterHandler: PlatformHandler = {
             const authorName = tweet.user.name;
             const authorHandle = tweet.user.screen_name;
 
-            // Build description with stats
-            let description = truncateText(tweet.text, 280);
-            const statsStr = formatStats({
+            // description should only be the text
+            const description = truncateText(tweet.text, 500);
+
+            // Build stats for oEmbed/ActivityPub row
+            const stats = formatStats({
                 comments: tweet.conversation_count,
+                retweets: tweet.retweet_count,
                 likes: tweet.favorite_count,
             });
-            if (statsStr) {
-                description += `\n\n${statsStr}`;
-            }
 
             // Check for media - try multiple sources
             const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media;
@@ -168,12 +170,14 @@ export const twitterHandler: PlatformHandler = {
                     url: `https://twitter.com/${authorHandle}/status/${parsed.tweetId}`,
                     siteName: getBrandedSiteName('twitter'),
                     authorName: authorName,
+                    authorHandle: `@${authorHandle}`,
                     authorUrl: `https://twitter.com/${authorHandle}`,
                     authorAvatar: tweet.user.profile_image_url_https,
                     image,
                     video,
                     color: platformColors.twitter,
                     platform: 'twitter',
+                    stats,
                 },
             };
         } catch (error) {

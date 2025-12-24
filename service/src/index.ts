@@ -39,27 +39,33 @@ app.get('/', (c) => {
 
 // oEmbed endpoint - provides provider info with FixEmbed logo for Discord
 app.get('/oembed', (c) => {
-    const url = c.req.query('url');
+    const originalUrl = c.req.query('url');
+    const stats = c.req.query('stats');
+    const author = c.req.query('author');
     const format = c.req.query('format') || 'json';
 
-    // Return oEmbed response with FixEmbed branding
+    // Discord handles 'rich' type well for custom metadata
     const oembedResponse = {
         version: '1.0',
-        type: 'link',
+        type: 'rich',
         provider_name: 'FixEmbed',
         provider_url: 'https://embed.ken.tools',
-        // Logo for the provider icon in Discord embeds
-        author_name: 'FixEmbed',
-        author_url: 'https://embed.ken.tools',
+        // 'author_name' is used by Discord for the "enhanced" engagement row
+        author_name: stats || author || 'FixEmbed',
+        author_url: originalUrl || 'https://embed.ken.tools',
+        title: 'Post',
     };
 
     if (format === 'xml') {
         const xml = `<?xml version="1.0" encoding="utf-8"?>
 <oembed>
     <version>1.0</version>
-    <type>link</type>
+    <type>rich</type>
     <provider_name>FixEmbed</provider_name>
     <provider_url>https://embed.ken.tools</provider_url>
+    <author_name>${stats || author || 'FixEmbed'}</author_name>
+    <author_url>${originalUrl || 'https://embed.ken.tools'}</author_url>
+    <title>Post</title>
 </oembed>`;
         return c.text(xml, 200, { 'Content-Type': 'text/xml' });
     }
@@ -74,7 +80,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; u?: string } = {};
+    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; s?: string; u?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -89,28 +95,30 @@ app.get('/activity/:encodedData', (c) => {
 
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
-        const author = embedData.a || 'FixEmbed';
+        const authorName = embedData.a || 'FixEmbed';
+        const displayAuthor = embedData.h ? `${authorName} (${embedData.h})` : authorName;
 
-        // Build attachment - ONLY for images, not videos
-        // Videos are handled by OG tags, ActivityPub just provides branding
-        // This allows both video playback AND footer branding like FixupX
+        // Build attachment
         let attachment: any[] = [];
-        if (embedData.i && !embedData.v) {
-            // Image attachment (only if no video)
+        if (embedData.v) {
+            // For videos, we only provide a thumbnail to Discord in ActivityPub
+            // This prevents Discord from trying to use AP for playback (which it's bad at)
+            // and lets the OG tags handle the native video player.
+            if (embedData.p) {
+                attachment = [{
+                    'type': 'Document',
+                    'mediaType': 'image/jpeg',
+                    'url': embedData.p,
+                    'name': embedData.t || 'Video thumbnail'
+                }];
+            }
+        } else if (embedData.i) {
+            // Image attachment
             attachment = [{
                 'type': 'Document',
                 'mediaType': 'image/jpeg',
                 'url': embedData.i,
                 'name': embedData.t || 'Image'
-            }];
-        }
-        // For videos: use poster as image so Discord shows thumbnail with footer
-        else if (embedData.p) {
-            attachment = [{
-                'type': 'Document',
-                'mediaType': 'image/jpeg',
-                'url': embedData.p,
-                'name': embedData.t || 'Video thumbnail'
             }];
         }
 
@@ -125,12 +133,11 @@ app.get('/activity/:encodedData', (c) => {
             ],
             'id': `https://embed.ken.tools/activity/${encodedData}`,
             'type': 'Note',
-            'summary': null,
+            'summary': embedData.s || null, // Stats in summary
             'content': `<p>${embedData.d || ''}</p>`,
-            'attributedTo': `https://embed.ken.tools/users/${encodeURIComponent(author)}`,
+            'attributedTo': `https://embed.ken.tools/users/${encodeURIComponent(authorName)}`,
             'published': new Date().toISOString(),
             'url': embedData.u || 'https://embed.ken.tools',
-            // Include attachment if present
             ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
         };
 

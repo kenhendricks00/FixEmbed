@@ -33,6 +33,7 @@ export interface EmbedData {
 
     // Author info
     authorName?: string;
+    authorHandle?: string;
     authorUrl?: string;
     authorAvatar?: string;
 
@@ -45,6 +46,7 @@ export interface EmbedData {
     color?: string;
     timestamp?: string;
     platform: Platform;
+    stats?: string;
 }
 
 export interface VideoEmbed {

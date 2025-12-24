@@ -65,7 +65,6 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:type" content="video/mp4">\n`;
 
-        // Only include dimensions if they're set (non-zero)
         if (embed.video.width && embed.video.height) {
             html += `  <meta property="og:video:width" content="${embed.video.width}">\n`;
             html += `  <meta property="og:video:height" content="${embed.video.height}">\n`;
@@ -75,12 +74,15 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
         }
 
-        // Use summary_large_image for video files to get large preview
-        // 'player' card is for iframes, which we are not using for direct MP4s
+        // Use player card for videos for better native playback experience
+        html += `  <meta name="twitter:card" content="player">\n`;
+        html += `  <meta name="twitter:player" content="${escape(embed.video.url)}">\n`;
+        if (embed.video.width && embed.video.height) {
+            html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
+            html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
+        }
+    } else {
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
-
-        // Remove twitter:player as it's meant for iframes
-        // Discord will use og:video for the actual playback
     }
 
     // Twitter-specific tags
@@ -88,27 +90,30 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
 
     // FixEmbed branding - multiple approaches for Discord enhanced embeds
-    // 1. Multiple icon sizes (like FxEmbed)
-    const iconSizes = ['16', '24', '32', '48', '64'];
-    for (const size of iconSizes) {
-        html += `  <link href="${FIXEMBED_LOGO}" rel="icon" sizes="${size}x${size}" type="image/png">\n`;
-    }
+    // 1. Single high-quality icon for branding
+    html += `  <link href="${FIXEMBED_LOGO}" rel="icon" type="image/png">\n`;
 
     // 2. Apple touch icon for mobile
     html += `  <link rel="apple-touch-icon" href="${FIXEMBED_LOGO}">\n`;
 
-    // 3. oEmbed link for Discord to fetch provider info
-    html += `  <link rel="alternate" type="application/json+oembed" href="https://embed.ken.tools/oembed?url=${encodeURIComponent(embed.url)}&amp;format=json">\n`;
+    // 3. oEmbed link for Discord to fetch provider and engagement info
+    const oembedUrl = new URL('https://embed.ken.tools/oembed');
+    oembedUrl.searchParams.set('url', embed.url);
+    if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
+    if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
+    html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
     // 4. ActivityPub-style link for Discord's enhanced footer format
     // Encode essential embed data so the ActivityPub endpoint can return proper content
     const activityData = {
         t: embed.title.substring(0, 100),       // title (truncated)
-        d: embed.description.substring(0, 200), // description (truncated)
-        i: embed.image || '',                   // image (only if no video)
+        d: embed.description.substring(0, 500), // description (more text for AP)
+        i: embed.image || '',                   // image
         v: embed.video?.url || '',              // video URL
         p: embed.video?.thumbnail || '',        // video poster/thumbnail
-        a: embed.authorName || '',              // author
+        a: embed.authorName || '',              // author name
+        h: embed.authorHandle || '',            // author handle
+        s: embed.stats || '',                   // engagement stats
         u: embed.url,                           // original URL
     };
     // Use encodeURIComponent to handle UTF-8 (emojis, Japanese, etc.) before btoa
