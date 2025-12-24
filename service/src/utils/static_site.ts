@@ -1566,7 +1566,7 @@ export const tosHtml = `<!DOCTYPE html>
                         <a href="/#features">Features</a>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
-                        <a href="/#support">Support</a>
+                        <a href="/support">Support</a>
                     </div>
                 </div>
             </div>
@@ -1674,7 +1674,7 @@ export const privacyHtml = `<!DOCTYPE html>
                         <a href="/#features">Features</a>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
-                        <a href="/#support">Support</a>
+                        <a href="/support">Support</a>
                     </div>
                 </div>
             </div>
@@ -1791,7 +1791,7 @@ export const docsHtml = `<!DOCTYPE html>
                         <a href="/#features">Features</a>
                         <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
-                        <a href="/#support">Support</a>
+                        <a href="/support">Support</a>
                     </div>
                 </div>
             </div>
@@ -2016,9 +2016,17 @@ export const supportHtml = `<!DOCTYPE html>
             </div>
             <div class="support-grid">
                 <div class="support-card">
+                    <i class="fas fa-heart" style="color: #ff5e5b;"></i>
+                    <h3>Donate on Ko-fi</h3>
+                    <p>Help cover server costs and support development. Every coffee counts!</p>
+                    <a href="https://ko-fi.com/kenhendricks" target="_blank" class="btn" style="background: linear-gradient(135deg, #ff5e5b, #ff9966); color: white;">
+                        <i class="fas fa-mug-hot"></i> Buy a Coffee
+                    </a>
+                </div>
+                <div class="support-card">
                     <i class="fas fa-star topgg-icon"></i>
                     <h3>Vote on Top.gg</h3>
-                    <p>Voting helps us reach more users and grow the community. It's free and takes just a few seconds!</p>
+                    <p>Voting helps us reach more users. Free and takes seconds!</p>
                     <a href="https://top.gg/bot/1173820242305224764" target="_blank" class="btn btn-topgg">
                         <i class="fas fa-arrow-up"></i> Vote Now
                     </a>
@@ -2026,7 +2034,7 @@ export const supportHtml = `<!DOCTYPE html>
                 <div class="support-card">
                     <i class="fab fa-discord discord-icon"></i>
                     <h3>Join Discord</h3>
-                    <p>Get help, report issues, suggest features, and hang out with the community!</p>
+                    <p>Get help, report issues, and hang out with the community!</p>
                     <a href="https://discord.gg/QFxTAmtZdn" target="_blank" class="btn btn-discord">
                         <i class="fab fa-discord"></i> Join Server
                     </a>
@@ -2034,7 +2042,7 @@ export const supportHtml = `<!DOCTYPE html>
                 <div class="support-card">
                     <i class="fab fa-github github-icon"></i>
                     <h3>Contribute</h3>
-                    <p>FixEmbed is open source! Star the repo, report bugs, or submit pull requests.</p>
+                    <p>Star the repo, report bugs, or submit pull requests!</p>
                     <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank" class="btn btn-github">
                         <i class="fab fa-github"></i> View on GitHub
                     </a>
