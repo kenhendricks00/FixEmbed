@@ -1783,8 +1783,8 @@ export const docsHtml = `<!DOCTYPE html>
 
     <section class="features-section" style="padding-top: 100px; min-height: 80vh;">
         <div class="container">
-            <h1 style="margin-bottom: 0.5rem;">Documentation</h1>
-            <p class="section-subtitle" style="text-align: left; margin-bottom: 2rem;">Everything you need to use FixEmbed</p>
+            <h1 style="margin-bottom: 0.5rem; text-align: center;">Documentation</h1>
+            <p class="section-subtitle" style="text-align: center; margin-bottom: 2rem;">Everything you need to use FixEmbed</p>
 
             <div class="docs-nav">
                 <a href="#bot-usage">🤖 Bot Usage</a>
