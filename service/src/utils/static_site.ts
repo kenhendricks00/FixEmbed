@@ -1563,9 +1563,8 @@ export const tosHtml = `<!DOCTYPE html>
                     </a>
                     <div class="nav-links">
                         <a href="/#features">Features</a>
-                        <a href="/#how-it-works">How It Works</a>
+                        <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
-                        <a href="/#hosting">Self-Host</a>
                         <a href="/#support">Support</a>
                     </div>
                 </div>
@@ -1577,7 +1576,7 @@ export const tosHtml = `<!DOCTYPE html>
         <div class="container">
             <div class="glass-card">
                 <h1>Terms of Service</h1>
-                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2025</p>
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2024</p>
                 
                 <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Acceptance of Terms</h3>
@@ -1592,14 +1591,20 @@ export const tosHtml = `<!DOCTYPE html>
                         <li>Violate any applicable laws or regulations</li>
                         <li>Infringe upon the rights of others</li>
                         <li>Interfere with or disrupt the Service operation</li>
-                        <li>Send automated queries that excessively burden specific platforms</li>
+                        <li>Send automated queries that excessively burden the service or third-party platforms</li>
                     </ul>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Disclaimer</h3>
-                    <p>The Service is provided "as is" without warranties of any kind. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
+                    <p>The Service is provided "as is" without warranties of any kind, either express or implied. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
-                    <p>FixEmbed interacts with third-party platforms (Twitter, Instagram, Reddit, etc.). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, YouTube, Bilibili). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Modifications to Terms</h3>
+                    <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the new terms.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">7. Termination</h3>
+                    <p>We may terminate or suspend access to the Service immediately, without prior notice, for conduct that we believe violates these Terms or is harmful to other users or the Service.</p>
                 </div>
             </div>
         </div>
@@ -1614,10 +1619,10 @@ export const tosHtml = `<!DOCTYPE html>
                 </div>
                 <div class="footer-right">
                     <div class="footer-links">
+                        <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
-                        <a href="https://discord.gg/QFxTAmtZdn">Support</a>
                     </div>
                     <p class="copyright">© 2023-2025 FixEmbed</p>
                 </div>
@@ -1660,9 +1665,8 @@ export const privacyHtml = `<!DOCTYPE html>
                     </a>
                     <div class="nav-links">
                         <a href="/#features">Features</a>
-                        <a href="/#how-it-works">How It Works</a>
+                        <a href="/docs">Docs</a>
                         <a href="/#platforms">Platforms</a>
-                        <a href="/#hosting">Self-Host</a>
                         <a href="/#support">Support</a>
                     </div>
                 </div>
@@ -1674,27 +1678,30 @@ export const privacyHtml = `<!DOCTYPE html>
         <div class="container">
             <div class="glass-card">
                 <h1>Privacy Policy</h1>
-                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2025</p>
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2024</p>
                 
                 <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Data Collection</h3>
                     <p>FixEmbed is designed to be privacy-focused. We do not persist or store personal user data.</p>
                     <ul style="list-style-position: inside; margin-left: 1rem;">
-                        <li><strong>Ephemeral Processing:</strong> URLs sent to our service are processed in-memory to generate embeds and are not permanently stored in a database.</li>
-                        <li><strong>Logs:</strong> We may keep temporary technical logs (e.g., Cloudflare request logs) for debugging and preventing abuse. These logs are rotated regularly.</li>
+                        <li><strong>Ephemeral Processing:</strong> URLs sent to our service are processed in-memory to generate embeds and are not permanently stored.</li>
+                        <li><strong>Logs:</strong> Cloudflare may keep temporary technical logs for debugging and abuse prevention. These logs are rotated regularly.</li>
                     </ul>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Cookies and Tracking</h3>
-                    <p>We do not use tracking cookies or third-party analytics trackers on our service.</p>
+                    <p>We do not use tracking cookies or third-party analytics on our service.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">3. Data Sharing</h3>
-                    <p>We do not sell, trade, or otherwise transfer your information to outside parties. Metadata fetching involves making requests to public social media pages on your behalf.</p>
+                    <p>We do not sell, trade, or transfer your information to outside parties. When you use FixEmbed, we make requests to public social media pages on your behalf to fetch metadata.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Third-Party Links</h3>
                     <p>Our service generates links to third-party content. We are not responsible for the privacy practices of those external sites.</p>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Contact</h3>
-                    <p>If you have questions about this privacy policy, you can reach out on our <a href="https://discord.gg/QFxTAmtZdn" style="color: var(--primary-light);">Discord Support Server</a>.</p>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Children's Privacy</h3>
+                    <p>Our Service is not directed to children under 13. We do not knowingly collect personal information from children.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Contact</h3>
+                    <p>If you have questions about this privacy policy, reach out on our <a href="https://discord.gg/QFxTAmtZdn" style="color: var(--primary-light);">Discord Support Server</a>.</p>
                 </div>
             </div>
         </div>
@@ -1709,10 +1716,184 @@ export const privacyHtml = `<!DOCTYPE html>
                 </div>
                 <div class="footer-right">
                     <div class="footer-links">
+                        <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
-                        <a href="https://discord.gg/QFxTAmtZdn">Support</a>
+                    </div>
+                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script src="/script.js"></script>
+</body>
+</html>`;
+
+export const docsHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - FixEmbed</title>
+    <meta name="description" content="Documentation for FixEmbed - Learn how to use the bot and API">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
+    <meta name="color-scheme" content="dark">
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .docs-nav { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .docs-nav a { padding: 0.75rem 1.5rem; background: var(--bg-tertiary); border-radius: 8px; color: var(--text-secondary); border: 1px solid var(--glass-border); }
+        .docs-nav a:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .code-example { background: var(--bg-primary); padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid var(--glass-border); overflow-x: auto; margin: 1rem 0; }
+        .code-example code { color: var(--accent-cyan); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.9rem; }
+        .docs-section { margin-top: 3rem; }
+        .docs-section:first-child { margin-top: 0; }
+        .endpoint-table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .endpoint-table th, .endpoint-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--glass-border); }
+        .endpoint-table th { color: var(--text-primary); background: var(--bg-tertiary); }
+        .method-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .method-get { background: rgba(87, 242, 135, 0.2); color: #57F287; }
+    </style>
+</head>
+<body>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+
+    <header>
+        <nav>
+            <div class="container">
+                <div class="nav-container">
+                    <a href="/" class="logo">
+                        <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img">
+                        <span>FixEmbed</span>
+                    </a>
+                    <div class="nav-links">
+                        <a href="/#features">Features</a>
+                        <a href="/docs">Docs</a>
+                        <a href="/#platforms">Platforms</a>
+                        <a href="/#support">Support</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="features-section" style="padding-top: 100px; min-height: 80vh;">
+        <div class="container">
+            <h1 style="margin-bottom: 0.5rem;">Documentation</h1>
+            <p class="section-subtitle" style="text-align: left; margin-bottom: 2rem;">Everything you need to use FixEmbed</p>
+
+            <div class="docs-nav">
+                <a href="#bot-usage">🤖 Bot Usage</a>
+                <a href="#api-usage">⚡ API Usage</a>
+                <a href="#supported-platforms">🌐 Platforms</a>
+            </div>
+
+            <div class="glass-card">
+                <div id="bot-usage" class="docs-section">
+                    <h2><span class="gradient-text">Bot Usage</span></h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">FixEmbed works automatically in servers and can be used anywhere via commands.</p>
+
+                    <h3 style="margin-top: 1.5rem;">Automatic Conversion (Server Mode)</h3>
+                    <p style="color: var(--text-secondary);">When FixEmbed is added to a server, it automatically detects supported social media links and converts them to rich embeds. No commands needed!</p>
+
+                    <h3 style="margin-top: 1.5rem;">Slash Commands</h3>
+                    <div class="code-example">
+                        <code>/fix &lt;url&gt;</code>
+                    </div>
+                    <p style="color: var(--text-secondary);">Use this command anywhere—even in servers without FixEmbed installed (if you have the bot installed to your account).</p>
+
+                    <h3 style="margin-top: 1.5rem;">Context Menu</h3>
+                    <p style="color: var(--text-secondary);">Right-click any message → <strong>Apps</strong> → <strong>Fix Embed</strong> to convert links in that message.</p>
+
+                    <h3 style="margin-top: 1.5rem;">Settings</h3>
+                    <div class="code-example">
+                        <code>/settings</code>
+                    </div>
+                    <p style="color: var(--text-secondary);">Configure which platforms are enabled/disabled, per-channel settings, and more.</p>
+                </div>
+
+                <div id="api-usage" class="docs-section">
+                    <h2><span class="gradient-text">API Usage</span></h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Use the FixEmbed API directly to generate embeds programmatically.</p>
+
+                    <h3 style="margin-top: 1.5rem;">Endpoints</h3>
+                    <table class="endpoint-table">
+                        <thead>
+                            <tr>
+                                <th>Method</th>
+                                <th>Endpoint</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="method-badge method-get">GET</span></td>
+                                <td><code>/embed?url=...</code></td>
+                                <td>Generate embed HTML for a URL</td>
+                            </tr>
+                            <tr>
+                                <td><span class="method-badge method-get">GET</span></td>
+                                <td><code>/oembed?url=...</code></td>
+                                <td>oEmbed JSON metadata</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 style="margin-top: 1.5rem;">Example Request</h3>
+                    <div class="code-example">
+                        <code>GET https://fixembed.app/embed?url=https://twitter.com/user/status/123</code>
+                    </div>
+
+                    <h3 style="margin-top: 1.5rem;">Response</h3>
+                    <p style="color: var(--text-secondary);">Returns HTML with proper Open Graph and Twitter Card meta tags for rich previews. Browsers/bots receive embed-ready HTML; regular users are redirected to the original URL.</p>
+                </div>
+
+                <div id="supported-platforms" class="docs-section">
+                    <h2><span class="gradient-text">Supported Platforms</span></h2>
+                    <table class="endpoint-table">
+                        <thead>
+                            <tr>
+                                <th>Platform</th>
+                                <th>Domains</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Twitter / X</td><td>twitter.com, x.com</td></tr>
+                            <tr><td>Instagram</td><td>instagram.com</td></tr>
+                            <tr><td>Reddit</td><td>reddit.com, redd.it</td></tr>
+                            <tr><td>Threads</td><td>threads.net</td></tr>
+                            <tr><td>Pixiv</td><td>pixiv.net</td></tr>
+                            <tr><td>Bluesky</td><td>bsky.app</td></tr>
+                            <tr><td>YouTube</td><td>youtube.com, youtu.be</td></tr>
+                            <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <span class="footer-logo">FixEmbed</span>
+                    <p>A Discord bot that fixes the lack of embed support in Discord.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="/docs">Docs</a>
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
                     </div>
                     <p class="copyright">© 2023-2025 FixEmbed</p>
                 </div>
