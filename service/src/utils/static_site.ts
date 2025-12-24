@@ -15,18 +15,18 @@ export const indexHtml = `<!DOCTYPE html>
     <meta property="og:description"
         content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more. Get rich video previews directly in Discord!">
     <meta property="og:image"
-        content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png">
-    <meta property="og:url" content="https://www.kenhendricks.me/FixEmbed/">
+        content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
+    <meta property="og:url" content="https://fixembed.app">
     <meta property="og:site_name" content="FixEmbed">
     <meta name="theme-color" content="#7c3aed">
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
         content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more.">
     <meta name="twitter:image"
-        content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png">
+        content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 
     <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png"
         type="image/png">
