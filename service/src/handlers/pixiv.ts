@@ -151,96 +151,120 @@ export const pixivHandler: PlatformHandler = {
             // Fetch artwork data
             const artworkResult = await fetchPixivArtwork(illustId);
 
-            if (!artworkResult.success || !artworkResult.data) {
-                // Fallback to basic redirect
+            if (artworkResult.success && artworkResult.data) {
+                const artwork = artworkResult.data;
+
+                // Build stats string
+                const stats: string[] = [];
+                if (artwork.likeCount > 0) {
+                    stats.push(`❤️ ${artwork.likeCount.toLocaleString()}`);
+                }
+                if (artwork.bookmarkCount > 0) {
+                    stats.push(`🔖 ${artwork.bookmarkCount.toLocaleString()}`);
+                }
+                if (artwork.viewCount > 0) {
+                    stats.push(`👁️ ${artwork.viewCount.toLocaleString()}`);
+                }
+                const statsStr = stats.length > 0 ? ` · ${stats.join(' ')}` : '';
+
+                // Clean description (remove HTML tags)
+                let description = artwork.description
+                    .replace(/<br\s*\/?>/gi, '\n')
+                    .replace(/<[^>]+>/g, '')
+                    .trim();
+
+                // Use image proxy for the artwork image
+                const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+
+                // Get image URL and proxy it
+                const originalImageUrl = artwork.urls.regular || artwork.urls.original || artwork.urls.small;
+                let proxyImageUrl: string | undefined;
+
+                if (originalImageUrl) {
+                    // Pixiv images require Referer header, so we proxy through our domain
+                    proxyImageUrl = `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(originalImageUrl)}`;
+                }
+
+                // Build response
+                const result: HandlerResponse = {
+                    success: true,
+                    data: {
+                        title: artwork.title || 'Untitled',
+                        description: description ? truncateText(description, 280) : '',
+                        url: canonicalUrl,
+                        siteName: `Pixiv${statsStr}`,
+                        authorName: artwork.userName,
+                        authorUrl: `https://www.pixiv.net/users/${artwork.userId}`,
+                        color: platformColors.pixiv,
+                        platform: 'pixiv',
+                    },
+                };
+
+                // Add NSFW warning if restricted
+                if (artwork.xRestrict > 0) {
+                    result.data!.title = `🔞 ${result.data!.title}`;
+                }
+
+                // Handle multi-page artworks (carousel)
+                if (artwork.pageCount > 1) {
+                    // Fetch all page URLs
+                    const pageUrls = await fetchPixivPages(illustId);
+
+                    if (pageUrls.length > 0) {
+                        // Proxy all images
+                        result.data!.images = pageUrls.map(imgUrl =>
+                            `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(imgUrl)}`
+                        );
+                        result.data!.image = result.data!.images[0];
+                    } else if (proxyImageUrl) {
+                        result.data!.image = proxyImageUrl;
+                    }
+
+                    // Add page count to description
+                    result.data!.description = `[${artwork.pageCount} images] ${result.data!.description}`;
+                } else if (proxyImageUrl) {
+                    result.data!.image = proxyImageUrl;
+                }
+
+                return result;
+            }
+
+            // Fallback: Try phixiv.net oEmbed API
+            console.log('Direct Pixiv fetch failed, trying phixiv fallback');
+            const oembedUrl = `https://www.phixiv.net/oembed?url=${encodeURIComponent(canonicalUrl)}`;
+            const response = await fetch(oembedUrl);
+
+            if (response.ok) {
+                const data = await response.json() as any;
+
                 return {
                     success: true,
                     data: {
-                        title: 'Pixiv Artwork',
-                        description: `View artwork #${illustId} on Pixiv`,
+                        title: data.title || 'Pixiv Artwork',
+                        description: data.author_name ? `by ${data.author_name}` : '',
                         url: canonicalUrl,
                         siteName: 'Pixiv',
+                        authorName: data.author_name,
+                        authorUrl: data.author_url,
+                        image: data.url, // Phixiv returns a proxy URL
                         color: platformColors.pixiv,
                         platform: 'pixiv',
                     },
                 };
             }
 
-            const artwork = artworkResult.data;
-
-            // Build stats string
-            const stats: string[] = [];
-            if (artwork.likeCount > 0) {
-                stats.push(`❤️ ${artwork.likeCount.toLocaleString()}`);
-            }
-            if (artwork.bookmarkCount > 0) {
-                stats.push(`🔖 ${artwork.bookmarkCount.toLocaleString()}`);
-            }
-            if (artwork.viewCount > 0) {
-                stats.push(`👁️ ${artwork.viewCount.toLocaleString()}`);
-            }
-            const statsStr = stats.length > 0 ? ` · ${stats.join(' ')}` : '';
-
-            // Clean description (remove HTML tags)
-            let description = artwork.description
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/<[^>]+>/g, '')
-                .trim();
-
-            // Use image proxy for the artwork image
-            const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
-
-            // Get image URL and proxy it
-            const originalImageUrl = artwork.urls.regular || artwork.urls.original || artwork.urls.small;
-            let proxyImageUrl: string | undefined;
-
-            if (originalImageUrl) {
-                // Pixiv images require Referer header, so we proxy through our domain
-                proxyImageUrl = `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(originalImageUrl)}`;
-            }
-
-            // Build response
-            const result: HandlerResponse = {
+            // Final fallback to basic redirect
+            return {
                 success: true,
                 data: {
-                    title: artwork.title || 'Untitled',
-                    description: description ? truncateText(description, 280) : '',
+                    title: 'Pixiv Artwork',
+                    description: `View artwork #${illustId} on Pixiv`,
                     url: canonicalUrl,
-                    siteName: `Pixiv${statsStr}`,
-                    authorName: artwork.userName,
-                    authorUrl: `https://www.pixiv.net/users/${artwork.userId}`,
+                    siteName: 'Pixiv',
                     color: platformColors.pixiv,
                     platform: 'pixiv',
                 },
             };
-
-            // Add NSFW warning if restricted
-            if (artwork.xRestrict > 0) {
-                result.data!.title = `🔞 ${result.data!.title}`;
-            }
-
-            // Handle multi-page artworks (carousel)
-            if (artwork.pageCount > 1) {
-                // Fetch all page URLs
-                const pageUrls = await fetchPixivPages(illustId);
-
-                if (pageUrls.length > 0) {
-                    // Proxy all images
-                    result.data!.images = pageUrls.map(imgUrl =>
-                        `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(imgUrl)}`
-                    );
-                    result.data!.image = result.data!.images[0];
-                } else if (proxyImageUrl) {
-                    result.data!.image = proxyImageUrl;
-                }
-
-                // Add page count to description
-                result.data!.description = `[${artwork.pageCount} images] ${result.data!.description}`;
-            } else if (proxyImageUrl) {
-                result.data!.image = proxyImageUrl;
-            }
-
-            return result;
         } catch (error) {
             console.error('Pixiv handler error:', error);
             return {
