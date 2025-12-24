@@ -67,16 +67,26 @@ app.get('/oembed', (c) => {
     return c.json(oembedResponse);
 });
 
-// ActivityPub-style endpoint for Discord enhanced embeds
-// Discord treats ActivityPub/Mastodon links specially, showing enhanced footer with icon
-// This mimics the Mastodon ActivityPub status format
-app.get('/users/:author/statuses/:status', (c) => {
-    const author = c.req.param('author');
-    const status = c.req.param('status');
+// ActivityPub endpoint with encoded embed data for Discord footer branding
+// The embed data is base64 encoded in the URL, decoded here to return proper content
+app.get('/activity/:encodedData', (c) => {
+    const encodedData = c.req.param('encodedData');
     const accept = c.req.header('Accept') || '';
+
+    // Decode the embed data from URL-safe base64
+    let embedData: { t?: string; d?: string; i?: string; a?: string; u?: string } = {};
+    try {
+        // Restore base64 padding and special chars
+        let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        embedData = JSON.parse(atob(base64));
+    } catch (e) {
+        console.error('Failed to decode activity data:', e);
+    }
 
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
+        const author = embedData.a || 'FixEmbed';
         const activityPubResponse = {
             '@context': [
                 'https://www.w3.org/ns/activitystreams',
@@ -86,9 +96,47 @@ app.get('/users/:author/statuses/:status', (c) => {
                     'Emoji': 'toot:Emoji'
                 }
             ],
-            'id': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+            'id': `https://embed.ken.tools/activity/${encodedData}`,
             'type': 'Note',
             'summary': null,
+            'content': `<p>${embedData.d || ''}</p>`,
+            'attributedTo': `https://embed.ken.tools/users/${encodeURIComponent(author)}`,
+            'published': new Date().toISOString(),
+            'url': embedData.u || 'https://embed.ken.tools',
+            // Include attachment for image if present
+            ...(embedData.i ? {
+                'attachment': [{
+                    'type': 'Document',
+                    'mediaType': 'image/jpeg',
+                    'url': embedData.i,
+                    'name': embedData.t || 'Image'
+                }]
+            } : {}),
+        };
+
+        return c.json(activityPubResponse, 200, {
+            'Content-Type': 'application/activity+json; charset=utf-8',
+        });
+    }
+
+    // For regular browser requests, redirect to the original URL
+    if (embedData.u) {
+        return c.redirect(embedData.u, 302);
+    }
+    return c.redirect('https://embed.ken.tools/', 302);
+});
+
+// Legacy ActivityPub endpoint (keep for backwards compatibility)
+app.get('/users/:author/statuses/:status', (c) => {
+    const author = c.req.param('author');
+    const status = c.req.param('status');
+    const accept = c.req.header('Accept') || '';
+
+    if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
+        const activityPubResponse = {
+            '@context': ['https://www.w3.org/ns/activitystreams'],
+            'id': `https://embed.ken.tools/users/${author}/statuses/${status}`,
+            'type': 'Note',
             'content': '',
             'attributedTo': `https://embed.ken.tools/users/${author}`,
             'published': new Date().toISOString(),
@@ -100,7 +148,6 @@ app.get('/users/:author/statuses/:status', (c) => {
         });
     }
 
-    // For regular browser requests, redirect to the embed service
     return c.redirect('https://embed.ken.tools/', 302);
 });
 

@@ -100,8 +100,17 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // 3. oEmbed link for Discord to fetch provider info
     html += `  <link rel="alternate" type="application/json+oembed" href="https://embed.ken.tools/oembed?url=${encodeURIComponent(embed.url)}&amp;format=json">\n`;
 
-    // NOTE: ActivityPub link was removed - it caused Discord to prioritize empty ActivityPub
-    // content over OG tags, losing the embed description/image/video.
+    // 4. ActivityPub-style link for Discord's enhanced footer format
+    // Encode essential embed data so the ActivityPub endpoint can return proper content
+    const activityData = {
+        t: embed.title.substring(0, 100),       // title (truncated)
+        d: embed.description.substring(0, 200), // description (truncated)
+        i: embed.image || embed.video?.thumbnail || '', // image
+        a: embed.authorName || '',              // author
+        u: embed.url,                           // original URL
+    };
+    const encodedData = btoa(JSON.stringify(activityData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    html += `  <link href="https://embed.ken.tools/activity/${encodedData}" rel="alternate" type="application/activity+json">\n`;
 
     // Close head and add redirect body
     html += `</head>
