@@ -268,8 +268,8 @@ export const instagramHandler: PlatformHandler = {
 
                 result.data!.video = {
                     url: proxyVideoUrl,
-                    width: isReel ? 720 : 720,  // Re-add dimensions to guide Discord
-                    height: isReel ? 1280 : 720,
+                    width: 0,   // Remove dimensions - let Discord determine from video file
+                    height: 0,
                     thumbnail: preview || firstMedia.thumbnail,
                 };
                 result.data!.image = preview || firstMedia.thumbnail;
