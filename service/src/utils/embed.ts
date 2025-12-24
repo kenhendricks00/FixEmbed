@@ -119,6 +119,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.platform !== 'instagram') {
         const oembedUrl = new URL('https://embed.ken.tools/oembed');
         oembedUrl.searchParams.set('url', embed.url);
+        if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
         if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
         if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
         html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;

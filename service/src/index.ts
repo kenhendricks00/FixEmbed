@@ -42,6 +42,7 @@ app.get('/oembed', (c) => {
     const originalUrl = c.req.query('url');
     const stats = c.req.query('stats');
     const author = c.req.query('author');
+    const provider = c.req.query('provider'); // Platform-specific branded name
     const format = c.req.query('format') || 'json';
 
     // Discord handles 'rich' type well for custom metadata
@@ -50,7 +51,7 @@ app.get('/oembed', (c) => {
     const oembedResponse: any = {
         version: '1.0',
         type: 'rich',
-        provider_name: 'FixEmbed',
+        provider_name: provider || 'FixEmbed',  // Use branded name if available
         provider_url: 'https://embed.ken.tools',
         title: 'Post',
     };
@@ -82,7 +83,7 @@ app.get('/oembed', (c) => {
 <oembed>
     <version>1.0</version>
     <type>rich</type>
-    <provider_name>FixEmbed</provider_name>
+    <provider_name>${provider || 'FixEmbed'}</provider_name>
     <provider_url>https://embed.ken.tools</provider_url>${authorXml}
     <title>Post</title>
 </oembed>`;
