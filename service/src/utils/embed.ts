@@ -111,6 +111,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         t: embed.title.substring(0, 100),       // title
         d: embed.description.substring(0, 500), // description
         i: embed.video ? '' : (embed.image || ''), // image ONLY for non-video (prevents Discord from using image instead of video)
+        v: embed.video?.url || '',              // video URL for ActivityPub attachment
         a: embed.authorName || '',              // author name
         h: embed.authorHandle || '',            // author handle
         ic: embed.authorAvatar || '',           // author icon/avatar

@@ -106,10 +106,14 @@ app.get('/activity/:encodedData', (c) => {
         // Build attachment
         let attachment: any[] = [];
         if (embedData.v) {
-            // CRITICAL: For videos, providing NO attachment in ActivityPub is often best 
-            // to allow Discord to fall back to our high-quality OG tags for playback.
-            // If we provide a thumbnail here, Discord might treat it as an image post.
-            attachment = [];
+            // Include video as ActivityPub attachment - this is how FxEmbed does it
+            // Discord will use this for playback AND we get the footer/branding
+            attachment = [{
+                'type': 'Document',
+                'mediaType': 'video/mp4',
+                'url': embedData.v,
+                'name': embedData.t || 'Video'
+            }];
         } else if (embedData.i) {
             // Image attachment
             attachment = [{
