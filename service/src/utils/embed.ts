@@ -50,11 +50,17 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         for (const imgUrl of embed.images) {
             html += `  <meta property="og:image" content="${escape(imgUrl)}">\n`;
         }
-        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+        // Only set card to summary_large_image if NOT a video
+        if (!embed.video) {
+            html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+        }
         html += `  <meta name="twitter:image" content="${escape(embed.images[0])}">\n`;
     } else if (embed.image) {
         html += `  <meta property="og:image" content="${escape(embed.image)}">\n`;
-        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+        // Only set card to summary_large_image if NOT a video
+        if (!embed.video) {
+            html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+        }
         html += `  <meta name="twitter:image" content="${escape(embed.image)}">\n`;
     }
 
