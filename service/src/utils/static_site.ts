@@ -1188,7 +1188,6 @@ code {
    FOOTER
    =================================== */
 footer {
-    background: var(--bg-secondary);
     padding: 80px 0 40px;
     border-top: 1px solid var(--glass-border);
 }
