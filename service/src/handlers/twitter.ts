@@ -121,8 +121,12 @@ export const twitterHandler: PlatformHandler = {
             const authorName = tweet.user.name;
             const authorHandle = tweet.user.screen_name;
 
-            // description should only be the text
-            const description = truncateText(tweet.text, 500);
+            // Remove t.co URLs from text - they're just media links or shortened URLs
+            // If only t.co URLs remain, leave the description empty
+            const cleanedText = tweet.text
+                .replace(/https?:\/\/t\.co\/\w+/g, '')  // Remove t.co URLs
+                .trim();
+            const description = cleanedText ? truncateText(cleanedText, 500) : '';
 
             // Build stats for oEmbed/ActivityPub row
             const stats = formatStats({
