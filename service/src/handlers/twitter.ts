@@ -69,6 +69,14 @@ interface SyndicationTweet {
             aspect_ratio?: [number, number];
         };
     }>;
+    quoted_tweet?: {
+        id_str: string;
+        text: string;
+        user: {
+            name: string;
+            screen_name: string;
+        };
+    };
 }
 
 /**
@@ -126,7 +134,26 @@ export const twitterHandler: PlatformHandler = {
             const cleanedText = tweet.text
                 .replace(/https?:\/\/t\.co\/\w+/g, '')  // Remove t.co URLs
                 .trim();
-            const description = cleanedText ? truncateText(cleanedText, 500) : '';
+
+            // Build description including quoted tweet if present
+            let fullDescription = cleanedText || '';
+
+            if (tweet.quoted_tweet) {
+                const quotedText = tweet.quoted_tweet.text
+                    .replace(/https?:\/\/t\.co\/\w+/g, '')  // Remove t.co URLs
+                    .trim();
+
+                if (quotedText) {
+                    const quotedHandle = tweet.quoted_tweet.user.screen_name;
+                    // Add separator and quoted tweet content
+                    if (fullDescription) {
+                        fullDescription += '\n\n';
+                    }
+                    fullDescription += `💬 @${quotedHandle}: ${quotedText}`;
+                }
+            }
+
+            const description = fullDescription ? truncateText(fullDescription, 500) : '';
 
             // Build stats for oEmbed/ActivityPub row
             const stats = formatStats({
