@@ -66,6 +66,8 @@ app.get('/oembed', (c) => {
     const stats = c.req.query('stats');
     const author = c.req.query('author');
     const provider = c.req.query('provider'); // Platform-specific branded name
+    const title = c.req.query('title');
+    const desc = c.req.query('desc');
     const format = c.req.query('format') || 'json';
 
     // Discord handles 'rich' type well for custom metadata
@@ -76,8 +78,12 @@ app.get('/oembed', (c) => {
         type: 'rich',
         provider_name: provider || 'FixEmbed',  // Use branded name if available
         provider_url: 'https://fixembed.app',
-        title: 'Post',
+        title: title || 'Post',
     };
+
+    if (desc) {
+        oembedResponse.description = desc;
+    }
 
     // Only add author_name if we have stats (preferred) or author
     // This prevents "FixEmbed" from showing twice

@@ -4,7 +4,7 @@
  */
 
 import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseTwitterUrl, truncateText } from '../utils/fetch';
+import { parseTwitterUrl, truncateText, decodeHtmlEntities } from '../utils/fetch';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
 
 interface SyndicationTweet {
@@ -76,6 +76,46 @@ interface SyndicationTweet {
             name: string;
             screen_name: string;
         };
+        entities?: {
+            media?: Array<{
+                type: string;
+                media_url_https: string;
+                video_info?: {
+                    variants: Array<{
+                        bitrate?: number;
+                        content_type: string;
+                        url: string;
+                    }>;
+                    aspect_ratio?: [number, number];
+                };
+            }>;
+        };
+        extended_entities?: {
+            media?: Array<{
+                type: string;
+                media_url_https: string;
+                video_info?: {
+                    variants: Array<{
+                        bitrate?: number;
+                        content_type: string;
+                        url: string;
+                    }>;
+                    aspect_ratio?: [number, number];
+                };
+            }>;
+        };
+        mediaDetails?: Array<{
+            type: string;
+            media_url_https: string;
+            video_info?: {
+                variants: Array<{
+                    bitrate?: number;
+                    content_type: string;
+                    url: string;
+                }>;
+                aspect_ratio?: [number, number];
+            };
+        }>;
     };
 }
 
@@ -131,40 +171,51 @@ export const twitterHandler: PlatformHandler = {
 
             // Remove t.co URLs from text - they're just media links or shortened URLs
             // If only t.co URLs remain, leave the description empty
-            const cleanedText = tweet.text
+            const cleanedText = decodeHtmlEntities(tweet.text
                 .replace(/https?:\/\/t\.co\/\w+/g, '')  // Remove t.co URLs
-                .trim();
+                .trim());
 
             // Build description including quoted tweet if present
             let fullDescription = cleanedText || '';
 
             if (tweet.quoted_tweet) {
-                const quotedText = tweet.quoted_tweet.text
+                const quotedText = decodeHtmlEntities(tweet.quoted_tweet.text
                     .replace(/https?:\/\/t\.co\/\w+/g, '')  // Remove t.co URLs
-                    .trim();
+                    .trim());
 
                 if (quotedText) {
+                    const quotedName = tweet.quoted_tweet.user.name;
                     const quotedHandle = tweet.quoted_tweet.user.screen_name;
-                    // Add separator and quoted tweet content
+                    // Format like Twitter: "Quoting Name (@handle)" then the text
                     if (fullDescription) {
                         fullDescription += '\n\n';
                     }
-                    fullDescription += `💬 @${quotedHandle}: ${quotedText}`;
+
+                    fullDescription += `Quoting ${quotedName} (@${quotedHandle})\n${quotedText}`;
                 }
             }
 
-            const description = fullDescription ? truncateText(fullDescription, 500) : '';
-
-            // Build stats for oEmbed/ActivityPub row
-            const stats = formatStats({
+            // Build stats for display in description (like FixupX)
+            const statsStr = formatStats({
                 comments: tweet.conversation_count,
                 retweets: (tweet.retweet_count || 0) + (tweet.quote_count || 0),
                 likes: tweet.favorite_count,
                 views: tweet.video?.viewCount ? parseInt(tweet.video.viewCount) : (tweet.view_count_info?.count ? parseInt(tweet.view_count_info.count) : undefined),
             });
 
+            const description = fullDescription ? truncateText(fullDescription, 4000) : '';
+
+            // Build stats for oEmbed/ActivityPub row (keep this for clients that support it)
+            const stats = statsStr;
+
             // Check for media - try multiple sources
-            const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media;
+            let media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media;
+
+            // Fallback to quoted tweet media if no media in main tweet
+            if ((!media || media.length === 0) && tweet.quoted_tweet) {
+                media = tweet.quoted_tweet.mediaDetails || tweet.quoted_tweet.extended_entities?.media || tweet.quoted_tweet.entities?.media;
+            }
+
             let image: string | undefined;
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
@@ -199,13 +250,13 @@ export const twitterHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    // Title is the tweet content (consistent with other platforms)
-                    title: description || `@${authorHandle}`,
-                    // Description is empty - content is in title
-                    description: '',
+                    // Title is the author (standard Twitter embed style)
+                    title: `${authorName} (@${authorHandle})`,
+                    // Description is the full content
+                    description: fullDescription ? truncateText(fullDescription, 4000) : '',
                     url: `https://twitter.com/${authorHandle}/status/${parsed.tweetId}`,
                     siteName: getBrandedSiteName('twitter'),
-                    // AuthorName is just the handle (consistent with Bluesky/Threads)
+                    // AuthorName is just the handle
                     authorName: `@${authorHandle}`,
                     authorUrl: `https://twitter.com/${authorHandle}`,
                     authorAvatar: tweet.user.profile_image_url_https,

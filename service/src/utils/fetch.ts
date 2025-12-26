@@ -165,3 +165,15 @@ export function truncateText(text: string, maxLength: number = 280): string {
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength - 3) + '...';
 }
+
+/**
+ * Decode HTML entities
+ */
+export function decodeHtmlEntities(text: string): string {
+    return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}

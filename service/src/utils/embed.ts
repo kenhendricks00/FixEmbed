@@ -71,30 +71,18 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:type" content="video/mp4">\n`;
 
-        /*
-        if (embed.video.width && embed.video.height) {
-            html += `  <meta property="og:video:width" content="${embed.video.width}">\n`;
-            html += `  <meta property="og:video:height" content="${embed.video.height}">\n`;
-        }
-        */
-
         if (embed.video.thumbnail) {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
         }
 
-        // Use player card for videos for better native playback experience
-        html += `  <meta name="twitter:card" content="player">\n`;
-        html += `  <meta name="twitter:player" content="${escape(embed.video.url)}">\n`;
+        // Use summary_large_image to assume "Rich Embed" layout (text + media)
+        // Discord should still pick up og:video for playback
+        html += `  <meta name="twitter:card" content="summary_large_image">\n`;
 
-        /*
-        if (embed.video.width && embed.video.height) {
-            html += `  <meta name="twitter:player:width" content="${embed.video.width}">\n`;
-            html += `  <meta name="twitter:player:height" content="${embed.video.height}">\n`;
+        // Ensure twitter:image is set for the card validation
+        if (embed.video.thumbnail) {
+            html += `  <meta name="twitter:image" content="${escape(embed.video.thumbnail)}">\n`;
         }
-        */
-
-        // Add responsive dimensions for Discord (0 tells it to preserve aspect ratio if possible, or omit)
-        // Actually, omitting them usually lets Discord default to a reasonable size or 16:9
     } else {
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
     }
@@ -117,6 +105,8 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
     if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
     if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
+    if (embed.title) oembedUrl.searchParams.set('title', embed.title);
+    if (embed.description) oembedUrl.searchParams.set('desc', embed.description.slice(0, 1000)); // Limit length for URL
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
 
