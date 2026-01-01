@@ -26,7 +26,7 @@ SERVICES = {
         "display_format": "Twitter • {0}"
     },
     "Instagram": {
-        "patterns": [r"instagram\.com/(?:p|reel)/([\w-]+)"],
+        "patterns": [r"instagram\.com/(?:p|reels?)/([\w-]+)"],
         "base_url": "fixembed.app",
         "display_format": "Instagram • {0}"
     },

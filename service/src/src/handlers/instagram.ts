@@ -280,8 +280,7 @@ export const instagramHandler: PlatformHandler = {
     name: 'instagram',
     patterns: [
         /instagram\.com\/p\/([^\/\?]+)/i,
-        /instagram\.com\/reel\/([^\/\?]+)/i,
-        /instagram\.com\/reels\/([^\/\?]+)/i,
+        /instagram\.com\/reels?\/([^\/\?]+)/i,
         /instagram\.com\/tv\/([^\/\?]+)/i,
         /instagram\.com\/stories\/([^\/]+)\/(\d+)/i,
         /instagram\.com\/share\/(p|reel)\/([^\/\?]+)/i,
