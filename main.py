@@ -15,7 +15,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.6"
+VERSION = "1.2.5"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -75,23 +75,63 @@ TIME_WINDOW = 1  # Time window in seconds
 
 message_timestamps = deque()
 
-async def rate_limited_send(channel, content):
+async def rate_limited_send(channel, content=None, embed=None):
     current_time = time.time()
     while len(message_timestamps) >= MESSAGE_LIMIT and current_time - message_timestamps[0] < TIME_WINDOW:
         await asyncio.sleep(0.1)
         current_time = time.time()
         message_timestamps.popleft()
     message_timestamps.append(current_time)
-    await channel.send(content)
+    await channel.send(content=content, embed=embed)
 
 def create_footer(embed, client):
     embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
+
+# Premium SKU ID (loaded from .env at bottom of file)
+PREMIUM_SKU_ID = None
 
 def get_guild_lang(guild_id):
     """Get the language setting for a guild, defaulting to English."""
     if guild_id is None:
         return "en"
     return bot_settings.get(guild_id, {}).get("language", "en")
+
+async def is_guild_premium(guild_id):
+    """Check if a guild has an active premium subscription."""
+    if not PREMIUM_SKU_ID:
+        return False
+    # Check cache first
+    cached = bot_settings.get(guild_id, {}).get("is_premium")
+    if cached is not None:
+        return cached
+    # Query entitlements
+    try:
+        guild = client.get_guild(guild_id)
+        if guild is None:
+            return False
+        entitlements = [e async for e in client.entitlements(guild=guild, skus=[discord.Object(id=int(PREMIUM_SKU_ID))])]
+        is_premium = any(not e.is_expired() for e in entitlements)
+        if guild_id in bot_settings:
+            bot_settings[guild_id]["is_premium"] = is_premium
+        return is_premium
+    except Exception as e:
+        logging.error(f"Error checking premium status: {e}")
+        return False
+
+def get_premium_color(guild_id):
+    """Get custom embed color for a premium guild, or None."""
+    color_hex = bot_settings.get(guild_id, {}).get("embed_color")
+    if color_hex:
+        try:
+            return discord.Color(int(color_hex.lstrip('#'), 16))
+        except (ValueError, AttributeError):
+            pass
+    return None
+
+def get_guild_color(guild_id, default=None):
+    """Get the guild's custom color if premium, otherwise return default."""
+    custom = get_premium_color(guild_id)
+    return custom if custom else (default or discord.Color.blurple())
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -127,6 +167,15 @@ async def init_db():
         else:
             raise
 
+    try:
+        await db.execute('ALTER TABLE guild_settings ADD COLUMN embed_color TEXT DEFAULT NULL')
+        await db.commit()
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e):
+            pass
+        else:
+            raise
+
     return db
 
 async def load_channel_states(db):
@@ -140,19 +189,21 @@ async def load_channel_states(db):
                 channel_states[channel.id] = True
 
 async def load_settings(db):
-    async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original, language FROM guild_settings') as cursor:
+    async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original, language, embed_color FROM guild_settings') as cursor:
         async for row in cursor:
             guild_id = row[0]
             enabled_services = row[1]
             mention_users = row[2]
             delete_original = row[3]
             language = row[4] if len(row) > 4 else "en"
+            embed_color = row[5] if len(row) > 5 else None
             enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
                 "delete_original": delete_original if delete_original is not None else True,
-                "language": language if language else "en"
+                "language": language if language else "en",
+                "embed_color": embed_color
             }
 
 async def update_channel_state(db, channel_id, state):
@@ -168,11 +219,11 @@ async def update_channel_state(db, channel_id, state):
             else:
                 raise
 
-async def update_setting(db, guild_id, enabled_services, mention_users, delete_original, language="en"):
+async def update_setting(db, guild_id, enabled_services, mention_users, delete_original, language="en", embed_color=None):
     retries = 5
     for i in range(retries):
         try:
-            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users, delete_original, language) VALUES (?, ?, ?, ?, ?)', (guild_id, repr(enabled_services), mention_users, delete_original, language))
+            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users, delete_original, language, embed_color) VALUES (?, ?, ?, ?, ?, ?)', (guild_id, repr(enabled_services), mention_users, delete_original, language, embed_color))
             await db.commit()
             break
         except sqlite3.OperationalError as e:
@@ -254,11 +305,12 @@ async def deactivate(interaction: discord.Interaction,
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def about(interaction: discord.Interaction):
-    lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
+    guild_id = interaction.guild.id if interaction.guild else None
+    lang = get_guild_lang(guild_id)
     embed = discord.Embed(
         title=get_text(lang, "about_title"),
         description=get_text(lang, "about_description"),
-        color=discord.Color(0x7289DA))
+        color=get_guild_color(guild_id, discord.Color(0x7289DA)))
     embed.add_field(
         name=get_text(lang, "quick_links"),
         value=(
@@ -286,11 +338,12 @@ async def about(interaction: discord.Interaction):
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def help_command(interaction: discord.Interaction):
-    lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
+    guild_id = interaction.guild.id if interaction.guild else None
+    lang = get_guild_lang(guild_id)
     embed = discord.Embed(
         title=get_text(lang, "help_title"),
         description=get_text(lang, "help_description"),
-        color=discord.Color(0x7289DA))
+        color=get_guild_color(guild_id, discord.Color(0x7289DA)))
     
     embed.add_field(
         name=get_text(lang, "fix_links"),
@@ -305,6 +358,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name=get_text(lang, "info"),
         value=get_text(lang, "info_value"),
+        inline=False)
+    
+    embed.add_field(
+        name="💎 " + get_text(lang, "premium_title"),
+        value=get_text(lang, "premium_help_value"),
         inline=False)
     
     embed.add_field(
@@ -479,7 +537,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     embed = discord.Embed(
         title="Debug Information",
         description="For more help, join the [support server](https://discord.gg/QFxTAmtZdn)",
-        color=discord.Color(0x7289DA))
+        color=get_guild_color(guild.id, discord.Color(0x7289DA)))
     
     embed.add_field(
         name="Status and Permissions",
@@ -555,8 +613,14 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(
                 label=get_text(lang, "debug"),
                 description=get_text(lang, "debug_desc"),
-                emoji="🐞",
+                emoji="\U0001f41e",
                 value="Debug"
+            ),
+            discord.SelectOption(
+                label=get_text(lang, "embed_color"),
+                description=get_text(lang, "embed_color_desc"),
+                emoji="\U0001f48e",
+                value="Embed Color"
             )
         ]
         super().__init__(placeholder=get_text(lang, "choose_option"),
@@ -605,7 +669,7 @@ class SettingsDropdown(ui.Select):
             embed = discord.Embed(
                 title=get_text(lang, "service_settings"),
                 description=f"{get_text(lang, 'activated_services')}\n{service_status_list}",
-                color=discord.Color.blurple())
+                color=get_guild_color(self.interaction.guild.id))
             view = ServiceSettingsView(self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "Debug":
@@ -616,9 +680,26 @@ class SettingsDropdown(ui.Select):
             embed = discord.Embed(
                 title=get_text(lang, "language_title"),
                 description=get_text(lang, "language_current", language=current_lang_name),
-                color=discord.Color.blurple())
+                color=get_guild_color(self.interaction.guild.id))
             view = LanguageSettingsView(self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        elif self.values[0] == "Embed Color":
+            premium = await is_guild_premium(self.interaction.guild.id)
+            if premium:
+                current_color = self.settings.get("embed_color")
+                color_desc = get_text(lang, "premium_current_color", color=current_color) if current_color else get_text(lang, "premium_no_color")
+                modal = EmbedColorModal(self.interaction, self.settings)
+                await interaction.response.send_modal(modal)
+            else:
+                embed = discord.Embed(
+                    title=get_text(lang, "embed_color_title"),
+                    description=get_text(lang, "premium_required"),
+                    color=discord.Color.gold())
+                view = discord.ui.View()
+                if PREMIUM_SKU_ID:
+                    btn = discord.ui.Button(style=discord.ButtonStyle.premium, sku_id=int(PREMIUM_SKU_ID))
+                    view.add_item(btn)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 
@@ -659,7 +740,7 @@ class ServicesDropdown(ui.Select):
         embed = discord.Embed(
             title="Service Settings",
             description=f"Configure which services are activated.\n\n**Activated services:**\n{service_status_list}",
-            color=discord.Color.blurple())
+            color=get_guild_color(self.interaction.guild.id))
         
         try:
             await interaction.response.edit_message(embed=embed, view=self.parent_view)
@@ -926,13 +1007,17 @@ async def settings(interaction: discord.Interaction):
     lang = get_guild_lang(interaction.guild.id)
     embed = discord.Embed(title=get_text(lang, "settings_title"),
                           description=get_text(lang, "settings_description"),
-                          color=discord.Color.blurple())
+                          color=get_guild_color(interaction.guild.id))
     create_footer(embed, client)
     await interaction.response.send_message(embed=embed, view=SettingsView(interaction, guild_settings), ephemeral=True)
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
+        return
+
+    if not message.guild:
+        await client.process_commands(message)
         return
 
     guild_id = message.guild.id
@@ -944,6 +1029,12 @@ async def on_message(message):
     enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"])
     mention_users = guild_settings.get("mention_users", True)
     delete_original = guild_settings.get("delete_original", True)
+    premium = await is_guild_premium(guild_id)
+
+    # Premium perk: skip bot messages only if NOT premium
+    if message.author.bot and not premium:
+        await client.process_commands(message)
+        return
     
     if channel_states.get(message.channel.id, True):
         try:
@@ -1037,16 +1128,18 @@ async def on_message(message):
                 if valid_link_found:
                     if delete_original:
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        if mention_users:
-                            formatted_message += f" | Sent by {message.author.mention}"
-                        else:
-                            formatted_message += f" | Sent by {message.author.display_name}"
-                        await rate_limited_send(message.channel, formatted_message)
+                        # Premium perk: no 'Sent by' label
+                        if not premium:
+                            if mention_users:
+                                formatted_message += f" | Sent by {message.author.mention}"
+                            else:
+                                formatted_message += f" | Sent by {message.author.display_name}"
+                        await rate_limited_send(message.channel, content=formatted_message)
                         await message.delete()
                     else:
                         await message.edit(suppress=True)
                         formatted_message = f"[{display_text}](https://{modified_link})"
-                        await rate_limited_send(message.channel, formatted_message)
+                        await rate_limited_send(message.channel, content=formatted_message)
 
         except discord.Forbidden:
             logging.warning(f"Missing permissions in channel {message.channel.id}")
@@ -1071,9 +1164,140 @@ async def on_guild_join(guild):
         }
         await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"], bot_settings[guild_id]["delete_original"], bot_settings[guild_id]["language"])
 
+# --- Premium Command ---
+@client.tree.command(name='premium', description="View FixEmbed Premium subscription info")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def premium_command(interaction: discord.Interaction):
+    lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
+    premium = False
+    if interaction.guild:
+        premium = await is_guild_premium(interaction.guild.id)
+    
+    embed = discord.Embed(
+        title=get_text(lang, "premium_title"),
+        description=get_text(lang, "premium_description"),
+        color=discord.Color.gold())
+    
+    if premium:
+        embed.add_field(
+            name="Status",
+            value=get_text(lang, "premium_active"),
+            inline=False)
+    else:
+        embed.add_field(
+            name="Status",
+            value=get_text(lang, "premium_not_active"),
+            inline=False)
+    
+    embed.add_field(
+        name=get_text(lang, "premium_perks_title"),
+        value=get_text(lang, "premium_perks"),
+        inline=False)
+    
+    create_footer(embed, client)
+    
+    view = discord.ui.View()
+    if PREMIUM_SKU_ID and not premium:
+        subscribe_button = discord.ui.Button(
+            style=discord.ButtonStyle.premium,
+            sku_id=int(PREMIUM_SKU_ID))
+        view.add_item(subscribe_button)
+    
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+# --- Embed Color Modal ---
+class EmbedColorModal(ui.Modal, title="Set Embed Color"):
+    color_input = ui.TextInput(
+        label="Hex Color Code",
+        placeholder="#FF5733 or 'reset'",
+        required=True,
+        max_length=7)
+    
+    def __init__(self, interaction, settings):
+        super().__init__()
+        self.original_interaction = interaction
+        self.settings = settings
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        lang = self.settings.get("language", "en")
+        value = self.color_input.value.strip()
+        guild_id = self.original_interaction.guild.id
+        
+        if value.lower() == "reset":
+            self.settings["embed_color"] = None
+            await update_setting(
+                client.db, guild_id,
+                self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+                self.settings.get("mention_users", True),
+                self.settings.get("delete_original", True),
+                self.settings.get("language", "en"),
+                None)
+            embed = discord.Embed(
+                title=get_text(lang, "embed_color_title"),
+                description=get_text(lang, "embed_color_reset"),
+                color=discord.Color.green())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            # Validate hex color
+            hex_color = value.lstrip('#')
+            if len(hex_color) == 6:
+                try:
+                    int(hex_color, 16)
+                    color_str = f"#{hex_color.upper()}"
+                    self.settings["embed_color"] = color_str
+                    await update_setting(
+                        client.db, guild_id,
+                        self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+                        self.settings.get("mention_users", True),
+                        self.settings.get("delete_original", True),
+                        self.settings.get("language", "en"),
+                        color_str)
+                    embed = discord.Embed(
+                        title=get_text(lang, "embed_color_title"),
+                        description=get_text(lang, "embed_color_set", color=color_str),
+                        color=discord.Color(int(hex_color, 16)))
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                except ValueError:
+                    pass
+            embed = discord.Embed(
+                title=get_text(lang, "embed_color_title"),
+                description=get_text(lang, "embed_color_invalid"),
+                color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# --- Entitlement Events ---
+@client.event
+async def on_entitlement_create(entitlement):
+    """Called when a user subscribes to premium."""
+    if entitlement.guild_id:
+        guild_id = entitlement.guild_id
+        if guild_id in bot_settings:
+            bot_settings[guild_id]["is_premium"] = True
+        logging.info(f"Premium activated for guild {guild_id}")
+
+@client.event
+async def on_entitlement_update(entitlement):
+    """Called when an entitlement is updated."""
+    if entitlement.guild_id:
+        guild_id = entitlement.guild_id
+        is_active = not entitlement.is_expired()
+        if guild_id in bot_settings:
+            bot_settings[guild_id]["is_premium"] = is_active
+        logging.info(f"Premium {'activated' if is_active else 'deactivated'} for guild {guild_id}")
+
+@client.event
+async def on_entitlement_delete(entitlement):
+    """Called when a user's subscription to premium is removed."""
+    if entitlement.guild_id:
+        guild_id = entitlement.guild_id
+        if guild_id in bot_settings:
+            bot_settings[guild_id]["is_premium"] = False
+        logging.info(f"Premium removed for guild {guild_id}")
+
 # Loading the bot token from .env
 load_dotenv()
 bot_token = os.getenv('BOT_TOKEN')
+PREMIUM_SKU_ID = os.getenv('PREMIUM_SKU_ID')
 client.run(bot_token)
-
-
