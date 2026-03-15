@@ -15,7 +15,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.5"
+VERSION = "1.2.6"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -957,8 +957,8 @@ async def on_message(message):
             valid_link_found = False
 
             for original_link in matches:
-                # Skip links if they are surrounded by < >
-                if re.search(surrounded_link_pattern, message.content):
+                # Check if this specific link is surrounded by < > in the message content
+                if f"<{original_link}>" in message.content:
                     continue  # Skip processing this link
 
                 display_text = ""
