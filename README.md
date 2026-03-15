@@ -26,6 +26,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - `/fix [link]` - Manually convert a link to an embed-friendly version
 - `/help` - View all commands and supported services
 - `/settings` - Configure bot settings for your server
+- `/premium` - View and manage your Premium subscription
 - `/activate` / `/deactivate` - Toggle link conversion for specific channels
 - **Right-click message → Apps → Fix Embed** - Convert links in any message
 
@@ -59,6 +60,15 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 7. **Multi-Language Support**:
     - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
     - Change language via `/settings` → Language.
+
+# 💎 Premium
+Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.
+
+**Perks include:**
+- 🎨 **Custom Embed Colors** — Set a custom hex color for all FixEmbed messages via `/settings` → Embed Color
+- 🤖 **Bot Message Processing** — FixEmbed will process links posted by other bots
+- 🏷️ **No "Sent by" Label** — Clean embeds without the attribution footer
+- ❤️ **Support Development** — Help keep FixEmbed running and improving!
 
 # 🚀 Invite FixEmbed to Your Server
 Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
