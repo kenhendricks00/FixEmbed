@@ -13,7 +13,11 @@
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
 
 # 🛠️ Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code> link, and the bot will remove your message or just the embed and automatically convert it to it's fixed link respectively, replying with the fixed link and label of who sent it.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
+
+> [!TIP]
+> You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`).
+
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
 </p>
@@ -50,7 +54,9 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - Use the bot privately by sending links directly.
 5. **Easy Hosting Options**:
     - Host the bot yourself using Docker.
-6. **Multi-Language Support**:
+6. **Link Suppression**:
+    - Prevent automatic conversion by wrapping links in `< >`.
+7. **Multi-Language Support**:
     - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
     - Change language via `/settings` → Language.
 
