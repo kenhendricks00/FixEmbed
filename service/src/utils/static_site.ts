@@ -352,7 +352,7 @@ docker run -d kenhendricks00/fixembed</code></pre>
                         <a href="/privacy">Privacy</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank">GitHub</a>
                     </div>
-                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                    <p class="copyright">© 2023-2026 FixEmbed</p>
                 </div>
             </div>
         </div>
