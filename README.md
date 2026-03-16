@@ -1,0 +1,102 @@
+<p align="center">
+  <a href="https://github.com/kenhendricks00/FixEmbed/releases"><img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/banner.png" /></a>
+</p>
+<div align="center">
+  <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764">
+    <img src="https://img.shields.io/static/v1?label=Invite&message=Link&color=blue" alt="Invite Link"></a>
+  <a href="https://top.gg/bot/1173820242305224764">
+    <img src="https://img.shields.io/static/v1?label=Top.gg&message=Vote&color=red" alt="Top.gg"></a>
+  <a href="https://github.com/kenhendricks00/FixEmbed/commits/main/">
+    <img src="https://img.shields.io/github/last-commit/kenhendricks00/FixEmbed?label=Last%20Commit&color=green" alt="Last Commit"></a>
+</div>
+<br>
+<h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
+
+# 🛠️ Usage
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
+
+> [!TIP]
+> You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`).
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
+</p>
+
+**Commands:**
+- `/fix [link]` - Manually convert a link to an embed-friendly version
+- `/help` - View all commands and supported services
+- `/settings` - Configure bot settings for your server
+- `/premium` - View and manage your Premium subscription
+- `/activate` / `/deactivate` - Toggle link conversion for specific channels
+- **Right-click message → Apps → Fix Embed** - Convert links in any message
+
+# 🌟 Why Choose FixEmbed?
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more.
+- **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
+- **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
+- **Reliable Performance**: Ensures consistent embed functionality across all platforms.
+
+# 📋 Key Features
+1. **Multi-Platform Support**:
+    - **X/Twitter**
+    - **Instagram**
+    - **Reddit**
+    - **Threads**
+    - **Pixiv**
+    - **Bluesky**
+    - **Bilibili**
+2. **User-Installable App**:
+    - Install FixEmbed to your personal account
+    - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere
+    - Works in DMs, group chats, and servers
+3. **Customizable Settings**:
+    - Activate or deactivate services per channel or server-wide.
+4. **Direct Message Capability**:
+    - Use the bot privately by sending links directly.
+5. **Easy Hosting Options**:
+    - Host the bot yourself using Docker.
+6. **Link Suppression**:
+    - Prevent automatic conversion by wrapping links in `< >`.
+7. **Multi-Language Support**:
+    - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
+    - Change language via `/settings` → Language.
+
+# 💎 Premium
+Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.
+
+**Perks include:**
+- 🎨 **Custom Embed Colors** — Set a custom hex color for all FixEmbed messages via `/settings` → Embed Color
+- 🤖 **Bot Message Processing** — FixEmbed will process links posted by other bots
+- 🏷️ **No "Sent by" Label** — Clean embeds without the attribution footer
+- ❤️ **Support Development** — Help keep FixEmbed running and improving!
+
+# 🚀 Invite FixEmbed to Your Server
+Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+
+# 🐳 Host FixEmbed Yourself
+You can host the bot yourself using Docker:
+<br>
+```bash
+docker pull kenhendricks00/fixembed
+docker run -d kenhendricks00/fixembed
+```
+Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
+
+# 💬 Support
+If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.
+<br>
+**Note:** If it's a technical issue, be sure to have debug info ready by using <code>/settings</code>, then click Debug.
+
+# 🎉 Quick Links
+- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)
+- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbed)
+- [Join the Support Server](https://discord.gg/QFxTAmtZdn)
+
+# 📜 Credits
+- Instagram carousel images via [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram)
+- Instagram fallback via [Snapsave](https://snapsave.app)
+- Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
+- Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
+- Built with [Hono](https://hono.dev/) framework
+- Deployed on [Cloudflare Workers](https://workers.cloudflare.com/)
