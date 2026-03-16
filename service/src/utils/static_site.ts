@@ -131,30 +131,25 @@ export const indexHtml = `<!DOCTYPE html>
             </p>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
-                    <h3>Multi-Platform Support</h3>
+                    <h3><i class="fas fa-layer-group"></i> Multi-Platform Support</h3>
                     <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more to
                         come.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-user"></i></div>
-                    <h3>User-Installable</h3>
+                    <h3><i class="fas fa-user"></i> User-Installable</h3>
                     <p>Install to your personal account and use /fix or right-click context menu anywhere—even in
                         servers without the bot!</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-sliders-h"></i></div>
-                    <h3>Customizable Settings</h3>
+                    <h3><i class="fas fa-sliders-h"></i> Customizable Settings</h3>
                     <p>Easy setup with options to activate or deactivate services per channel or server-wide.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-bolt"></i></div>
-                    <h3>Reliable Performance</h3>
+                    <h3><i class="fas fa-bolt"></i> Reliable Performance</h3>
                     <p>Ensures consistent embed functionality across all supported platforms.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-crown"></i></div>
-                    <h3>Premium Perks</h3>
+                    <h3><i class="fas fa-crown"></i> Premium Perks</h3>
                     <p>Unlock custom embed colors, bot compatibility, and a cleaner look with Server Subscriptions.</p>
                 </div>
             </div>
@@ -199,39 +194,32 @@ export const indexHtml = `<!DOCTYPE html>
             <p class="section-subtitle">All your favorite social media sites, fixed for Discord</p>
             <div class="platforms-grid">
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fab fa-twitter"></i></div>
-                    <h3>X / Twitter</h3>
+                    <h3><i class="fab fa-twitter"></i> X / Twitter</h3>
                     <p>Properly displays tweets with images, videos, and text.</p>
                 </div>
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fab fa-instagram"></i></div>
-                    <h3>Instagram</h3>
+                    <h3><i class="fab fa-instagram"></i> Instagram</h3>
                     <p>Shows posts, stories, and reels with full previews.</p>
                 </div>
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fab fa-reddit"></i></div>
-                    <h3>Reddit</h3>
+                    <h3><i class="fab fa-reddit"></i> Reddit</h3>
                     <p>Embeds posts and comments with complete formatting.</p>
                 </div>
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fas fa-comment-dots"></i></div>
-                    <h3>Threads</h3>
+                    <h3><i class="fas fa-comment-dots"></i> Threads</h3>
                     <p>Displays Threads posts with proper media support.</p>
                 </div>
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fas fa-image"></i></div>
-                    <h3>Pixiv</h3>
+                    <h3><i class="fas fa-image"></i> Pixiv</h3>
                     <p>Shows artwork and illustrations with previews.</p>
                 </div>
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fas fa-cloud"></i></div>
-                    <h3>Bluesky</h3>
+                    <h3><i class="fas fa-cloud"></i> Bluesky</h3>
                     <p>Embeds Bluesky posts with full media support.</p>
                 </div>
 
                 <div class="platform-card">
-                    <div class="platform-icon"><i class="fas fa-play-circle"></i></div>
-                    <h3>Bilibili</h3>
+                    <h3><i class="fas fa-play-circle"></i> Bilibili</h3>
                     <p>Embeds Bilibili videos with full media support.</p>
                 </div>
             </div>
@@ -247,18 +235,15 @@ export const indexHtml = `<!DOCTYPE html>
             
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-palette"></i></div>
-                    <h3>Custom Branding</h3>
+                    <h3><i class="fas fa-palette"></i> Custom Branding</h3>
                     <p>Set a custom hex color for all bot command responses to match your server's theme perfectly.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-robot"></i></div>
-                    <h3>Bot Compatibility</h3>
+                    <h3><i class="fas fa-robot"></i> Bot Compatibility</h3>
                     <p>Premium servers fix links even when sent by other bots or webhooks. Never miss a link again.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon"><i class="fas fa-magic"></i></div>
-                    <h3>Clean Experience</h3>
+                    <h3><i class="fas fa-magic"></i> Clean Experience</h3>
                     <p>Enjoy a cleaner look by removing the "Sent by @user" label from your fixed embeds.</p>
                 </div>
             </div>
@@ -304,21 +289,18 @@ docker run -d kenhendricks00/fixembed</code></pre>
             <h2>Support</h2>
             <div class="support-options">
                 <div class="support-card">
-                    <div class="support-icon"><i class="fab fa-discord"></i></div>
-                    <h3>Discord Server</h3>
+                    <h3><i class="fab fa-discord"></i> Discord Server</h3>
                     <p>Join our support server for help and updates.</p>
                     <a href="https://discord.gg/QFxTAmtZdn" class="support-link" target="_blank">Join Server</a>
                 </div>
                 <div class="support-card">
-                    <div class="support-icon"><i class="fab fa-github"></i></div>
-                    <h3>GitHub Issues</h3>
+                    <h3><i class="fab fa-github"></i> GitHub Issues</h3>
                     <p>Report bugs or request features on our GitHub.</p>
                     <a href="https://github.com/kenhendricks00/FixEmbed/issues" class="support-link"
                         target="_blank">Open Issue</a>
                 </div>
                 <div class="support-card">
-                    <div class="support-icon"><i class="fas fa-cog"></i></div>
-                    <h3>Debug Info</h3>
+                    <h3><i class="fas fa-cog"></i> Debug Info</h3>
                     <p>Use <code>/settings</code> in Discord, then click Debug for technical issues.</p>
                 </div>
             </div>
@@ -801,8 +783,8 @@ nav {
 .features-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 24px;
-    margin-top: 60px;
+    gap: 20px;
+    margin-top: 40px;
 }
 
 .feature-card {
@@ -811,7 +793,7 @@ nav {
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     border-radius: 16px;
-    padding: 32px;
+    padding: 24px;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
@@ -840,33 +822,17 @@ nav {
     opacity: 1;
 }
 
-.feature-icon {
-    width: 56px;
-    height: 56px;
-    background: var(--gradient-card);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
+.feature-card h3 i, .platform-card h3 i, .support-card h3 i {
+    margin-right: 12px;
+    font-size: 1.25rem;
     color: var(--primary-light);
-    margin-bottom: 20px;
-    transition: all 0.3s ease;
+    vertical-align: middle;
 }
 
-.feature-card:hover .feature-icon {
-    transform: scale(1.1);
-    box-shadow: 0 0 30px var(--glow-color);
-}
-
-.feature-card h3 {
-    margin-bottom: 12px;
-    color: var(--text-primary);
-}
-
-.feature-card p {
+.feature-card p, .platform-card p, .support-card p {
     color: var(--text-secondary);
-    line-height: 1.7;
+    line-height: 1.6;
+    font-size: 0.95rem;
 }
 
 /* ===================================
@@ -950,8 +916,8 @@ nav {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 24px;
-    margin-top: 60px;
+    gap: 20px;
+    margin-top: 40px;
 }
 
 .platform-card {
@@ -960,8 +926,8 @@ nav {
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     border-radius: 16px;
-    padding: 32px;
-    text-align: center;
+    padding: 24px;
+    text-align: left;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
@@ -974,25 +940,6 @@ nav {
     border-color: rgba(88, 101, 242, 0.3);
     box-shadow: 0 20px 40px var(--shadow-color),
                 0 0 30px rgba(88, 101, 242, 0.15);
-}
-
-.platform-icon {
-    width: 72px;
-    height: 72px;
-    background: var(--gradient-card);
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    color: var(--primary-light);
-    margin: 0 auto 20px;
-    transition: all 0.4s ease;
-}
-
-.platform-card:hover .platform-icon {
-    transform: scale(1.15) rotate(5deg);
-    box-shadow: 0 0 40px var(--glow-color);
 }
 
 .platform-card h3 {
@@ -1130,8 +1077,8 @@ code {
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     border-radius: 16px;
-    padding: 32px;
-    text-align: center;
+    padding: 24px;
+    text-align: left;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -2066,48 +2013,42 @@ export const supportHtml = `<!DOCTYPE html>
                 <p class="section-subtitle">Help us keep FixEmbed running and improving!</p>
             </div>
                 <div class="support-card" style="border: 1px solid var(--primary-color); background: rgba(88, 101, 242, 0.05);">
-                    <i class="fas fa-gem" style="color: var(--accent-cyan);"></i>
-                    <h3>Server Subscription</h3>
+                    <h3><i class="fas fa-gem"></i> Server Subscription</h3>
                     <p>The best way to support us! Get custom colors and bot support for your whole server.</p>
                     <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" target="_blank" class="btn btn-discord">
                         <i class="fas fa-crown"></i> Subscribe Now
                     </a>
                 </div>
                 <div class="support-card">
-                    <i class="fas fa-heart" style="color: #ff5e5b;"></i>
-                    <h3>Donate on Ko-fi</h3>
+                    <h3><i class="fas fa-heart"></i> Donate on Ko-fi</h3>
                     <p>Help cover server costs and support development!</p>
                     <a href="https://ko-fi.com/kenhendricks" target="_blank" class="btn" style="background: linear-gradient(135deg, #ff5e5b, #ff9966); color: white;">
                         <i class="fas fa-mug-hot"></i> Ko-fi
                     </a>
                 </div>
                 <div class="support-card">
-                    <i class="fas fa-coffee" style="color: #FFDD00;"></i>
-                    <h3>Buy Me a Coffee</h3>
+                    <h3><i class="fas fa-coffee"></i> Buy Me a Coffee</h3>
                     <p>Another way to support FixEmbed development!</p>
                     <a href="https://buymeacoffee.com/kenhendricks" target="_blank" class="btn" style="background: #FFDD00; color: #000;">
                         <i class="fas fa-coffee"></i> Buy a Coffee
                     </a>
                 </div>
                 <div class="support-card">
-                    <i class="fas fa-star topgg-icon"></i>
-                    <h3>Vote on Top.gg</h3>
+                    <h3><i class="fas fa-star topgg-icon"></i> Vote on Top.gg</h3>
                     <p>Voting helps us reach more users. Free and takes seconds!</p>
                     <a href="https://top.gg/bot/1173820242305224764" target="_blank" class="btn btn-topgg">
                         <i class="fas fa-arrow-up"></i> Vote Now
                     </a>
                 </div>
                 <div class="support-card">
-                    <i class="fab fa-discord discord-icon"></i>
-                    <h3>Join Discord</h3>
+                    <h3><i class="fab fa-discord discord-icon"></i> Join Discord</h3>
                     <p>Get help, report issues, and hang out with the community!</p>
                     <a href="https://discord.gg/QFxTAmtZdn" target="_blank" class="btn btn-discord">
                         <i class="fab fa-discord"></i> Join Server
                     </a>
                 </div>
                 <div class="support-card">
-                    <i class="fab fa-github github-icon"></i>
-                    <h3>Contribute</h3>
+                    <h3><i class="fab fa-github github-icon"></i> Contribute</h3>
                     <p>Star the repo, report bugs, or submit pull requests!</p>
                     <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank" class="btn btn-github">
                         <i class="fab fa-github"></i> View on GitHub
