@@ -67,6 +67,7 @@ Direct URL patterns for easy use:
 GET /twitter/{user}/status/{id}
 GET /instagram/p/{shortcode}
 GET /instagram/reel/{shortcode}
+GET /instagram/reels/{shortcode}
 GET /threads/@{username}/post/{shortcode}
 GET /bluesky/profile/{handle}/post/{id}
 GET /reddit/r/{subreddit}/comments/{id}

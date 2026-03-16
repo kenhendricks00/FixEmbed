@@ -112,7 +112,7 @@ export function parseRedditUrl(url: string): { subreddit: string; postId: string
 export function parseInstagramUrl(url: string): { shortcode: string; type: 'post' | 'reel' | 'story' } | null {
     const patterns = [
         { pattern: /instagram\.com\/p\/([^\/\?]+)/i, type: 'post' as const },
-        { pattern: /instagram\.com\/reel\/([^\/\?]+)/i, type: 'reel' as const },
+        { pattern: /instagram\.com\/reels?\/([^\/\?]+)/i, type: 'reel' as const },
         { pattern: /instagram\.com\/stories\/[^\/]+\/(\d+)/i, type: 'story' as const },
     ];
 
