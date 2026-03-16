@@ -1,0 +1,22 @@
+{
+  "name": "fixembed-service",
+  "version": "1.0.0",
+  "description": "Unified embed service for Discord - fixes embeds for Twitter, Instagram, Reddit, and more",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "hono": "^4.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^3.99.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
