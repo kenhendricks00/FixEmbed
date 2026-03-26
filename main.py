@@ -163,7 +163,7 @@ async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
     await db.commit()
-    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN, delete_original BOOLEAN DEFAULT TRUE, language TEXT DEFAULT 'en', embed_color TEXT DEFAULT NULL, delivery_mode TEXT DEFAULT 'delete', media_quality TEXT DEFAULT 'balanced')''')
+    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN, delete_original BOOLEAN DEFAULT TRUE, language TEXT DEFAULT 'en', embed_color TEXT DEFAULT NULL, delivery_mode TEXT DEFAULT 'suppress', media_quality TEXT DEFAULT 'balanced')''')
     await db.commit()
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_service_rules (guild_id INTEGER, channel_id INTEGER, service TEXT, action TEXT, PRIMARY KEY (guild_id, channel_id, service))''')
     await db.commit()
@@ -205,7 +205,7 @@ async def init_db():
             raise
 
     try:
-        await db.execute("ALTER TABLE guild_settings ADD COLUMN delivery_mode TEXT DEFAULT 'delete'")
+        await db.execute("ALTER TABLE guild_settings ADD COLUMN delivery_mode TEXT DEFAULT 'suppress'")
         await db.commit()
     except sqlite3.OperationalError as e:
         if 'duplicate column name' in str(e):
@@ -243,7 +243,7 @@ async def load_settings(db):
             delete_original = row[3]
             language = row[4] if len(row) > 4 else "en"
             embed_color = row[5] if len(row) > 5 else None
-            delivery_mode = row[6] if len(row) > 6 else "delete"
+            delivery_mode = row[6] if len(row) > 6 else "suppress"
             media_quality = row[7] if len(row) > 7 else "balanced"
             enabled_services_list = ast.literal_eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]          
             bot_settings[guild_id] = {
@@ -252,7 +252,7 @@ async def load_settings(db):
                 "delete_original": delete_original if delete_original is not None else True,
                 "language": language if language else "en",
                 "embed_color": embed_color,
-                "delivery_mode": delivery_mode if delivery_mode else "delete",
+                "delivery_mode": delivery_mode if delivery_mode else "suppress",
                 "media_quality": media_quality if media_quality else "balanced"
             }
 
@@ -269,7 +269,7 @@ async def update_channel_state(db, channel_id, state):
             else:
                 raise
 
-async def update_setting(db, guild_id, enabled_services, mention_users, delete_original, language="en", embed_color=None, delivery_mode="delete", media_quality="balanced"):
+async def update_setting(db, guild_id, enabled_services, mention_users, delete_original, language="en", embed_color=None, delivery_mode="suppress", media_quality="balanced"):
     retries = 5
     for i in range(retries):
         try:
@@ -637,7 +637,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "delete", "media_quality": "balanced"})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})))
 
 class SettingsDropdown(ui.Select):
 
@@ -649,7 +649,7 @@ class SettingsDropdown(ui.Select):
             channel_states.get(ch.id, True)
             for ch in interaction.guild.text_channels)
         mention_users = settings.get("mention_users", True)
-        delivery_mode = settings.get("delivery_mode", "delete")
+        delivery_mode = settings.get("delivery_mode", "suppress")
         
         options = [
             discord.SelectOption(
@@ -719,7 +719,7 @@ class SettingsDropdown(ui.Select):
         status_deactivated = get_text(lang, "deactivated")
         
         if self.values[0] == "Delivery Method":
-            delivery_mode = self.settings.get("delivery_mode", "delete")
+            delivery_mode = self.settings.get("delivery_mode", "suppress")
             mode_text = {
                 "delete": "Delete original message and post fixed link",
                 "suppress": "Keep message, suppress original embed, and post fixed link",
@@ -842,7 +842,7 @@ class ServicesDropdown(ui.Select):
         selected_services = self.values
         guild_id = self.interaction.guild.id
         self.settings["enabled_services"] = selected_services
-        await update_setting(client.db, guild_id, selected_services, self.settings["mention_users"], self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "delete"), self.settings.get("media_quality", "balanced"))
+        await update_setting(client.db, guild_id, selected_services, self.settings["mention_users"], self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "suppress"), self.settings.get("media_quality", "balanced"))
 
         self.parent_view.clear_items()
         self.parent_view.add_item(
@@ -910,7 +910,7 @@ class QualityDropdown(ui.Select):
             self.settings.get("delete_original", True),
             self.settings.get("language", "en"),
             self.settings.get("embed_color"),
-            self.settings.get("delivery_mode", "delete"),
+            self.settings.get("delivery_mode", "suppress"),
             selected_quality,
         )
         embed = discord.Embed(
@@ -1065,7 +1065,7 @@ class LanguageDropdown(ui.Select):
             self.settings.get("delete_original", True),
             selected_lang,
             self.settings.get("embed_color"),
-            self.settings.get("delivery_mode", "delete"),
+            self.settings.get("delivery_mode", "suppress"),
             self.settings.get("media_quality", "balanced")
         )
         
@@ -1183,7 +1183,7 @@ class MentionUsersSettingsView(ui.View):
         
         self.mention_users = not self.mention_users
         self.settings["mention_users"] = self.mention_users
-        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.mention_users, self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "delete"), self.settings.get("media_quality", "balanced"))
+        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.mention_users, self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "suppress"), self.settings.get("media_quality", "balanced"))
         self.toggle_button.label = get_text(lang, "activated") if self.mention_users else get_text(lang, "deactivated")
         self.toggle_button.style = discord.ButtonStyle.green if self.mention_users else discord.ButtonStyle.red
 
@@ -1281,7 +1281,7 @@ class DeliveryMethodSettingsView(ui.View):
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "delete", "media_quality": "balanced"})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
     
     lang = get_guild_lang(interaction.guild.id)
     embed = discord.Embed(title=get_text(lang, "settings_title"),
@@ -1304,7 +1304,7 @@ async def delivery(interaction: discord.Interaction, mode: app_commands.Choice[s
         "mention_users": True,
         "delete_original": True,
         "language": "en",
-        "delivery_mode": "delete",
+        "delivery_mode": "suppress",
         "media_quality": "balanced",
     })
     settings_obj["delivery_mode"] = mode.value
@@ -1329,14 +1329,14 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
         "mention_users": True,
         "delete_original": True,
         "language": "en",
-        "delivery_mode": "delete",
+        "delivery_mode": "suppress",
         "media_quality": "balanced",
     })
     settings_obj["media_quality"] = profile.value
     await update_setting(
         client.db, guild_id, settings_obj["enabled_services"], settings_obj["mention_users"],
         settings_obj.get("delete_original", True), settings_obj.get("language", "en"),
-        settings_obj.get("embed_color"), settings_obj.get("delivery_mode", "delete"), settings_obj["media_quality"]
+        settings_obj.get("embed_color"), settings_obj.get("delivery_mode", "suppress"), settings_obj["media_quality"]
     )
     await interaction.response.send_message(f"✅ Media quality profile set to `{profile.value}`.", ephemeral=True)
 
@@ -1396,7 +1396,7 @@ async def on_message(message):
     enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"])
     mention_users = guild_settings.get("mention_users", True)
     delete_original = guild_settings.get("delete_original", True)
-    delivery_mode = guild_settings.get("delivery_mode", "delete")
+    delivery_mode = guild_settings.get("delivery_mode", "suppress")
     media_quality = guild_settings.get("media_quality", "balanced")
     premium = await is_guild_premium(guild_id)
 
@@ -1549,10 +1549,10 @@ async def on_guild_join(guild):
             "mention_users": True,
             "delete_original": True,
             "language": "en",
-            "delivery_mode": "delete",
+            "delivery_mode": "suppress",
             "media_quality": "balanced"
         }
-        await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"], bot_settings[guild_id]["delete_original"], bot_settings[guild_id]["language"], bot_settings[guild_id].get("embed_color"), bot_settings[guild_id].get("delivery_mode", "delete"), bot_settings[guild_id].get("media_quality", "balanced"))
+        await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"], bot_settings[guild_id]["delete_original"], bot_settings[guild_id]["language"], bot_settings[guild_id].get("embed_color"), bot_settings[guild_id].get("delivery_mode", "suppress"), bot_settings[guild_id].get("media_quality", "balanced"))
 
 # --- Premium Command ---
 @client.tree.command(name='premium', description="View FixEmbed Premium subscription info")
@@ -1623,7 +1623,7 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                 self.settings.get("delete_original", True),
                 self.settings.get("language", "en"),
                 None,
-                self.settings.get("delivery_mode", "delete"),
+                self.settings.get("delivery_mode", "suppress"),
                 self.settings.get("media_quality", "balanced"))
             embed = discord.Embed(
                 title=get_text(lang, "embed_color_title"),
@@ -1645,7 +1645,7 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                         self.settings.get("delete_original", True),
                         self.settings.get("language", "en"),
                         color_str,
-                        self.settings.get("delivery_mode", "delete"),
+                        self.settings.get("delivery_mode", "suppress"),
                         self.settings.get("media_quality", "balanced"))
                     embed = discord.Embed(
                         title=get_text(lang, "embed_color_title"),
