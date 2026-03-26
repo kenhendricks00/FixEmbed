@@ -71,6 +71,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="nav-links">
                         <a href="#features">Features</a>
                         <a href="/docs">Docs</a>
+                        <a href="/status">Status</a>
                         <a href="#platforms">Platforms</a>
                         <a href="/support">Support</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" class="github-link" target="_blank">
@@ -348,6 +349,7 @@ docker run -d kenhendricks00/fixembed</code></pre>
                 <div class="footer-right">
                     <div class="footer-links">
                         <a href="/docs">Docs</a>
+                        <a href="/status">Status</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
                         <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank">GitHub</a>
@@ -2150,5 +2152,262 @@ export const supportHtml = `<!DOCTYPE html>
         </div>
     </footer>
     <script src="/script.js"></script>
+</body>
+</html>`;
+
+export const statusHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixEmbed Status</title>
+    <meta name="description" content="Real-time FixEmbed reliability dashboard and per-platform status.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="FixEmbed Status Dashboard">
+    <meta property="og:description" content="Public per-platform uptime, latency, and degraded mode notices for FixEmbed.">
+    <meta property="og:url" content="https://fixembed.app/status">
+    <meta name="theme-color" content="#5865F2">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .status-page {
+            min-height: 100vh;
+            padding: 90px 0 60px;
+        }
+        .status-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0.75rem 0;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--glass-border);
+            background: var(--bg-card);
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-operational .status-dot { background: #57F287; }
+        .status-degraded .status-dot { background: #FEE75C; }
+        .status-outage .status-dot { background: #ED4245; }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .status-metric {
+            padding: 1rem;
+            border-radius: 14px;
+            border: 1px solid var(--glass-border);
+            background: var(--bg-card);
+        }
+        .status-metric .label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .status-metric .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        .status-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            background: var(--bg-card);
+        }
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .status-table th,
+        .status-table td {
+            padding: 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            white-space: nowrap;
+        }
+        .status-table th {
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        .notice-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        .notice-card {
+            padding: 0.9rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: rgba(237, 66, 69, 0.08);
+        }
+        .muted {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+    </div>
+    <header>
+        <nav>
+            <div class="container">
+                <div class="nav-container">
+                    <a href="/" class="logo">
+                        <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img">
+                        <span>FixEmbed</span>
+                    </a>
+                    <div class="nav-links">
+                        <a href="/docs">Docs</a>
+                        <a href="/status">Status</a>
+                        <a href="/support">Support</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="status-page">
+        <section>
+            <div class="container">
+                <div class="status-header">
+                    <h1>Reliability Dashboard</h1>
+                    <p class="section-subtitle">Public per-platform uptime, latency, and degraded mode notices.</p>
+                    <div id="overallStatus" class="status-chip status-operational">
+                        <span class="status-dot"></span>
+                        <span>Operational</span>
+                    </div>
+                    <p id="lastUpdated" class="muted">Loading latest checks…</p>
+                </div>
+
+                <div class="status-grid">
+                    <div class="status-metric">
+                        <div class="label">Platforms checked</div>
+                        <div id="metricPlatforms" class="value">-</div>
+                    </div>
+                    <div class="status-metric">
+                        <div class="label">Operational</div>
+                        <div id="metricOperational" class="value">-</div>
+                    </div>
+                    <div class="status-metric">
+                        <div class="label">Degraded / Outage</div>
+                        <div id="metricIssues" class="value">-</div>
+                    </div>
+                    <div class="status-metric">
+                        <div class="label">Average p50 latency</div>
+                        <div id="metricLatency" class="value">-</div>
+                    </div>
+                </div>
+
+                <div class="status-table-wrap">
+                    <table class="status-table">
+                        <thead>
+                            <tr>
+                                <th>Platform</th>
+                                <th>Status</th>
+                                <th>Uptime 24h</th>
+                                <th>Uptime 7d</th>
+                                <th>Uptime 30d</th>
+                                <th>p50</th>
+                                <th>p95</th>
+                                <th>Notice</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statusRows">
+                            <tr><td colspan="8" class="muted">Loading platform checks…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="noticeList" class="notice-list"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function statusClass(status) {
+            if (status === 'outage') return 'status-outage';
+            if (status === 'degraded') return 'status-degraded';
+            return 'status-operational';
+        }
+
+        function formatPercent(value) {
+            return Number(value).toFixed(2) + '%';
+        }
+
+        async function loadStatus() {
+            const response = await fetch('/api/status', { cache: 'no-store' });
+            if (!response.ok) throw new Error('Failed to load status');
+            const data = await response.json();
+
+            const overall = document.getElementById('overallStatus');
+            overall.className = 'status-chip ' + statusClass(data.overallStatus);
+            overall.innerHTML = '<span class="status-dot"></span><span>' + data.overallStatus + '</span>';
+
+            const rows = data.platforms || [];
+            const operationalCount = rows.filter((row) => row.status === 'operational').length;
+            const issuesCount = rows.length - operationalCount;
+            const avgLatency = rows.length
+                ? Math.round(rows.reduce((sum, row) => sum + Number(row.p50LatencyMs || 0), 0) / rows.length)
+                : 0;
+
+            document.getElementById('metricPlatforms').textContent = String(rows.length);
+            document.getElementById('metricOperational').textContent = String(operationalCount);
+            document.getElementById('metricIssues').textContent = String(issuesCount);
+            document.getElementById('metricLatency').textContent = avgLatency + 'ms';
+            document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date(data.updatedAt).toLocaleString();
+
+            const tbody = document.getElementById('statusRows');
+            tbody.innerHTML = rows.map((row) => {
+                return '<tr>'
+                    + '<td>' + row.platform + '</td>'
+                    + '<td><span class="status-chip ' + statusClass(row.status) + '"><span class="status-dot"></span><span>' + row.status + '</span></span></td>'
+                    + '<td>' + formatPercent(row.uptime24h) + '</td>'
+                    + '<td>' + formatPercent(row.uptime7d) + '</td>'
+                    + '<td>' + formatPercent(row.uptime30d) + '</td>'
+                    + '<td>' + row.p50LatencyMs + 'ms</td>'
+                    + '<td>' + row.p95LatencyMs + 'ms</td>'
+                    + '<td class="muted">' + (row.notice || '—') + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            const noticeList = document.getElementById('noticeList');
+            const notices = data.notices || [];
+            if (!notices.length) {
+                noticeList.innerHTML = '<div class="status-metric"><strong>No active incidents.</strong><div class="muted">All platforms are currently serving normally.</div></div>';
+            } else {
+                noticeList.innerHTML = notices.map((notice) => {
+                    return '<div class="notice-card"><strong>' + notice.platform + ' · ' + notice.level + '</strong>'
+                        + '<div>' + notice.message + '</div>'
+                        + '<div class="muted">Updated: ' + new Date(notice.updatedAt).toLocaleString() + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+        }
+
+        loadStatus().catch((error) => {
+            document.getElementById('statusRows').innerHTML = '<tr><td colspan="8" class="muted">Could not load status data. Please retry.</td></tr>';
+            document.getElementById('lastUpdated').textContent = error.message;
+        });
+        setInterval(() => loadStatus().catch(() => {}), 30000);
+    </script>
 </body>
 </html>`;
