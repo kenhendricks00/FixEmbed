@@ -774,6 +774,48 @@ TRANSLATIONS = {
     },
 }
 
+# Ensure newer UI keys exist across all languages (fallback to English text where missing).
+UI_FALLBACK_KEYS = {
+    "quality_profile": "Quality Profile",
+    "quality_profile_desc": "Set fastest, balanced, or highest quality",
+    "quality_current_profile": "Current profile: **{profile}**",
+    "quality_fastest": "Fastest",
+    "quality_fastest_desc": "Prefer speed and reliability",
+    "quality_balanced": "Balanced",
+    "quality_balanced_desc": "Balance speed and quality",
+    "quality_highest": "Highest",
+    "quality_highest_desc": "Prefer highest media quality",
+    "quality_select_placeholder": "Select a quality profile...",
+    "quality_set": "✅ Quality profile set to **{profile}**",
+    "channel_rules": "Channel Rules",
+    "channel_rules_desc": "Per-channel service overrides",
+    "channel_rules_title": "Channel Rules",
+    "channel_rules_instructions": "Set per-channel overrides: choose channel, service, then action.",
+    "channel_rules_pick_channel": "1) Pick a channel",
+    "channel_rules_pick_service": "2) Pick a service",
+    "channel_rules_pick_action": "3) Pick an action",
+    "channel_rules_force_on": "Force On",
+    "channel_rules_force_off": "Force Off",
+    "channel_rules_default": "Default (Inherit)",
+    "channel_rules_apply": "Apply Rule",
+    "channel_rules_select_all": "Please select channel, service, and action first.",
+    "channel_rules_updated": "✅ Updated rule: {channel} • {service} → **{action}**",
+    "channel_rules_selections": "Selections:\n- Channel: {channel}\n- Service: {service}\n- Action: {action}",
+    "reliability_status": "Reliability Status",
+    "reliability_status_desc": "View queue and processing stats",
+    "reliability_status_title": "FixEmbed Status",
+    "status_queue": "Queue",
+    "status_pending_sends": "Pending sends: {count}",
+    "status_totals": "Totals",
+    "status_fixed": "Fixed: {count}",
+    "status_failed": "Failed: {count}",
+    "status_per_service": "Per Service",
+}
+
+for lang_table in TRANSLATIONS.values():
+    for key, value in UI_FALLBACK_KEYS.items():
+        lang_table.setdefault(key, value)
+
 # Language names for display
 LANGUAGE_NAMES = {
     "en": "English",
