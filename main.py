@@ -11,6 +11,7 @@ import itertools
 import aiosqlite
 import sqlite3
 import time
+import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
@@ -77,10 +78,15 @@ message_timestamps = deque()
 
 async def rate_limited_send(channel, content=None, embed=None):
     current_time = time.time()
-    while len(message_timestamps) >= MESSAGE_LIMIT and current_time - message_timestamps[0] < TIME_WINDOW:
+    while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
+        message_timestamps.popleft()
+
+    while len(message_timestamps) >= MESSAGE_LIMIT:
         await asyncio.sleep(0.1)
         current_time = time.time()
-        message_timestamps.popleft()
+        while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
+            message_timestamps.popleft()
+
     message_timestamps.append(current_time)
     await channel.send(content=content, embed=embed)
 
@@ -197,7 +203,7 @@ async def load_settings(db):
             delete_original = row[3]
             language = row[4] if len(row) > 4 else "en"
             embed_color = row[5] if len(row) > 5 else None
-            enabled_services_list = eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]          
+            enabled_services_list = ast.literal_eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
