@@ -205,14 +205,16 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
 export const threadsHandler: PlatformHandler = {
     name: 'threads',
     patterns: [
-        /threads\.net\/@?([^\/]+)\/post\/([^\/\?]+)/i,
-        /threads\.net\/t\/([^\/\?]+)/i,
+        /threads\.(?:net|com)\/@?([^\/]+)\/post\/([^\/\?]+)/i,
+        /threads\.(?:net|com)\/t\/([^\/\?]+)/i,
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
+        const normalizedUrl = url.replace(/threads\.com/i, 'threads.net');
+
         // Parse URL to extract post info
-        const postMatch = url.match(/threads\.net\/@?([^\/]+)\/post\/([^\/\?]+)/i);
-        const shortMatch = url.match(/threads\.net\/t\/([^\/\?]+)/i);
+        const postMatch = normalizedUrl.match(/threads\.(?:net|com)\/@?([^\/]+)\/post\/([^\/\?]+)/i);
+        const shortMatch = normalizedUrl.match(/threads\.(?:net|com)\/t\/([^\/\?]+)/i);
 
         if (!postMatch && !shortMatch) {
             return { success: false, error: 'Invalid Threads URL' };
@@ -245,7 +247,7 @@ export const threadsHandler: PlatformHandler = {
                     data: {
                         title: description || 'Thread',
                         description: '', // Stats go via oEmbed, not in description
-                        url: url,
+                        url: normalizedUrl,
                         siteName: getBrandedSiteName('threads'),
                         authorName: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
@@ -284,7 +286,7 @@ export const threadsHandler: PlatformHandler = {
 
             // GraphQL failed, try oEmbed as fallback
             try {
-                const oembedUrl = `https://www.threads.net/oembed/?url=${encodeURIComponent(url)}`;
+                const oembedUrl = `https://www.threads.net/oembed/?url=${encodeURIComponent(normalizedUrl)}`;
                 const response = await fetch(oembedUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0)',
@@ -303,7 +305,7 @@ export const threadsHandler: PlatformHandler = {
                         data: {
                             title: data.title ? truncateText(data.title, 100) : 'Thread',
                             description: data.title ? truncateText(data.title, 280) : '',
-                            url: url,
+                            url: normalizedUrl,
                             siteName: getBrandedSiteName('threads'),
                             authorName: `@${data.author_name || username}`,
                             authorUrl: `https://threads.net/@${username}`,
@@ -323,7 +325,7 @@ export const threadsHandler: PlatformHandler = {
                 data: {
                     title: 'Thread',
                     description: '',
-                    url: url,
+                    url: normalizedUrl,
                     siteName: getBrandedSiteName('threads'),
                     authorName: `@${username}`,
                     authorUrl: `https://threads.net/@${username}`,

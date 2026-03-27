@@ -1949,7 +1949,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>Twitter / X</td><td>twitter.com, x.com</td></tr>
                             <tr><td>Instagram</td><td>instagram.com</td></tr>
                             <tr><td>Reddit</td><td>reddit.com, redd.it</td></tr>
-                            <tr><td>Threads</td><td>threads.net</td></tr>
+                            <tr><td>Threads</td><td>threads.net, threads.com</td></tr>
                             <tr><td>Pixiv</td><td>pixiv.net</td></tr>
                             <tr><td>Bluesky</td><td>bsky.app</td></tr>
 
