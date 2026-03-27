@@ -1486,23 +1486,25 @@ async def on_message(message):
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
-            matches = re.findall(link_pattern, message.content)
+            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+            matches = list(re.finditer(link_pattern, message.content))
 
-            # Regex pattern to detect links surrounded by < >
-            surrounded_link_pattern = r"<https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)>"
-
-            valid_link_found = False
             if len(matches) > 1:
                 await message.channel.trigger_typing()
 
-            for original_link in matches:
-                # Check if this specific link is surrounded by < > in the message content
-                if f"<{original_link}>" in message.content:
-                    continue  # Skip processing this link
+            for match in matches:
+                original_link = match.group(0)
+                start, end = match.span()
+
+                # Skip links that are explicitly wrapped in < > to prevent processing
+                if start > 0 and end < len(message.content) and message.content[start - 1] == "<" and message.content[end] == ">":
+                    continue
+
+                link_processed = False
+                normalized_link = re.sub(r"^https?://(?:www\.)?", "", original_link)
 
                 display_text = ""
-                modified_link = original_link
+                modified_link = normalized_link
                 service = ""
                 user_or_community = ""
 
@@ -1567,7 +1569,7 @@ async def on_message(message):
 
                 default_enabled = service in enabled_services
                 service_enabled = get_service_rule(guild_id, message.channel.id, service, default_enabled)
-                full_original_url = f"https://{original_link}"
+                full_original_url = f"https://{normalized_link}"
                 dedup_key = (message.channel.id, full_original_url)
                 cache_time = processed_link_cache.get(dedup_key, 0)
                 recently_processed = (time.time() - cache_time) < DEDUP_WINDOW_SECONDS
@@ -1578,13 +1580,13 @@ async def on_message(message):
                     # Use the unified FixEmbed service
                     import urllib.parse
                     modified_link = f"fixembed.app/embed?url={urllib.parse.quote(full_original_url, safe='')}&quality={media_quality}"
-                    valid_link_found = True
+                    link_processed = True
                     processed_link_cache[dedup_key] = time.time()
                     service_stats = processing_stats["by_service"].setdefault(service, {"ok": 0, "fail": 0})
                     service_stats["ok"] += 1
                     processing_stats["total_fixed"] += 1
 
-                if valid_link_found:
+                if link_processed:
                     if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                         formatted_message = f"[{display_text}](https://{modified_link})"
                         # Premium perk: no 'Sent by' label
