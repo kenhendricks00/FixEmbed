@@ -530,7 +530,7 @@ async def fix_link(interaction: discord.Interaction, link: str):
     """Convert a social media link to an embed-friendly version."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
     match = re.search(link_pattern, link)
     
     if not match:
@@ -562,8 +562,8 @@ async def fix_link(interaction: discord.Interaction, link: str):
         artwork_id = id_match[0] if id_match else "Unknown"
         display_text = f"Pixiv • {artwork_id}"
         
-    elif 'threads.net' in matched_path:
-        user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", matched_path)
+    elif 'threads.net' in matched_path or 'threads.com' in matched_path:
+        user_match = re.findall(r"threads\.(?:net|com)/@([^/]+)/post/([\w-]+)", matched_path)
         if user_match:
             user = user_match[0][0]
             display_text = f"Threads • @{user}"
@@ -599,7 +599,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
     import urllib.parse
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
+    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
     matches = re.findall(link_pattern, message.content)
     
     if not matches:
@@ -631,8 +631,8 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
             artwork_id = id_match[0] if id_match else "Unknown"
             display_text = f"Pixiv • {artwork_id}"
             
-        elif 'threads.net' in original_link:
-            user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
+        elif 'threads.net' in original_link or 'threads.com' in original_link:
+            user_match = re.findall(r"threads\.(?:net|com)/@([^/]+)/post/([\w-]+)", original_link)
             if user_match:
                 user = user_match[0][0]
                 display_text = f"Threads • @{user}"
@@ -1486,7 +1486,7 @@ async def on_message(message):
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.net/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
             matches = list(re.finditer(link_pattern, message.content))
 
             if len(matches) > 1:
@@ -1536,9 +1536,9 @@ async def on_message(message):
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
 
-                elif 'threads.net' in original_link:
+                elif 'threads.net' in original_link or 'threads.com' in original_link:
                     service = "Threads"
-                    user_match = re.findall(r"threads\.net/@([^/]+)/post/([\w-]+)", original_link)
+                    user_match = re.findall(r"threads\.(?:net|com)/@([^/]+)/post/([\w-]+)", original_link)
                     if len(user_match) > 0:
                         user_or_community, post_id = user_match[0]
                         modified_link = f"fixthreads.net/@{user_or_community}/post/{post_id}"
