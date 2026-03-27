@@ -16,7 +16,7 @@
 Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
 
 > [!TIP]
-> You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`).
+> You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`). FixEmbed will leave that message alone (no edits or deletions).
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
