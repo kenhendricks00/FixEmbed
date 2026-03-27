@@ -58,6 +58,38 @@ SERVICES = {
     }
 }
 
+SERVICE_NAMES = list(SERVICES.keys())
+DEFAULT_ENABLED_SERVICES = SERVICE_NAMES.copy()
+SERVICE_EMOJI_FALLBACKS = {
+    "Twitter": "𝕏",
+    "Instagram": "📷",
+    "Reddit": "👽",
+    "Threads": "🧵",
+    "Pixiv": "🎨",
+    "Bluesky": "🦋",
+    "Bilibili": "📺",
+}
+
+def get_custom_service_emoji(guild: Optional[discord.Guild], service: str) -> Optional[discord.Emoji]:
+    """Return a guild custom emoji for a service, if available."""
+    if guild is None:
+        return None
+    for candidate in (service.lower(), service.replace(" ", "").lower()):
+        emoji = discord.utils.get(guild.emojis, name=candidate)
+        if emoji:
+            return emoji
+    return None
+
+def get_service_select_emoji(guild: Optional[discord.Guild], service: str):
+    """Emoji object/char for select options with fallback when custom emojis are missing."""
+    custom = get_custom_service_emoji(guild, service)
+    return custom or SERVICE_EMOJI_FALLBACKS.get(service, "🔗")
+
+def get_service_display_icon(guild: Optional[discord.Guild], service: str) -> str:
+    """String icon for embeds/text with fallback when custom emojis are missing."""
+    custom = get_custom_service_emoji(guild, service)
+    return str(custom) if custom else SERVICE_EMOJI_FALLBACKS.get(service, "🔗")
+
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
@@ -245,7 +277,7 @@ async def load_settings(db):
             embed_color = row[5] if len(row) > 5 else None
             delivery_mode = row[6] if len(row) > 6 else "suppress"
             media_quality = row[7] if len(row) > 7 else "balanced"
-            enabled_services_list = ast.literal_eval(enabled_services) if enabled_services else ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]          
+            enabled_services_list = ast.literal_eval(enabled_services) if enabled_services else DEFAULT_ENABLED_SERVICES          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
                 "mention_users": mention_users if mention_users is not None else True,
@@ -637,7 +669,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
     )
 
     create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})))
+    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})))
 
 class SettingsDropdown(ui.Select):
 
@@ -751,10 +783,10 @@ class SettingsDropdown(ui.Select):
             view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"])
+            enabled_services = self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
             service_status_list = "\n".join([
-                f"{'🟢' if service in enabled_services else '🔴'} {service}"
-                for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]
+                f"{'🟢' if service in enabled_services else '🔴'} {get_service_display_icon(interaction.guild, service)} {service}"
+                for service in DEFAULT_ENABLED_SERVICES
             ])
             embed = discord.Embed(
                 title=get_text(lang, "service_settings"),
@@ -780,9 +812,9 @@ class SettingsDropdown(ui.Select):
         elif self.values[0] == "Reliability Status":
             by_service = processing_stats.get("by_service", {})
             service_lines = []
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]:
+            for service in DEFAULT_ENABLED_SERVICES:
                 data = by_service.get(service, {"ok": 0, "fail": 0})
-                service_lines.append(f"- {service}: ✅ {data['ok']} | ❌ {data['fail']}")
+                service_lines.append(f"- {get_service_display_icon(interaction.guild, service)} {service}: ✅ {data['ok']} | ❌ {data['fail']}")
             embed = discord.Embed(title=get_text(lang, "reliability_status_title"), color=get_guild_color(self.interaction.guild.id))
             embed.add_field(name=get_text(lang, "status_queue"), value=get_text(lang, "status_pending_sends", count=SEND_QUEUE.qsize()), inline=False)
             embed.add_field(name=get_text(lang, "status_totals"), value=f"{get_text(lang, 'status_fixed', count=processing_stats['total_fixed'])}\n{get_text(lang, 'status_failed', count=processing_stats['total_failed'])}", inline=False)
@@ -825,13 +857,14 @@ class ServicesDropdown(ui.Select):
         self.interaction = interaction
         self.parent_view = parent_view
         self.settings = settings
-        enabled_services = settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"])
+        enabled_services = settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
         options = [
             discord.SelectOption(
                 label=service,
                 description=f"Activate or deactivate {service} links",
-                emoji="✅" if service in enabled_services else "❌")
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]
+                emoji=get_service_select_emoji(interaction.guild, service),
+                default=service in enabled_services)
+            for service in DEFAULT_ENABLED_SERVICES
         ]
         super().__init__(placeholder="Select services to activate...",
                          min_values=1,
@@ -850,8 +883,8 @@ class ServicesDropdown(ui.Select):
         self.parent_view.add_item(SettingsDropdown(self.interaction, self.settings))
 
         service_status_list = "\n".join([
-            f"{'🟢' if service in selected_services else '🔴'} {service}"
-            for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]
+            f"{'🟢' if service in selected_services else '🔴'} {get_service_display_icon(self.interaction.guild, service)} {service}"
+            for service in DEFAULT_ENABLED_SERVICES
         ])
         embed = discord.Embed(
             title="Service Settings",
@@ -905,7 +938,7 @@ class QualityDropdown(ui.Select):
         await update_setting(
             client.db,
             self.interaction.guild.id,
-            self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+            self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
             self.settings.get("mention_users", True),
             self.settings.get("delete_original", True),
             self.settings.get("language", "en"),
@@ -949,7 +982,15 @@ class RuleServiceDropdown(ui.Select):
     def __init__(self, interaction, parent_view):
         self.interaction = interaction
         self.parent_view = parent_view
-        options = [discord.SelectOption(label=s, value=s, default=(parent_view.selected_service == s)) for s in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]]
+        options = [
+            discord.SelectOption(
+                label=s,
+                value=s,
+                emoji=get_service_select_emoji(interaction.guild, s),
+                default=(parent_view.selected_service == s),
+            )
+            for s in DEFAULT_ENABLED_SERVICES
+        ]
         super().__init__(placeholder=get_text(parent_view.settings.get("language", "en"), "channel_rules_pick_service"), min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1060,7 +1101,7 @@ class LanguageDropdown(ui.Select):
         await update_setting(
             client.db, 
             guild_id, 
-            self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+            self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
             self.settings.get("mention_users", True),
             self.settings.get("delete_original", True),
             selected_lang,
@@ -1281,7 +1322,7 @@ class DeliveryMethodSettingsView(ui.View):
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
-    guild_settings = bot_settings.get(guild_id, {"enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"], "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
+    guild_settings = bot_settings.get(guild_id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
     
     lang = get_guild_lang(interaction.guild.id)
     embed = discord.Embed(title=get_text(lang, "settings_title"),
@@ -1300,7 +1341,7 @@ async def settings(interaction: discord.Interaction):
 async def delivery(interaction: discord.Interaction, mode: app_commands.Choice[str]):
     guild_id = interaction.guild.id
     settings_obj = bot_settings.setdefault(guild_id, {
-        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"],
+        "enabled_services": DEFAULT_ENABLED_SERVICES,
         "mention_users": True,
         "delete_original": True,
         "language": "en",
@@ -1325,7 +1366,7 @@ async def delivery(interaction: discord.Interaction, mode: app_commands.Choice[s
 async def quality(interaction: discord.Interaction, profile: app_commands.Choice[str]):
     guild_id = interaction.guild.id
     settings_obj = bot_settings.setdefault(guild_id, {
-        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"],
+        "enabled_services": DEFAULT_ENABLED_SERVICES,
         "mention_users": True,
         "delete_original": True,
         "language": "en",
@@ -1369,9 +1410,9 @@ async def rule(interaction: discord.Interaction, channel: discord.TextChannel, s
 async def status(interaction: discord.Interaction):
     by_service = processing_stats.get("by_service", {})
     service_lines = []
-    for service in ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]:
+    for service in DEFAULT_ENABLED_SERVICES:
         data = by_service.get(service, {"ok": 0, "fail": 0})
-        service_lines.append(f"- {service}: ✅ {data['ok']} | ❌ {data['fail']}")
+        service_lines.append(f"- {get_service_display_icon(interaction.guild, service)} {service}: ✅ {data['ok']} | ❌ {data['fail']}")
     embed = discord.Embed(title="FixEmbed Status", color=discord.Color.blurple())
     embed.add_field(name="Queue", value=f"Pending sends: {SEND_QUEUE.qsize()}", inline=False)
     embed.add_field(name="Totals", value=f"Fixed: {processing_stats['total_fixed']}\nFailed: {processing_stats['total_failed']}", inline=False)
@@ -1389,11 +1430,11 @@ async def on_message(message):
 
     guild_id = message.guild.id
     guild_settings = bot_settings.get(guild_id, {
-        "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"],
+        "enabled_services": DEFAULT_ENABLED_SERVICES,
         "mention_users": True,
         "delete_original": True
     })
-    enabled_services = guild_settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"])
+    enabled_services = guild_settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
     mention_users = guild_settings.get("mention_users", True)
     delete_original = guild_settings.get("delete_original", True)
     delivery_mode = guild_settings.get("delivery_mode", "suppress")
@@ -1545,7 +1586,7 @@ async def on_guild_join(guild):
     guild_id = guild.id
     if guild_id not in bot_settings:
         bot_settings[guild_id] = {
-            "enabled_services": ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"],
+            "enabled_services": DEFAULT_ENABLED_SERVICES,
             "mention_users": True,
             "delete_original": True,
             "language": "en",
@@ -1618,7 +1659,7 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
             self.settings["embed_color"] = None
             await update_setting(
                 client.db, guild_id,
-                self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+                self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
                 self.settings.get("mention_users", True),
                 self.settings.get("delete_original", True),
                 self.settings.get("language", "en"),
@@ -1640,7 +1681,7 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                     self.settings["embed_color"] = color_str
                     await update_setting(
                         client.db, guild_id,
-                        self.settings.get("enabled_services", ["Twitter", "Instagram", "Reddit", "Threads", "Pixiv", "Bluesky", "Bilibili"]),
+                        self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
                         self.settings.get("mention_users", True),
                         self.settings.get("delete_original", True),
                         self.settings.get("language", "en"),
