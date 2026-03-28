@@ -2,9 +2,9 @@
  * FixEmbed Service - Bluesky Handler
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseBlueskyUrl, fetchJSON, truncateText } from '../utils/fetch';
-import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { parseBlueskyUrl, fetchJSON, truncateText } from '../utils/fetch.ts';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
 interface BlueskyPost {
     thread: {

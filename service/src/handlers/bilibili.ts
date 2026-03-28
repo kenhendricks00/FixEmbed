@@ -11,8 +11,8 @@
  * - Falls back to basic redirect if scraping fails
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { platformColors, getBrandedSiteName } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 // Scrape vxbilibili.com HTML for OG tags
 async function scrapeVxBilibili(bvid: string): Promise<{

@@ -177,3 +177,19 @@ export function decodeHtmlEntities(text: string): string {
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'");
 }
+
+/**
+ * Strip HTML tags and normalize whitespace for plain-text embeds
+ */
+export function stripHtml(text: string): string {
+    return decodeHtmlEntities(
+        text
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+\n/g, '\n')
+            .replace(/\n\s+/g, '\n')
+            .replace(/[ \t]{2,}/g, ' ')
+            .trim(),
+    );
+}

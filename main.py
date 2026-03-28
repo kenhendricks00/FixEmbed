@@ -16,7 +16,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.5"
+VERSION = "1.2.7"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -573,7 +573,7 @@ async def fix_link(interaction: discord.Interaction, link: str):
         if bsky_match:
             user = bsky_match[0][0]
             display_text = f"Bluesky • {user}"
-    
+
     elif 'bilibili.com' in matched_path or 'b23.tv' in matched_path:
         if 'bilibili.com' in matched_path:
             video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", matched_path)
@@ -642,7 +642,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
             if bsky_match:
                 user = bsky_match[0][0]
                 display_text = f"Bluesky • {user}"
-        
+
         elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
             if 'bilibili.com' in original_link:
                 video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", original_link)

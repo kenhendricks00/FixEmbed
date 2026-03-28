@@ -10,9 +10,9 @@
  * - Falls back to oEmbed if Invidious fails
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseYouTubeUrl, truncateText } from '../utils/fetch';
-import { platformColors } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { parseYouTubeUrl, truncateText } from '../utils/fetch.ts';
+import { platformColors } from '../utils/embed.ts';
 
 // Invidious API instances
 const INVIDIOUS_INSTANCES = [

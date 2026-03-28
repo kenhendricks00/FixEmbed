@@ -5,9 +5,9 @@
  * Based on fixthreads implementation (https://github.com/milanmdev/fixthreads)
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { truncateText } from '../utils/fetch';
-import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { truncateText } from '../utils/fetch.ts';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
 // Convert Threads short code to numeric post ID
 function decodeThreadsPostId(shortcode: string): string {

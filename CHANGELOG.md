@@ -1,3 +1,32 @@
+## v1.2.7 (03/28/2026)
+
+#### **New Features**
+- **`New Status Page`**
+  - Added a public status dashboard for the embed service with per-platform uptime, latency, and incident notices.
+- **`Power User Commands`**
+  - Added `/delivery`, `/quality`, `/rule`, and `/status` commands for faster advanced configuration and diagnostics.
+
+#### **Enhancements**
+- **`Icons for All Services`**
+  - Added or completed branded icons for every supported service.
+- **`Default Conversion Behavior`**
+  - Set the default delivery behavior to suppress the original embed instead of deleting the original message.
+- **`Language Selection UX`**
+  - Added country flags to the language selector to make multilingual settings easier to scan.
+- **`Threads.com Support`**
+  - Added support for `threads.com` links alongside the existing `threads.net` URLs.
+- **`Opt-Out Link Handling`**
+  - Respect links wrapped in angle brackets (`< >`) so users can intentionally prevent automatic conversion.
+- **`Embed Service Test Coverage`**
+  - Added a lightweight TypeScript test harness for service URL parsing and handler routing.
+  - Added coverage for supported platform routing and Twitter redirect behavior.
+- **`Node-Compatible Service Imports`**
+  - Updated the Cloudflare Worker TypeScript imports to run cleanly under direct local Node-based test execution.
+
+#### **Documentation**
+- **`README Updates`**
+  - Updated user-facing supported service strings across all translations.
+
 ## v1.2.6 (03/15/2026)
 
 #### **🚀 New Features**
