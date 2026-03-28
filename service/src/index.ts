@@ -14,10 +14,9 @@ import type { Env } from './types.ts';
 import { findHandler } from './handlers/index.ts';
 import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
+import { assessProbeResult, buildUptimeValue, type PlatformStatus } from './utils/status.ts';
 
 const app = new Hono<{ Bindings: Env }>();
-
-type PlatformStatus = 'operational' | 'degraded' | 'outage';
 
 interface PlatformStatusRow {
     platform: string;
@@ -47,18 +46,6 @@ const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1xx411c7mD' },
 ];
 
-function deriveStatusFromLatency(latencyMs: number, success: boolean): PlatformStatus {
-    if (!success) return 'outage';
-    if (latencyMs > 4000) return 'degraded';
-    return 'operational';
-}
-
-function buildUptimeValue(base: number, status: PlatformStatus): number {
-    if (status === 'outage') return Math.max(90, base - 8);
-    if (status === 'degraded') return Math.max(95, base - 3);
-    return base;
-}
-
 async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformStatusRow> {
     const handler = findHandler(probe.sampleUrl);
     const checkedAt = new Date().toISOString();
@@ -82,22 +69,19 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
     try {
         const result = await handler.handle(probe.sampleUrl, env);
         const latencyMs = Date.now() - startedAt;
-        const status = deriveStatusFromLatency(latencyMs, result.success);
-        const notice = result.success
-            ? (status === 'degraded' ? `High latency observed (${latencyMs}ms).` : null)
-            : (result.error || 'Handler failed to produce embed data.');
+        const assessment = assessProbeResult(result, latencyMs);
 
         return {
             platform: probe.platform,
-            uptime24h: buildUptimeValue(99.95, status),
-            uptime7d: buildUptimeValue(99.9, status),
-            uptime30d: buildUptimeValue(99.8, status),
+            uptime24h: buildUptimeValue(99.95, assessment.status),
+            uptime7d: buildUptimeValue(99.9, assessment.status),
+            uptime30d: buildUptimeValue(99.8, assessment.status),
             p50LatencyMs: latencyMs,
             p95LatencyMs: Math.round(latencyMs * 1.35),
-            status,
-            notice,
+            status: assessment.status,
+            notice: assessment.notice,
             checkedAt,
-            responseCode: result.success ? 200 : 500,
+            responseCode: assessment.responseCode,
         };
     } catch (error) {
         return {
