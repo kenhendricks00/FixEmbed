@@ -136,6 +136,7 @@ export const bilibiliHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('bilibili'),
                         authorName: scrapeResult.author || undefined, // Don't set if no author found
+                        authorHandle: scrapeResult.author ? `@${scrapeResult.author}` : undefined,
                         image: imageUrl,
                         video: scrapeResult.video ? {
                             url: `https://${embedDomain}/proxy/bilibili?url=${encodeURIComponent(scrapeResult.video)}`,
