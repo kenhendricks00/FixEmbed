@@ -43,7 +43,6 @@ const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Reddit', sampleUrl: 'https://www.reddit.com/r/programming/comments/15e0xv9/example/' },
     { platform: 'Threads', sampleUrl: 'https://www.threads.net/@zuck/post/Cu8M4wXLZQx' },
     { platform: 'Bluesky', sampleUrl: 'https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t' },
-    { platform: 'Mastodon', sampleUrl: 'https://mastodon.social/@Gargron/114063518292837173' },
     { platform: 'Pixiv', sampleUrl: 'https://www.pixiv.net/en/artworks/101844438' },
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1xx411c7mD' },
 ];

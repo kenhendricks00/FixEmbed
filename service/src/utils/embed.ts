@@ -151,7 +151,6 @@ export const platformColors: Record<string, string> = {
     threads: '#000000',
     pixiv: '#0096FA',
     bluesky: '#1185FE',
-    mastodon: '#6364FF',
     bilibili: '#00A1D6',
 };
 
@@ -165,7 +164,6 @@ export const platformNames: Record<string, string> = {
     threads: '🧵 Threads',
     pixiv: '🎨 Pixiv',
     bluesky: '🦋 Bluesky',
-    mastodon: '🐘 Mastodon',
     bilibili: '📺 Bilibili',
     youtube: '▶️ YouTube',
 };

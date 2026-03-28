@@ -6,7 +6,6 @@
 export { twitterHandler } from './twitter.ts';
 export { redditHandler } from './reddit.ts';
 export { blueskyHandler } from './bluesky.ts';
-export { mastodonHandler } from './mastodon.ts';
 export { instagramHandler } from './instagram.ts';
 export { threadsHandler } from './threads.ts';
 export { pixivHandler } from './pixiv.ts';
@@ -15,7 +14,6 @@ export { bilibiliHandler } from './bilibili.ts';
 import { twitterHandler } from './twitter.ts';
 import { redditHandler } from './reddit.ts';
 import { blueskyHandler } from './bluesky.ts';
-import { mastodonHandler } from './mastodon.ts';
 import { instagramHandler } from './instagram.ts';
 import { threadsHandler } from './threads.ts';
 import { pixivHandler } from './pixiv.ts';
@@ -27,7 +25,6 @@ export const handlers: PlatformHandler[] = [
     twitterHandler,
     redditHandler,
     blueskyHandler,
-    mastodonHandler,
     instagramHandler,
     threadsHandler,
     pixivHandler,
