@@ -244,7 +244,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string; fo?: number } = {};
+    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -259,6 +259,8 @@ app.get('/activity/:encodedData', (c) => {
 
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
+        const authorName = embedData.a || 'FixEmbed';
+
         // Build attachment
         let attachment: any[] = [];
         if (embedData.v) {
@@ -280,7 +282,7 @@ app.get('/activity/:encodedData', (c) => {
             }];
         }
 
-        const activityPubResponse: Record<string, unknown> = {
+        const activityPubResponse = {
             '@context': [
                 'https://www.w3.org/ns/activitystreams',
                 {
@@ -293,14 +295,11 @@ app.get('/activity/:encodedData', (c) => {
             'type': 'Note',
             'summary': embedData.s || null, // Stats row
             'content': `<p>${embedData.d || ''}</p>`,
+            'attributedTo': `https://fixembed.app/activity/${encodedData}/actor`,
             'published': new Date().toISOString(),
             'url': embedData.u || 'https://fixembed.app',
             ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
         };
-
-        if (!embedData.fo) {
-            activityPubResponse.attributedTo = `https://fixembed.app/activity/${encodedData}/actor`;
-        }
 
         return c.json(activityPubResponse, 200, {
             'Content-Type': 'application/activity+json; charset=utf-8',

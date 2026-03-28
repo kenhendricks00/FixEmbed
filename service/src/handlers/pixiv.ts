@@ -103,7 +103,6 @@ export const pixivHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('pixiv'),
                         authorName: scrapeResult.author,
-                        authorHandle: scrapeResult.author ? `@${scrapeResult.author}` : undefined,
                         authorUrl: scrapeResult.author ? `https://www.pixiv.net/users/${scrapeResult.author}` : undefined,
                         image: scrapeResult.image,
                         color: platformColors.pixiv,

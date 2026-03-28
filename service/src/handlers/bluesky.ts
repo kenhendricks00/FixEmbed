@@ -115,14 +115,14 @@ export const blueskyHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    title: author.displayName
-                        ? `${author.displayName} (@${author.handle})`
-                        : `@${author.handle}`,
-                    description,
+                    // Title is the post content (or handle if empty)
+                    title: description || `@${author.handle}`,
+                    // Description shows the full post if title was truncated
+                    description: '',
                     url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
                     siteName: getBrandedSiteName('bluesky'),
+                    // authorName shows handle - don't duplicate display name
                     authorName: `@${author.handle}`,
-                    authorHandle: `@${author.handle}`,
                     authorUrl: `https://bsky.app/profile/${author.handle}`,
                     authorAvatar: author.avatar,
                     image,
