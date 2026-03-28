@@ -245,11 +245,12 @@ export const threadsHandler: PlatformHandler = {
                 const result: HandlerResponse = {
                     success: true,
                     data: {
-                        title: description || 'Thread',
-                        description: '', // Stats go via oEmbed, not in description
+                        title: `@${displayUsername}`,
+                        description,
                         url: normalizedUrl,
                         siteName: getBrandedSiteName('threads'),
                         authorName: `@${displayUsername}`,
+                        authorHandle: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
                         color: platformColors.threads,
                         platform: 'threads',
@@ -303,11 +304,12 @@ export const threadsHandler: PlatformHandler = {
                     return {
                         success: true,
                         data: {
-                            title: data.title ? truncateText(data.title, 100) : 'Thread',
+                            title: `@${data.author_name || username}`,
                             description: data.title ? truncateText(data.title, 280) : '',
                             url: normalizedUrl,
                             siteName: getBrandedSiteName('threads'),
                             authorName: `@${data.author_name || username}`,
+                            authorHandle: `@${data.author_name || username}`,
                             authorUrl: `https://threads.net/@${username}`,
                             image: data.thumbnail_url,
                             color: platformColors.threads,
@@ -328,6 +330,7 @@ export const threadsHandler: PlatformHandler = {
                     url: normalizedUrl,
                     siteName: getBrandedSiteName('threads'),
                     authorName: `@${username}`,
+                    authorHandle: `@${username}`,
                     authorUrl: `https://threads.net/@${username}`,
                     color: platformColors.threads,
                     platform: 'threads',
