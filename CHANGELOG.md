@@ -1,9 +1,6 @@
 ## v1.2.7 (03/28/2026)
 
 #### **New Features**
-- **`Mastodon Support`**
-  - Added Mastodon link conversion support across the Discord bot and embed service.
-  - Supports common Mastodon post URL formats including `/@user/status`, `/users/{user}/statuses/{id}`, and `/web/statuses/{id}`.
 - **`New Status Page`**
   - Added a public status dashboard for the embed service with per-platform uptime, latency, and incident notices.
 - **`Power User Commands`**
@@ -11,7 +8,7 @@
 
 #### **Enhancements**
 - **`Icons for All Services`**
-  - Added or completed branded icons for every supported service, including the custom Mastodon emoji.
+  - Added or completed branded icons for every supported service.
 - **`Default Conversion Behavior`**
   - Set the default delivery behavior to suppress the original embed instead of deleting the original message.
 - **`Language Selection UX`**
@@ -22,15 +19,12 @@
   - Respect links wrapped in angle brackets (`< >`) so users can intentionally prevent automatic conversion.
 - **`Embed Service Test Coverage`**
   - Added a lightweight TypeScript test harness for service URL parsing and handler routing.
-  - Added coverage for Mastodon parsing plus existing supported platform routing and Twitter redirect behavior.
+  - Added coverage for supported platform routing and Twitter redirect behavior.
 - **`Node-Compatible Service Imports`**
   - Updated the Cloudflare Worker TypeScript imports to run cleanly under direct local Node-based test execution.
-- **`Status Dashboard`**
-  - Added Mastodon to the public service status probes so the reliability dashboard reports its health alongside the other platforms.
 
 #### **Documentation**
 - **`README Updates`**
-  - Documented Mastodon support in the bot and service READMEs.
   - Updated user-facing supported service strings across all translations.
 
 ## v1.2.6 (03/15/2026)

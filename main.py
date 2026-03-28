@@ -51,15 +51,6 @@ SERVICES = {
         "base_url": "fixembed.app",
         "display_format": "Bluesky • {0}"
     },
-    "Mastodon": {
-        "patterns": [
-            r"[^/]+/@([^/]+)/(\d+)",
-            r"[^/]+/users/([^/]+)/statuses/(\d+)",
-            r"[^/]+/web/statuses/(\d+)"
-        ],
-        "base_url": "fixembed.app",
-        "display_format": "Mastodon • @{0}"
-    },
     "Bilibili": {
         "patterns": [r"bilibili\.com/video/([\w]+)", r"b23\.tv/([\w]+)"],
         "base_url": "fixembed.app",
@@ -76,7 +67,6 @@ SERVICE_EMOJI_FALLBACKS = {
     "Threads": "🧵",
     "Pixiv": "🎨",
     "Bluesky": "🦋",
-    "Mastodon": "🐘",
     "Bilibili": "📺",
 }
 SERVICE_EMOJI_IDS = {
@@ -86,7 +76,6 @@ SERVICE_EMOJI_IDS = {
     "Instagram": 1486919548732051586,
     "Twitter": 1486919288588861440,
     "Bluesky": 1486919050796859432,
-    "Mastodon": 1487526395109183629,
     "Bilibili": 1486917321456095362,
 }
 LANGUAGE_FLAG_EMOJIS = {
@@ -398,7 +387,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Mastodon links", "for Bilibili links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Bilibili links"
 ])
 
 @tasks.loop(seconds=60)
@@ -541,7 +530,7 @@ async def fix_link(interaction: discord.Interaction, link: str):
     """Convert a social media link to an embed-friendly version."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|[^/\s]+/@[^/\s]+/\d+|[^/\s]+/users/[^/\s]+/statuses/\d+|[^/\s]+/web/statuses/\d+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
     match = re.search(link_pattern, link)
     
     if not match:
@@ -585,19 +574,6 @@ async def fix_link(interaction: discord.Interaction, link: str):
             user = bsky_match[0][0]
             display_text = f"Bluesky • {user}"
 
-    elif re.search(r"https?://(?:www\.)?[^/\s]+/(?:@[^/\s]+/\d+|users/[^/\s]+/statuses/\d+|web/statuses/\d+)", original_link):
-        mastodon_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/@([^/\s]+)/(\d+)", original_link)
-        if mastodon_match:
-            _, user, _ = mastodon_match[0]
-            display_text = f"Mastodon • @{user}"
-        else:
-            user_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/users/([^/\s]+)/statuses/(\d+)", original_link)
-            if user_match:
-                _, user, _ = user_match[0]
-                display_text = f"Mastodon • @{user}"
-            elif re.search(r"https?://(?:www\.)?[^/\s]+/web/statuses/\d+", original_link):
-                display_text = "Mastodon • status"
-    
     elif 'bilibili.com' in matched_path or 'b23.tv' in matched_path:
         if 'bilibili.com' in matched_path:
             video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", matched_path)
@@ -623,7 +599,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
     import urllib.parse
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|[^/\s]+/@[^/\s]+/\d+|[^/\s]+/users/[^/\s]+/statuses/\d+|[^/\s]+/web/statuses/\d+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
+    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
     matches = re.findall(link_pattern, message.content)
     
     if not matches:
@@ -667,19 +643,6 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
                 user = bsky_match[0][0]
                 display_text = f"Bluesky • {user}"
 
-        elif re.search(r"https?://(?:www\.)?[^/\s]+/(?:@[^/\s]+/\d+|users/[^/\s]+/statuses/\d+|web/statuses/\d+)", original_link):
-            mastodon_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/@([^/\s]+)/(\d+)", original_link)
-            if mastodon_match:
-                _, user, _ = mastodon_match[0]
-                display_text = f"Mastodon • @{user}"
-            else:
-                user_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/users/([^/\s]+)/statuses/(\d+)", original_link)
-                if user_match:
-                    _, user, _ = user_match[0]
-                    display_text = f"Mastodon • @{user}"
-                elif re.search(r"https?://(?:www\.)?[^/\s]+/web/statuses/\d+", original_link):
-                    display_text = "Mastodon • status"
-        
         elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
             if 'bilibili.com' in original_link:
                 video_id_match = re.findall(r"bilibili\.com/video/([\w]+)", original_link)
@@ -1464,7 +1427,6 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
     app_commands.Choice(name="Threads", value="Threads"),
     app_commands.Choice(name="Pixiv", value="Pixiv"),
     app_commands.Choice(name="Bluesky", value="Bluesky"),
-    app_commands.Choice(name="Mastodon", value="Mastodon"),
     app_commands.Choice(name="Bilibili", value="Bilibili"),
 ], action=[
     app_commands.Choice(name="force on", value="on"),
@@ -1524,7 +1486,7 @@ async def on_message(message):
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|[^/\s]+/@[^/\s]+/\d+|[^/\s]+/users/[^/\s]+/statuses/\d+|[^/\s]+/web/statuses/\d+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
             matches = list(re.finditer(link_pattern, message.content))
 
             if len(matches) > 1:
@@ -1589,24 +1551,6 @@ async def on_message(message):
                         user_or_community, post_id = bsky_match[0]
                         modified_link = f"bskyx.app/profile/{user_or_community}/post/{post_id}"
                         display_text = f"Bluesky • {user_or_community}"
-
-                elif re.search(r"https?://(?:www\.)?[^/\s]+/(?:@[^/\s]+/\d+|users/[^/\s]+/statuses/\d+|web/statuses/\d+)", original_link):
-                    service = "Mastodon"
-                    mastodon_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/@([^/\s]+)/(\d+)", original_link)
-                    if len(mastodon_match) > 0:
-                        _, user_or_community, status_id = mastodon_match[0]
-                        display_text = f"Mastodon • @{user_or_community}"
-                    else:
-                        user_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/users/([^/\s]+)/statuses/(\d+)", original_link)
-                        if len(user_match) > 0:
-                            _, user_or_community, status_id = user_match[0]
-                            display_text = f"Mastodon • @{user_or_community}"
-                        else:
-                            web_match = re.findall(r"https?://(?:www\.)?([^/\s]+)/web/statuses/(\d+)", original_link)
-                            if len(web_match) > 0:
-                                _, status_id = web_match[0]
-                                user_or_community = status_id
-                                display_text = f"Mastodon • {status_id}"
 
                 elif 'bilibili.com' in original_link or 'b23.tv' in original_link:
                     service = "Bilibili"

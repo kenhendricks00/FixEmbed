@@ -7,7 +7,6 @@ import {
     cleanUrl,
     parseBlueskyUrl,
     parseInstagramUrl,
-    parseMastodonUrl,
     parseRedditUrl,
     parseTwitterUrl,
     truncateText,
@@ -82,25 +81,6 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'parseMastodonUrl supports common Mastodon status routes',
-        run: () => {
-            assert.deepEqual(
-                parseMastodonUrl('https://mastodon.social/@Gargron/114063518292837173'),
-                { host: 'mastodon.social', username: 'Gargron', statusId: '114063518292837173' },
-            );
-
-            assert.deepEqual(
-                parseMastodonUrl('https://hachyderm.io/users/amy/statuses/109876543210'),
-                { host: 'hachyderm.io', username: 'amy', statusId: '109876543210' },
-            );
-
-            assert.deepEqual(
-                parseMastodonUrl('https://fosstodon.org/web/statuses/1029384756'),
-                { host: 'fosstodon.org', statusId: '1029384756' },
-            );
-        },
-    },
-    {
         name: 'truncateText only adds an ellipsis when text exceeds the limit',
         run: () => {
             assert.equal(truncateText('short text', 20), 'short text');
@@ -116,7 +96,6 @@ const tests: TestCase[] = [
             assert.equal(findHandler('https://www.threads.net/@zuck/post/Cu8M4wXLZQx')?.name, 'threads');
             assert.equal(findHandler('https://www.threads.net/t/Cu8M4wXLZQx')?.name, 'threads');
             assert.equal(findHandler('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t')?.name, 'bluesky');
-            assert.equal(findHandler('https://mastodon.social/@Gargron/114063518292837173')?.name, 'mastodon');
             assert.equal(findHandler('https://www.pixiv.net/en/artworks/101844438')?.name, 'pixiv');
             assert.equal(findHandler('https://www.bilibili.com/video/BV1xx411c7mD')?.name, 'bilibili');
         },
