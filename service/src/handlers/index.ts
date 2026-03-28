@@ -3,22 +3,22 @@
  * Re-exports all platform handlers
  */
 
-export { twitterHandler } from './twitter';
-export { redditHandler } from './reddit';
-export { blueskyHandler } from './bluesky';
-export { instagramHandler } from './instagram';
-export { threadsHandler } from './threads';
-export { pixivHandler } from './pixiv';
-export { bilibiliHandler } from './bilibili';
+export { twitterHandler } from './twitter.ts';
+export { redditHandler } from './reddit.ts';
+export { blueskyHandler } from './bluesky.ts';
+export { instagramHandler } from './instagram.ts';
+export { threadsHandler } from './threads.ts';
+export { pixivHandler } from './pixiv.ts';
+export { bilibiliHandler } from './bilibili.ts';
 
-import { twitterHandler } from './twitter';
-import { redditHandler } from './reddit';
-import { blueskyHandler } from './bluesky';
-import { instagramHandler } from './instagram';
-import { threadsHandler } from './threads';
-import { pixivHandler } from './pixiv';
-import { bilibiliHandler } from './bilibili';
-import type { PlatformHandler } from '../types';
+import { twitterHandler } from './twitter.ts';
+import { redditHandler } from './reddit.ts';
+import { blueskyHandler } from './bluesky.ts';
+import { instagramHandler } from './instagram.ts';
+import { threadsHandler } from './threads.ts';
+import { pixivHandler } from './pixiv.ts';
+import { bilibiliHandler } from './bilibili.ts';
+import type { PlatformHandler } from '../types.ts';
 
 // All handlers in priority order
 export const handlers: PlatformHandler[] = [

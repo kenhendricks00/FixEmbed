@@ -2,11 +2,13 @@
   "name": "fixembed-service",
   "version": "1.0.0",
   "description": "Unified embed service for Discord - fixes embeds for Twitter, Instagram, Reddit, and more",
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node --experimental-strip-types tests/run-tests.ts"
   },
   "dependencies": {
     "hono": "^4.3.0"
