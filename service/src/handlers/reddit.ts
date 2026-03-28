@@ -4,7 +4,7 @@
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch.ts';
-import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
+import { platformColors } from '../utils/embed.ts';
 
 interface RedditPost {
     title: string;
@@ -56,20 +56,17 @@ export const redditHandler: PlatformHandler = {
         const parsed = parseRedditUrl(url);
 
         if (!parsed) {
-            // Try short URL format
             const shortMatch = url.match(/redd\.it\/([^\/\?]+)/i);
             if (!shortMatch) {
                 return { success: false, error: 'Invalid Reddit URL' };
             }
-            // Redirect short URLs
             return {
                 success: false,
-                redirect: `https://reddit.com/comments/${shortMatch[1]}`
+                redirect: `https://reddit.com/comments/${shortMatch[1]}`,
             };
         }
 
         try {
-            // Fetch post data using Reddit's JSON API
             const apiUrl = `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json`;
 
             const response = await fetchJSON<Array<{ data: { children: Array<{ data: RedditPost }> } }>>(apiUrl, {
@@ -83,23 +80,11 @@ export const redditHandler: PlatformHandler = {
             }
 
             const post = response[0].data.children[0].data;
+            const description = post.selftext ? truncateText(post.selftext, 280) : '';
 
-            // Build description (no stats here - moved to oEmbed row)
-            const description = post.selftext
-                ? truncateText(post.selftext, 280)
-                : post.title;
-
-            // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
-            const stats = formatStats({
-                comments: post.num_comments,
-                likes: post.score, // Reddit uses score/upvotes as "likes"
-            });
-
-            // Check for media
             let image: string | undefined;
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
-            // Video content
             const redditVideo = post.secure_media?.reddit_video || post.media?.reddit_video;
             if (post.is_video && redditVideo) {
                 video = {
@@ -108,32 +93,27 @@ export const redditHandler: PlatformHandler = {
                     height: redditVideo.height,
                     thumbnail: post.thumbnail !== 'self' ? post.thumbnail : undefined,
                 };
-            }
-            // Image content
-            else if (post.preview?.images?.[0]) {
+            } else if (post.preview?.images?.[0]) {
                 const imageSource = post.preview.images[0].source;
-                // Reddit HTML-encodes URLs in the API response
                 image = imageSource.url.replace(/&amp;/g, '&');
-            }
-            // External image link
-            else if (post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            } else if (post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                 image = post.url;
             }
 
             return {
                 success: true,
                 data: {
-                    title: `r/${post.subreddit} • ${truncateText(post.title, 100)}`,
+                    title: truncateText(post.title, 140),
                     description,
                     url: `https://reddit.com${post.permalink}`,
-                    siteName: getBrandedSiteName('reddit'),
-                    authorName: `u/${post.author}`,
+                    siteName: `r/${post.subreddit}`,
+                    authorName: `Posted by u/${post.author}`,
+                    authorHandle: `u/${post.author}`,
                     authorUrl: `https://reddit.com/u/${post.author}`,
                     image,
                     video,
                     color: platformColors.reddit,
                     platform: 'reddit',
-                    stats, // Consistent stats via oEmbed like other platforms
                 },
             };
         } catch (error) {

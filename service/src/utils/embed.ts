@@ -44,6 +44,10 @@ function buildActivityData(embed: EmbedData): string {
     return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+function shouldExposeActivityPub(embed: EmbedData): boolean {
+    return embed.platform === 'twitter' || embed.platform === 'bluesky' || embed.platform === 'threads';
+}
+
 /**
  * Generate Open Graph meta tags for Discord/Telegram embeds
  */
@@ -133,7 +137,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.description) oembedUrl.searchParams.set('desc', metaDescription);
 
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
-    html += `  <link rel="alternate" type="application/activity+json" href="${escape(activityUrl)}">\n`;
+    if (shouldExposeActivityPub(embed)) {
+        html += `  <link rel="alternate" type="application/activity+json" href="${escape(activityUrl)}">\n`;
+    }
 
     if (isDiscord || isTelegram) {
         html += `  <meta name="referrer" content="no-referrer">\n`;
