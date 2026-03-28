@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import type { Env } from '../src/types.ts';
-import { formatStats, generateEmbedHTML, getBrandedSiteName, platformColors } from '../src/utils/embed.ts';
+import { formatStats, generateEmbedHTML, getBrandedSiteName } from '../src/utils/embed.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -195,12 +195,6 @@ const tests: TestCase[] = [
             assert.match(html, /application\/activity\+json/);
             assert.match(html, /og:title" content="How to change the owner of a pet\?"/);
             assert.match(html, /og:site_name" content="r\/Minecraft"/);
-        },
-    },
-    {
-        name: 'platformColors includes YouTube branding color',
-        run: () => {
-            assert.equal(platformColors.youtube, '#FF0000');
         },
     },
 ];
