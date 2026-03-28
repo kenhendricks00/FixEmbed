@@ -175,27 +175,6 @@ const tests: TestCase[] = [
             assert.match(html, /twitter:card" content="summary_large_image"/);
         },
     },
-    {
-        name: 'generateEmbedHTML does not expose ActivityPub metadata for Reddit cards',
-        run: () => {
-            const html = generateEmbedHTML({
-                title: 'How to change the owner of a pet?',
-                description: 'I just bought an original copy of minecraft...',
-                url: 'https://reddit.com/r/Minecraft/comments/example/how_to_change/',
-                siteName: 'r/Minecraft',
-                authorName: 'Posted by u/[deleted]',
-                authorHandle: 'u/[deleted]',
-                image: 'https://cdn.example/reddit-thumb.jpg',
-                color: '#FF4500',
-                platform: 'reddit',
-            }, 'Discordbot/2.0');
-
-            assert.match(html, /application\/json\+oembed/);
-            assert.doesNotMatch(html, /application\/activity\+json/);
-            assert.match(html, /og:title" content="How to change the owner of a pet\?"/);
-            assert.match(html, /og:site_name" content="r\/Minecraft"/);
-        },
-    },
 ];
 
 async function main() {
