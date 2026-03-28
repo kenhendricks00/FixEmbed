@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import type { Env } from '../src/types.ts';
+import { assessProbeResult } from '../src/utils/status.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -124,6 +125,33 @@ const tests: TestCase[] = [
             assert.equal(response.success, false);
             assert.equal(response.error, 'Invalid Twitter URL');
             assert.equal(response.redirect, undefined);
+        },
+    },
+    {
+        name: 'status probes treat redirects as operational instead of outages',
+        run: () => {
+            const assessment = assessProbeResult({
+                success: false,
+                redirect: 'https://fxtwitter.com/openai/status/1234567890',
+                error: 'Redirecting to FxTwitter',
+            }, 120);
+
+            assert.equal(assessment.status, 'operational');
+            assert.equal(assessment.notice, null);
+            assert.equal(assessment.responseCode, 302);
+        },
+    },
+    {
+        name: 'status probes downgrade stale sample content errors to degraded',
+        run: () => {
+            const assessment = assessProbeResult({
+                success: false,
+                error: 'HTTP 404: Not Found',
+            }, 180);
+
+            assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.notice, 'HTTP 404: Not Found');
+            assert.equal(assessment.responseCode, 424);
         },
     },
 ];
