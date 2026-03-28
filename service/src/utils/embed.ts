@@ -9,136 +9,108 @@ import type { EmbedData } from '../types.ts';
  */
 export const FIXEMBED_LOGO = 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png';
 
-function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function truncateMeta(value: string, maxLength: number): string {
-    if (value.length <= maxLength) {
-        return value;
-    }
-
-    return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function buildActivityData(embed: EmbedData): string {
-    const payload = {
-        t: truncateMeta(embed.title, 300),
-        d: truncateMeta(embed.description, 1000),
-        i: embed.images?.[0] || embed.image,
-        v: embed.video?.url,
-        p: embed.siteName,
-        a: embed.authorName,
-        h: embed.authorHandle,
-        ic: embed.authorAvatar || FIXEMBED_LOGO,
-        s: embed.stats,
-        u: embed.url,
-    };
-
-    const json = JSON.stringify(payload);
-    const encoded = btoa(unescape(encodeURIComponent(json)));
-    return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
 /**
  * Generate Open Graph meta tags for Discord/Telegram embeds
  */
 export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
-    const escape = escapeHtml;
-    const metaTitle = truncateMeta(embed.title || embed.authorName || 'FixEmbed', 300);
-    const metaDescription = truncateMeta(
-        embed.description || embed.title || embed.authorName || embed.siteName,
-        1000,
-    );
-    const activityUrl = `https://fixembed.app/activity/${buildActivityData(embed)}`;
+
+    // Escape HTML entities
+    const escape = (str: string) =>
+        str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
 
     let html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="${escape(metaDescription)}">
-  <meta property="og:title" content="${escape(metaTitle)}">
-  <meta property="og:description" content="${escape(metaDescription)}">
+  <meta property="og:title" content="${escape(embed.title)}">
+  <meta property="og:description" content="${escape(embed.description)}">
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
   <meta property="og:type" content="${embed.video ? 'video.other' : 'website'}">
 `;
 
+    // Color theme
     if (embed.color) {
         html += `  <meta name="theme-color" content="${embed.color}">\n`;
     }
 
+    // Author info
     if (embed.authorName) {
         html += `  <meta property="og:article:author" content="${escape(embed.authorName)}">\n`;
     }
 
+    // Image embed - support single image or carousel
     if (embed.images && embed.images.length > 0) {
+        // Multiple images (carousel) - output all og:image tags
         for (const imgUrl of embed.images) {
             html += `  <meta property="og:image" content="${escape(imgUrl)}">\n`;
         }
-        html += `  <meta property="og:image:alt" content="${escape(metaTitle)}">\n`;
+        // Only set card to summary_large_image if NOT a video
         if (!embed.video) {
             html += `  <meta name="twitter:card" content="summary_large_image">\n`;
         }
         html += `  <meta name="twitter:image" content="${escape(embed.images[0])}">\n`;
-        html += `  <meta name="twitter:image:alt" content="${escape(metaTitle)}">\n`;
     } else if (embed.image) {
         html += `  <meta property="og:image" content="${escape(embed.image)}">\n`;
-        html += `  <meta property="og:image:alt" content="${escape(metaTitle)}">\n`;
+        // Only set card to summary_large_image if NOT a video
         if (!embed.video) {
             html += `  <meta name="twitter:card" content="summary_large_image">\n`;
         }
         html += `  <meta name="twitter:image" content="${escape(embed.image)}">\n`;
-        html += `  <meta name="twitter:image:alt" content="${escape(metaTitle)}">\n`;
     }
 
+    // Video embed
     if (embed.video) {
         html += `  <meta property="og:video" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:secure_url" content="${escape(embed.video.url)}">\n`;
         html += `  <meta property="og:video:type" content="video/mp4">\n`;
-        html += `  <meta property="og:video:width" content="${embed.video.width}">\n`;
-        html += `  <meta property="og:video:height" content="${embed.video.height}">\n`;
 
         if (embed.video.thumbnail) {
             html += `  <meta property="og:image" content="${escape(embed.video.thumbnail)}">\n`;
-            html += `  <meta property="og:image:alt" content="${escape(metaTitle)}">\n`;
-            html += `  <meta name="twitter:image" content="${escape(embed.video.thumbnail)}">\n`;
-            html += `  <meta name="twitter:image:alt" content="${escape(metaTitle)}">\n`;
         }
 
+        // Use summary_large_image to assume "Rich Embed" layout (text + media)
+        // Discord should still pick up og:video for playback
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
+
+        // Ensure twitter:image is set for the card validation
+        if (embed.video.thumbnail) {
+            html += `  <meta name="twitter:image" content="${escape(embed.video.thumbnail)}">\n`;
+        }
     } else {
         html += `  <meta name="twitter:card" content="summary_large_image">\n`;
     }
 
-    html += `  <meta name="twitter:title" content="${escape(metaTitle)}">\n`;
-    html += `  <meta name="twitter:description" content="${escape(metaDescription)}">\n`;
+    // Twitter-specific tags
+    html += `  <meta name="twitter:title" content="${escape(embed.title)}">\n`;
+    html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
+
+    // FixEmbed branding - multiple approaches for Discord enhanced embeds
+    // 1. Single high-quality icon for branding
     html += `  <link href="${FIXEMBED_LOGO}" rel="icon" type="image/png">\n`;
+
+    // 2. Apple touch icon for mobile
     html += `  <link rel="apple-touch-icon" href="${FIXEMBED_LOGO}">\n`;
 
+    // 3. oEmbed link for Discord to fetch provider and engagement info
+    // Note: Previously excluded Instagram to force large images, but testing if it still works with oEmbed
     const oembedUrl = new URL('https://fixembed.app/oembed');
     oembedUrl.searchParams.set('url', embed.url);
     if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
     if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
     if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
-    if (embed.title) oembedUrl.searchParams.set('title', metaTitle);
-    if (embed.description) oembedUrl.searchParams.set('desc', metaDescription);
-
+    if (embed.title) oembedUrl.searchParams.set('title', embed.title);
+    if (embed.description) oembedUrl.searchParams.set('desc', embed.description.slice(0, 1000)); // Limit length for URL
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
-    html += `  <link rel="alternate" type="application/activity+json" href="${escape(activityUrl)}">\n`;
 
-    if (isDiscord || isTelegram) {
-        html += `  <meta name="referrer" content="no-referrer">\n`;
-    }
 
+    // Close head and add redirect body
     html += `</head>
 <body>
   <p>Redirecting to <a href="${escape(embed.url)}">${escape(embed.url)}</a></p>
@@ -186,26 +158,26 @@ export const platformColors: Record<string, string> = {
  * Platform display names for branding
  */
 export const platformNames: Record<string, string> = {
-    twitter: 'Twitter',
-    instagram: 'Instagram',
-    reddit: 'Reddit',
-    threads: 'Threads',
-    pixiv: 'Pixiv',
-    bluesky: 'Bluesky',
-    bilibili: 'Bilibili',
-    youtube: 'YouTube',
+    twitter: '𝕏 Twitter',
+    instagram: '📷 Instagram',
+    reddit: '🔗 Reddit',
+    threads: '🧵 Threads',
+    pixiv: '🎨 Pixiv',
+    bluesky: '🦋 Bluesky',
+    bilibili: '📺 Bilibili',
+    youtube: '▶️ YouTube',
 };
 
 /**
  * Generate branded site name for consistent FixEmbed branding
- * Format: "FixEmbed - Platform" or "FixEmbed - Platform - Duration"
+ * Format: "FixEmbed • Platform" or "FixEmbed • Platform • Duration"
  */
 export function getBrandedSiteName(platform: string, extra?: string): string {
     const platformDisplay = platformNames[platform] || platform;
     if (extra) {
-        return `FixEmbed - ${platformDisplay} - ${extra}`;
+        return `FixEmbed • ${platformDisplay} • ${extra}`;
     }
-    return `FixEmbed - ${platformDisplay}`;
+    return `FixEmbed • ${platformDisplay}`;
 }
 
 /**
@@ -221,7 +193,7 @@ export function formatNumber(num: number): string {
 }
 
 /**
- * Format stats line for compact, clean metadata rows
+ * Format stats line with emojis for consistent display
  */
 export function formatStats(stats: {
     likes?: number;
@@ -232,20 +204,21 @@ export function formatStats(stats: {
 }): string {
     const parts: string[] = [];
 
+    // Only show stats that are defined AND greater than 0
     if (stats.comments !== undefined && stats.comments > 0) {
-        parts.push(`Replies ${formatNumber(stats.comments)}`);
+        parts.push(`💬 ${formatNumber(stats.comments)}`);
     }
     if (stats.retweets !== undefined && stats.retweets > 0) {
-        parts.push(`Reposts ${formatNumber(stats.retweets)}`);
+        parts.push(`🔁 ${formatNumber(stats.retweets)}`);
     }
     if (stats.likes !== undefined && stats.likes > 0) {
-        parts.push(`Likes ${formatNumber(stats.likes)}`);
+        parts.push(`❤️ ${formatNumber(stats.likes)}`);
     }
     if (stats.views !== undefined && stats.views > 0) {
-        parts.push(`Views ${formatNumber(stats.views)}`);
+        parts.push(`👁 ${formatNumber(stats.views)}`);
     }
     if (stats.shares !== undefined && stats.shares > 0) {
-        parts.push(`Shares ${formatNumber(stats.shares)}`);
+        parts.push(`↗️ ${formatNumber(stats.shares)}`);
     }
 
     return parts.join(' ');

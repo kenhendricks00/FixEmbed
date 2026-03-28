@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import type { Env } from '../src/types.ts';
-import { formatStats, generateEmbedHTML, getBrandedSiteName } from '../src/utils/embed.ts';
+import { assessProbeResult } from '../src/utils/status.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -128,51 +128,30 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'generateEmbedHTML includes oEmbed and ActivityPub metadata for rich cards',
+        name: 'status probes treat redirects as operational instead of outages',
         run: () => {
-            const html = generateEmbedHTML({
-                title: 'Netflix Anime (@NetflixAnime)',
-                description: 'A heartwarming yet humorous story awaits.',
-                url: 'https://x.com/NetflixAnime/status/1',
-                siteName: getBrandedSiteName('twitter'),
-                authorName: '@NetflixAnime',
-                authorHandle: '@NetflixAnime',
-                authorAvatar: 'https://cdn.example/avatar.jpg',
-                image: 'https://cdn.example/post.jpg',
-                color: '#111111',
-                platform: 'twitter',
-                stats: formatStats({ comments: 61, retweets: 539, likes: 2500, views: 59500 }),
-            }, 'Discordbot/2.0');
+            const assessment = assessProbeResult({
+                success: false,
+                redirect: 'https://fxtwitter.com/openai/status/1234567890',
+                error: 'Redirecting to FxTwitter',
+            }, 120);
 
-            assert.match(html, /application\/json\+oembed/);
-            assert.match(html, /application\/activity\+json/);
-            assert.match(html, /og:image:alt/);
-            assert.match(html, /twitter:image:alt/);
-            assert.match(html, /Netflix Anime \(@NetflixAnime\)/);
+            assert.equal(assessment.status, 'operational');
+            assert.equal(assessment.notice, null);
+            assert.equal(assessment.responseCode, 302);
         },
     },
     {
-        name: 'generateEmbedHTML includes video dimensions for video embeds',
+        name: 'status probes downgrade stale sample content errors to degraded',
         run: () => {
-            const html = generateEmbedHTML({
-                title: '@creator',
-                description: 'Clip preview',
-                url: 'https://www.instagram.com/reel/abc123/',
-                siteName: getBrandedSiteName('instagram'),
-                image: 'https://cdn.example/thumb.jpg',
-                video: {
-                    url: 'https://cdn.example/video.mp4',
-                    width: 720,
-                    height: 1280,
-                    thumbnail: 'https://cdn.example/thumb.jpg',
-                },
-                color: '#E4405F',
-                platform: 'instagram',
-            }, 'Discordbot/2.0');
+            const assessment = assessProbeResult({
+                success: false,
+                error: 'HTTP 404: Not Found',
+            }, 180);
 
-            assert.match(html, /og:video:width" content="720"/);
-            assert.match(html, /og:video:height" content="1280"/);
-            assert.match(html, /twitter:card" content="summary_large_image"/);
+            assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.notice, 'HTTP 404: Not Found');
+            assert.equal(assessment.responseCode, 424);
         },
     },
 ];
