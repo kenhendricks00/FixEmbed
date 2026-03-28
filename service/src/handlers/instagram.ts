@@ -10,9 +10,9 @@
  * - Snapsave decryption based on: https://github.com/ahmedrangel/snapsave-media-downloader
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseInstagramUrl, truncateText } from '../utils/fetch';
-import { platformColors, getBrandedSiteName } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { parseInstagramUrl, truncateText } from '../utils/fetch.ts';
+import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata

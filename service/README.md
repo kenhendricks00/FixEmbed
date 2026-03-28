@@ -10,6 +10,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 | Instagram | 📷 | ✅ | VxInstagram + Snapsave |
 | Threads | 🧵 | ✅ | GraphQL API |
 | Bluesky | 🦋 | ✅ | AT Protocol |
+| Mastodon | 🐘 | ✅ | Public REST API |
 | Reddit | 🔗 | ✅ | JSON API |
 | Pixiv | 🎨 | ✅ | Phixiv HTML scraping |
 | Bilibili | 📺 | ✅ | VxBilibili HTML scraping |
@@ -93,6 +94,7 @@ service/
 │   │   ├── instagram.ts      # VxInstagram + Snapsave fallback
 │   │   ├── threads.ts        # Meta Threads GraphQL API
 │   │   ├── bluesky.ts        # AT Protocol
+│   │   ├── mastodon.ts       # Public Mastodon REST API
 │   │   ├── reddit.ts         # Reddit JSON API
 │   │   ├── pixiv.ts          # Phixiv HTML scraping
 │   │   └── bilibili.ts       # VxBilibili HTML scraping

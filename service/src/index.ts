@@ -10,10 +10,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import type { Env } from './types';
-import { findHandler } from './handlers';
-import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed';
-import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site';
+import type { Env } from './types.ts';
+import { findHandler } from './handlers/index.ts';
+import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
+import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -43,6 +43,7 @@ const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Reddit', sampleUrl: 'https://www.reddit.com/r/programming/comments/15e0xv9/example/' },
     { platform: 'Threads', sampleUrl: 'https://www.threads.net/@zuck/post/Cu8M4wXLZQx' },
     { platform: 'Bluesky', sampleUrl: 'https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t' },
+    { platform: 'Mastodon', sampleUrl: 'https://mastodon.social/@Gargron/114063518292837173' },
     { platform: 'Pixiv', sampleUrl: 'https://www.pixiv.net/en/artworks/101844438' },
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1xx411c7mD' },
 ];

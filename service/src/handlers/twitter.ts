@@ -3,8 +3,8 @@
  * Uses FxTwitter (fxtwitter.com) for embeds temporarily
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseTwitterUrl } from '../utils/fetch';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { parseTwitterUrl } from '../utils/fetch.ts';
 
 export const twitterHandler: PlatformHandler = {
     name: 'twitter',
@@ -27,4 +27,3 @@ export const twitterHandler: PlatformHandler = {
         };
     },
 };
-

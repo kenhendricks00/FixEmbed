@@ -20,6 +20,7 @@ export type Platform =
     | 'threads'
     | 'pixiv'
     | 'bluesky'
+    | 'mastodon'
     | 'youtube'
     | 'bilibili';
 
