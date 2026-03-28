@@ -16,7 +16,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 
 # Version number
-VERSION = "1.2.5"
+VERSION = "1.2.7"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
