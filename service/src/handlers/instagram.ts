@@ -377,11 +377,14 @@ export const instagramHandler: PlatformHandler = {
                 return {
                     success: true,
                     data: {
-                        title: authorName || 'Post',
+                        title: authorName || (parsed.type === 'reel' ? 'Instagram Reel' : 'Instagram Post'),
                         description: desc ? truncateText(desc, 280) : '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
-                        // authorName: authorName, // OLD: Don't set author field to avoid duplication
+                        authorName,
+                        authorHandle: authorName?.match(/\(@([^\)]+)\)/)?.[1]
+                            ? `@${authorName.match(/\(@([^\)]+)\)/)![1]}`
+                            : (authorName?.startsWith('@') ? authorName : undefined),
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
@@ -431,7 +434,7 @@ export const instagramHandler: PlatformHandler = {
             const result: HandlerResponse = {
                 success: true,
                 data: {
-                    title: parsed.type === 'reel' ? 'Reel' : 'Post',
+                    title: parsed.type === 'reel' ? 'Instagram Reel' : 'Instagram Post',
                     description: description
                         ? truncateText(description, 280)
                         : '',
@@ -505,8 +508,12 @@ export const instagramHandler: PlatformHandler = {
                     }
 
                     if (authorName) {
-                        // result.data!.authorName = authorName; // Don't set author field to avoid duplication
-                        result.data!.title = authorName; // User requested: Author Name as Title
+                        result.data!.authorName = authorName;
+                        const handleMatch = authorName.match(/\(@([^\)]+)\)/);
+                        result.data!.authorHandle = handleMatch
+                            ? `@${handleMatch[1]}`
+                            : (authorName.startsWith('@') ? authorName : undefined);
+                        result.data!.title = authorName;
                     }
 
                     // Update description if we have a better one
@@ -520,9 +527,8 @@ export const instagramHandler: PlatformHandler = {
             }
 
             // Fallback: If we still have generic title but have authorName (e.g. from existing logic), set it
-            if ((result.data!.title === 'Post' || result.data!.title === 'Reel') && result.data!.authorName) {
+            if ((result.data!.title === 'Instagram Post' || result.data!.title === 'Instagram Reel') && result.data!.authorName) {
                 result.data!.title = result.data!.authorName;
-                result.data!.authorName = undefined; // Clear author field to avoid duplication
             }
             // Clean description: Remove author name if it appears at the start
             // This happens often (e.g. "username Caption text")

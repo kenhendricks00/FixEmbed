@@ -186,6 +186,7 @@ export const platformColors: Record<string, string> = {
     threads: '#000000',
     pixiv: '#0096FA',
     bluesky: '#1185FE',
+    youtube: '#FF0000',
     bilibili: '#00A1D6',
 };
 
