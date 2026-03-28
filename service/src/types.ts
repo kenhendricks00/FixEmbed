@@ -47,6 +47,7 @@ export interface EmbedData {
     timestamp?: string;
     platform: Platform;
     stats?: string;
+    footerOnlyActivity?: boolean;
 }
 
 export interface VideoEmbed {

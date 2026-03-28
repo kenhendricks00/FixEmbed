@@ -37,6 +37,7 @@ function buildActivityData(embed: EmbedData): string {
         ic: embed.authorAvatar || FIXEMBED_LOGO,
         s: embed.stats,
         u: embed.url,
+        fo: embed.footerOnlyActivity ? 1 : 0,
     };
 
     const json = JSON.stringify(payload);
@@ -45,7 +46,7 @@ function buildActivityData(embed: EmbedData): string {
 }
 
 function shouldExposeActivityPub(embed: EmbedData): boolean {
-    return embed.platform === 'twitter' || embed.platform === 'bluesky' || embed.platform === 'threads';
+    return embed.footerOnlyActivity || embed.platform === 'twitter' || embed.platform === 'bluesky' || embed.platform === 'threads';
 }
 
 /**
