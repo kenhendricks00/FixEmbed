@@ -4,9 +4,22 @@
 - **`Mastodon Support`**
   - Added Mastodon link conversion support across the Discord bot and embed service.
   - Supports common Mastodon post URL formats including `/@user/status`, `/users/{user}/statuses/{id}`, and `/web/statuses/{id}`.
-  - Added custom Mastodon emoji support for service selectors and status displays.
+- **`New Status Page`**
+  - Added a public status dashboard for the embed service with per-platform uptime, latency, and incident notices.
+- **`Power User Commands`**
+  - Added `/delivery`, `/quality`, `/rule`, and `/status` commands for faster advanced configuration and diagnostics.
 
 #### **Enhancements**
+- **`Icons for All Services`**
+  - Added or completed branded icons for every supported service, including the custom Mastodon emoji.
+- **`Default Conversion Behavior`**
+  - Set the default delivery behavior to suppress the original embed instead of deleting the original message.
+- **`Language Selection UX`**
+  - Added country flags to the language selector to make multilingual settings easier to scan.
+- **`Threads.com Support`**
+  - Added support for `threads.com` links alongside the existing `threads.net` URLs.
+- **`Opt-Out Link Handling`**
+  - Respect links wrapped in angle brackets (`< >`) so users can intentionally prevent automatic conversion.
 - **`Embed Service Test Coverage`**
   - Added a lightweight TypeScript test harness for service URL parsing and handler routing.
   - Added coverage for Mastodon parsing plus existing supported platform routing and Twitter redirect behavior.
