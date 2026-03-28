@@ -11,8 +11,8 @@
  * - Falls back to basic embed if phixiv is unavailable
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { platformColors, getBrandedSiteName } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 // Scrape phixiv.net HTML for OG tags
 async function scrapePhixivHtml(illustId: string): Promise<{

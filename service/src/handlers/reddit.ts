@@ -2,9 +2,9 @@
  * FixEmbed Service - Reddit Handler
  */
 
-import { Env, HandlerResponse, PlatformHandler } from '../types';
-import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch';
-import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed';
+import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch.ts';
+import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
 interface RedditPost {
     title: string;

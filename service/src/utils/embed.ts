@@ -2,7 +2,7 @@
  * FixEmbed Service - Embed HTML Generator
  */
 
-import { EmbedData } from '../types';
+import type { EmbedData } from '../types.ts';
 
 /**
  * FixEmbed logo URL for branding in embeds
@@ -151,6 +151,7 @@ export const platformColors: Record<string, string> = {
     threads: '#000000',
     pixiv: '#0096FA',
     bluesky: '#1185FE',
+    mastodon: '#6364FF',
     bilibili: '#00A1D6',
 };
 
@@ -164,6 +165,7 @@ export const platformNames: Record<string, string> = {
     threads: '🧵 Threads',
     pixiv: '🎨 Pixiv',
     bluesky: '🦋 Bluesky',
+    mastodon: '🐘 Mastodon',
     bilibili: '📺 Bilibili',
     youtube: '▶️ YouTube',
 };

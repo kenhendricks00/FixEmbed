@@ -159,6 +159,36 @@ export function parseBlueskyUrl(url: string): { handle: string; postId: string }
 }
 
 /**
+ * Parse Mastodon status URL
+ */
+export function parseMastodonUrl(url: string): { host: string; username?: string; statusId: string } | null {
+    try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        const path = parsed.pathname.replace(/\/+$/, '');
+
+        const userMatch = path.match(/^\/@([^\/]+)\/(\d+)$/i);
+        if (userMatch) {
+            return { host, username: userMatch[1], statusId: userMatch[2] };
+        }
+
+        const apiStyleMatch = path.match(/^\/users\/([^\/]+)\/statuses\/(\d+)$/i);
+        if (apiStyleMatch) {
+            return { host, username: apiStyleMatch[1], statusId: apiStyleMatch[2] };
+        }
+
+        const webStyleMatch = path.match(/^\/web\/statuses\/(\d+)$/i);
+        if (webStyleMatch) {
+            return { host, statusId: webStyleMatch[1] };
+        }
+    } catch {
+        return null;
+    }
+
+    return null;
+}
+
+/**
  * Truncate text to a maximum length
  */
 export function truncateText(text: string, maxLength: number = 280): string {
@@ -176,4 +206,20 @@ export function decodeHtmlEntities(text: string): string {
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'");
+}
+
+/**
+ * Strip HTML tags and normalize whitespace for plain-text embeds
+ */
+export function stripHtml(text: string): string {
+    return decodeHtmlEntities(
+        text
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+\n/g, '\n')
+            .replace(/\n\s+/g, '\n')
+            .replace(/[ \t]{2,}/g, ' ')
+            .trim(),
+    );
 }
