@@ -114,7 +114,6 @@ export const redditHandler: PlatformHandler = {
                     video,
                     color: platformColors.reddit,
                     platform: 'reddit',
-                    footerOnlyActivity: true,
                 },
             };
         } catch (error) {

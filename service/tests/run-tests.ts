@@ -176,7 +176,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'generateEmbedHTML exposes footer-only ActivityPub metadata for Reddit cards',
+        name: 'generateEmbedHTML does not expose ActivityPub metadata for Reddit cards',
         run: () => {
             const html = generateEmbedHTML({
                 title: 'How to change the owner of a pet?',
@@ -188,11 +188,10 @@ const tests: TestCase[] = [
                 image: 'https://cdn.example/reddit-thumb.jpg',
                 color: '#FF4500',
                 platform: 'reddit',
-                footerOnlyActivity: true,
             }, 'Discordbot/2.0');
 
             assert.match(html, /application\/json\+oembed/);
-            assert.match(html, /application\/activity\+json/);
+            assert.doesNotMatch(html, /application\/activity\+json/);
             assert.match(html, /og:title" content="How to change the owner of a pet\?"/);
             assert.match(html, /og:site_name" content="r\/Minecraft"/);
         },
