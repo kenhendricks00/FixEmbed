@@ -23,7 +23,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 </p>
 
 **Commands:**
-- `/fix [link]` - Manually convert a link to an embed-friendly version
+- `/fix [link]` - Convert one or more links into polished FixEmbed links (works in DMs and user-installed contexts)
 - `/help` - View all commands and supported services
 - `/settings` - Configure bot settings for your server
 - `/premium` - View and manage your Premium subscription
@@ -35,6 +35,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
+- **First-Party X/Twitter Embeds**: FixEmbed normally renders X posts through its own Cloudflare service, with an emergency fallback if the upstream source is unavailable.
 
 # 📋 Key Features
 1. **Multi-Platform Support**:

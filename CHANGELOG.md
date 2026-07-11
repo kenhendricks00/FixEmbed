@@ -1,3 +1,30 @@
+## v1.3.0 (07/11/2026)
+
+#### **New Features**
+- **`First-Party X/Twitter Embeds`**
+  - FixEmbed now fetches and renders X/Twitter post text, authors, media, and engagement data through its own Cloudflare Worker.
+  - FxTwitter remains available only as an emergency fallback when first-party rendering cannot complete.
+- **`Multi-Link /fix`**
+  - `/fix` now converts every supported link in one invocation while preserving the original order.
+  - Already-fixed FixEmbed, FxTwitter, and Bluesky proxy links normalize back to canonical source URLs.
+
+#### **Enhancements**
+- **`One Canonical Link Engine`**
+  - Slash commands, the message context command, and automatic conversion now share the same host-safe parser, labels, suppression rules, and FixEmbed URL builder.
+  - Multi-link automatic conversion sends and deletes or suppresses once per message instead of repeating those actions for each link.
+- **`Honest Reliability Dashboard`**
+  - Replaced synthetic uptime percentages with live first-party/fallback state, current latency, check time, and incident notices.
+  - Escaped live status content before rendering it in the dashboard.
+- **`Release Metadata Guard`**
+  - Added an automated release check so the bot version, manifests, service package, and changelog cannot silently drift apart.
+
+#### **Fixes**
+- Fixed Instagram `/reels/` links across the bot and embed service.
+- Fixed Bluesky handles ending in `x.com` being misclassified as Twitter.
+- Added support for already-fixed `bskyx.app` links.
+- Preserved the full text of Bluesky posts in embeds.
+- Enabled Discord automatic sharding so large-scale gateway startup succeeds reliably.
+
 ## v1.2.7 (03/28/2026)
 
 #### **New Features**

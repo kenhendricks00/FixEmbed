@@ -17,7 +17,7 @@ from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_fixembed_url, extract_supported_links
 
 # Version number
-VERSION = "1.2.7"
+VERSION = "1.3.0"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
