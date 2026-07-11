@@ -132,7 +132,7 @@ logging.basicConfig(level=logging.INFO)
 # Bot configuration
 intents = discord.Intents.default()
 intents.message_content = True
-client = commands.Bot(command_prefix='/', intents=intents, shard_count=10)
+client = commands.AutoShardedBot(command_prefix='/', intents=intents, shard_count=10)
 
 # In-memory storage for channel states and settings
 channel_states = {}
