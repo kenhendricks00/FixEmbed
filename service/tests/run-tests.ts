@@ -11,6 +11,7 @@ import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { statusHtml } from '../src/utils/static_site.ts';
+import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
@@ -33,6 +34,22 @@ const env: Env = {
     ENABLE_CACHE: 'false',
     CACHE_TTL: '3600',
 };
+
+async function topGgSignature(body: string, secret: string, timestamp: number): Promise<string> {
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+    );
+    const signature = await crypto.subtle.sign(
+        'HMAC',
+        key,
+        new TextEncoder().encode(`${timestamp}.${body}`),
+    );
+    return `t=${timestamp},v1=${[...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+}
 
 const tests: TestCase[] = [
     {
@@ -430,6 +447,106 @@ const tests: TestCase[] = [
             assert.equal(assessment.status, 'degraded');
             assert.equal(assessment.mode, 'fallback');
             assert.match(assessment.notice || '', /emergency fallback/i);
+        },
+    },
+    {
+        name: 'Top.gg webhook rejects an invalid signature without calling Discord',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let discordCalled = false;
+            globalThis.fetch = async () => {
+                discordCalled = true;
+                return new Response(null, { status: 204 });
+            };
+            try {
+                const response = await handleTopGgWebhook(new Request('https://fixembed.app/webhooks/topgg', {
+                    method: 'POST',
+                    headers: { 'x-topgg-signature': 't=1,v1=bad' },
+                    body: '{}',
+                }), {
+                    ...env,
+                    TOPGG_WEBHOOK_SECRET: 'whs_test',
+                    DISCORD_BOT_TOKEN: 'discord-test-token',
+                    FIXEMBED_GUILD_ID: '1195810157112852540',
+                    FIXEMBED_VOTER_ROLE_ID: '123456789012345678',
+                    TOPGG_BOT_ID: '1173820242305224764',
+                });
+                assert.equal(response.status, 401);
+                assert.equal(discordCalled, false);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'Top.gg vote webhook grants the configured Discord voter role',
+        run: async () => {
+            const payload = JSON.stringify({
+                type: 'vote.create',
+                data: {
+                    id: '123456789012345678',
+                    project: { type: 'bot', platform: 'discord', platform_id: '1173820242305224764' },
+                    user: { platform_id: '222222222222222222', name: 'Voter' },
+                },
+            });
+            const timestamp = Math.floor(Date.now() / 1000);
+            const signature = await topGgSignature(payload, 'whs_test', timestamp);
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input, init) => {
+                assert.equal(String(input), 'https://discord.com/api/v10/guilds/1195810157112852540/members/222222222222222222/roles/123456789012345678');
+                assert.equal(init?.method, 'PUT');
+                assert.equal(new Headers(init?.headers).get('Authorization'), 'Bot discord-test-token');
+                return new Response(null, { status: 204 });
+            };
+            try {
+                const response = await handleTopGgWebhook(new Request('https://fixembed.app/webhooks/topgg', {
+                    method: 'POST',
+                    headers: { 'x-topgg-signature': signature },
+                    body: payload,
+                }), {
+                    ...env,
+                    TOPGG_WEBHOOK_SECRET: 'whs_test',
+                    DISCORD_BOT_TOKEN: 'discord-test-token',
+                    FIXEMBED_GUILD_ID: '1195810157112852540',
+                    FIXEMBED_VOTER_ROLE_ID: '123456789012345678',
+                    TOPGG_BOT_ID: '1173820242305224764',
+                });
+                assert.equal(response.status, 204);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'Top.gg test webhook validates without granting a Discord role',
+        run: async () => {
+            const payload = JSON.stringify({
+                type: 'webhook.test',
+                data: {
+                    project: { type: 'bot', platform: 'discord', platform_id: '1173820242305224764' },
+                    user: { platform_id: '222222222222222222', name: 'Tester' },
+                },
+            });
+            const timestamp = Math.floor(Date.now() / 1000);
+            const signature = await topGgSignature(payload, 'whs_test', timestamp);
+            const originalFetch = globalThis.fetch;
+            let discordCalled = false;
+            globalThis.fetch = async () => {
+                discordCalled = true;
+                return new Response(null, { status: 204 });
+            };
+            try {
+                const response = await handleTopGgWebhook(new Request('https://fixembed.app/webhooks/topgg', {
+                    method: 'POST',
+                    headers: { 'x-topgg-signature': signature },
+                    body: payload,
+                }), {
+                    ...env,
+                    TOPGG_WEBHOOK_SECRET: 'whs_test',
+                    DISCORD_BOT_TOKEN: 'discord-test-token',
+                    FIXEMBED_GUILD_ID: '1195810157112852540',
+                    FIXEMBED_VOTER_ROLE_ID: '123456789012345678',
+                    TOPGG_BOT_ID: '1173820242305224764',
+                });
+                assert.equal(response.status, 204);
+                assert.equal(discordCalled, false);
+            } finally { globalThis.fetch = originalFetch; }
         },
     },
     {

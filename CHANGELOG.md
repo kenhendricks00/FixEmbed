@@ -1,3 +1,18 @@
+## v1.4.5 (07/11/2026)
+
+#### **🚀 New Features**
+- **`Top.gg Voter Role Rewards`**
+  - Added a first-party Top.gg vote webhook that automatically grants the existing `Voter` role in the FixEmbed Support Server.
+  - Real `vote.create` events grant the role idempotently; Top.gg test events validate the endpoint without granting rewards.
+
+#### **🔧 Backend Changes**
+- **`Secure Webhook Verification`**
+  - Added raw-body HMAC SHA-256 signature verification, timestamp replay protection, payload limits, and strict FixEmbed project validation.
+  - Added an authenticated Discord REST role assignment with safe handling for voters who have not joined the support server.
+
+#### **🧪 Testing**
+- Added regression coverage for rejected signatures, valid vote rewards, and non-rewarding test events.
+
 ## v1.4.4 (07/11/2026)
 
 #### **🔧 Enhancements**

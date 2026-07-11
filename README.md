@@ -88,6 +88,8 @@ If you need support or have any questions, you can join the [support server](htt
 <br>
 **Note:** If it's a technical issue, be sure to have debug info ready by using <code>/settings</code>, then click Debug.
 
+Members of the support server automatically receive the **Voter** role after voting for FixEmbed on Top.gg.
+
 # 🎉 Quick Links
 - [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
 - [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)

@@ -10,6 +10,11 @@ export interface Env {
     ENABLE_CACHE: string;
     CACHE_TTL: string;
     EMBED_CACHE?: KVNamespace;
+    TOPGG_WEBHOOK_SECRET?: string;
+    DISCORD_BOT_TOKEN?: string;
+    FIXEMBED_GUILD_ID?: string;
+    FIXEMBED_VOTER_ROLE_ID?: string;
+    TOPGG_BOT_ID?: string;
 }
 
 // Supported platforms

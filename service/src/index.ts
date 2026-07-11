@@ -15,6 +15,7 @@ import { findHandler } from './handlers/index.ts';
 import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
+import { handleTopGgWebhook } from './webhooks/topgg.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -91,6 +92,8 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
 // Middleware
 app.use('*', cors());
 app.use('*', logger());
+
+app.post('/webhooks/topgg', (c) => handleTopGgWebhook(c.req.raw, c.env));
 
 // Health check
 // Serve static landing page
