@@ -26,6 +26,17 @@ function comparableIdentity(value?: string): string {
 export function normalizeEmbedLayout(embed: EmbedData): EmbedData {
     const title = embed.title.trim();
     const description = embed.description.trim();
+
+    // X reads best in its familiar tweet-card form: handle as the linked title
+    // and the full tweet as body copy. Keep this intentional platform exception.
+    if (embed.platform === 'twitter') {
+        return {
+            ...embed,
+            title,
+            description: description === title ? '' : description,
+        };
+    }
+
     const titleIdentity = comparableIdentity(title);
     const repeatsCreator = Boolean(titleIdentity) && [
         comparableIdentity(embed.authorName),

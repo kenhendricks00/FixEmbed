@@ -1,3 +1,13 @@
+## v1.4.3 (07/11/2026)
+
+#### **🔧 Enhancements**
+- **`Classic X Card Layout`**
+  - Restored the familiar X presentation with engagement stats, the linked `@handle`, tweet text, and media in that order.
+  - Kept the standardized duplicate-content cleanup for Instagram and other platforms while treating X as an intentional layout exception.
+
+#### **🧪 Testing**
+- Added regression coverage to preserve X handles as titles and tweet text as body copy.
+
 ## v1.4.2 (07/11/2026)
 
 #### **🔧 Enhancements**

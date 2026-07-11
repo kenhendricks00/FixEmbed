@@ -68,6 +68,23 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'normalizeEmbedLayout preserves the classic X handle and body layout',
+        run: () => {
+            const normalized = normalizeEmbedLayout({
+                title: '@BerntBornich',
+                description: 'Introducing NEO\'s 25 Degrees of Freedom.',
+                url: 'https://x.com/BerntBornich/status/example',
+                siteName: 'FixEmbed • Twitter',
+                authorName: 'Bernt Bornich',
+                authorHandle: '@BerntBornich',
+                platform: 'twitter',
+            });
+
+            assert.equal(normalized.title, '@BerntBornich');
+            assert.equal(normalized.description, 'Introducing NEO\'s 25 Degrees of Freedom.');
+        },
+    },
+    {
         name: 'cleanUrl removes tracking params but preserves the canonical path',
         run: () => {
             const cleaned = cleanUrl('https://x.com/example/status/1234567890?s=20&t=abc&utm_source=discord&keep=1');
