@@ -1,6 +1,6 @@
 import unittest
 
-from link_utils import build_fixembed_url, extract_supported_links, social_service
+from link_utils import build_fixembed_url, chunk_lines, extract_supported_links, social_service
 
 
 class SocialServiceTests(unittest.TestCase):
@@ -63,6 +63,14 @@ class SocialServiceTests(unittest.TestCase):
             build_fixembed_url(link, quality="high"),
             "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&quality=high",
         )
+
+    def test_chunk_lines_preserves_every_line_within_discord_limits(self):
+        lines = [f"link-{index}-" + ("x" * 700) for index in range(5)]
+
+        chunks = chunk_lines(lines, max_length=1900)
+
+        self.assertTrue(all(len(chunk) <= 1900 for chunk in chunks))
+        self.assertEqual("\n".join(chunks), "\n".join(lines))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ import time
 import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
-from link_utils import build_fixembed_url, extract_supported_links
+from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
 
 # Version number
 VERSION = "1.3.0"
@@ -537,7 +537,10 @@ async def fix_link(interaction: discord.Interaction, link: str):
         return
 
     fixed_links = [f"[{item.display_text}]({build_fixembed_url(item)})" for item in links]
-    await interaction.response.send_message("\n".join(fixed_links))
+    chunks = chunk_lines(fixed_links)
+    await interaction.response.send_message(chunks[0])
+    for chunk in chunks[1:]:
+        await interaction.followup.send(chunk)
 
 @client.tree.context_menu(name='Fix Embed')
 @app_commands.allowed_installs(guilds=True, users=True)
@@ -552,7 +555,10 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
         return
 
     fixed_links = [f"[{item.display_text}]({build_fixembed_url(item)})" for item in links]
-    await interaction.response.send_message("\n".join(fixed_links))
+    chunks = chunk_lines(fixed_links)
+    await interaction.response.send_message(chunks[0])
+    for chunk in chunks[1:]:
+        await interaction.followup.send(chunk)
 
 async def debug_info(interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
     if not channel:
@@ -1397,18 +1403,20 @@ async def on_message(message):
                     processing_stats["total_fixed"] += 1
 
             if formatted_links:
-                formatted_message = "\n".join(formatted_links)
                 if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
-                        formatted_message += f"\nSent by {sender}"
-                    await rate_limited_send(message.channel, content=formatted_message)
+                        formatted_links.append(f"Sent by {sender}")
+                    for chunk in chunk_lines(formatted_links):
+                        await rate_limited_send(message.channel, content=chunk)
                     await message.delete()
                 elif delivery_mode == "suppress":
                     await message.edit(suppress=True)
-                    await rate_limited_send(message.channel, content=formatted_message)
+                    for chunk in chunk_lines(formatted_links):
+                        await rate_limited_send(message.channel, content=chunk)
                 else:
-                    await rate_limited_send(message.channel, content=formatted_message)
+                    for chunk in chunk_lines(formatted_links):
+                        await rate_limited_send(message.channel, content=chunk)
 
         except discord.Forbidden:
             logging.warning(f"Missing permissions in channel {message.channel.id}")

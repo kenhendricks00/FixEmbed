@@ -117,3 +117,26 @@ def build_fixembed_url(link: SupportedLink, quality: Optional[str] = None) -> st
     """Build the public FixEmbed URL for a canonical supported link."""
     url = f"https://fixembed.app/embed?url={quote(link.canonical_url, safe='')}"
     return f"{url}&quality={quote(quality, safe='')}" if quality else url
+
+
+def chunk_lines(lines: List[str], max_length: int = 1900) -> List[str]:
+    """Group complete lines into Discord-safe message chunks."""
+    chunks: List[str] = []
+    current: List[str] = []
+    current_length = 0
+
+    for line in lines:
+        if len(line) > max_length:
+            raise ValueError("A formatted link is too long to send through Discord")
+        added_length = len(line) + (1 if current else 0)
+        if current and current_length + added_length > max_length:
+            chunks.append("\n".join(current))
+            current = [line]
+            current_length = len(line)
+        else:
+            current.append(line)
+            current_length += added_length
+
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
