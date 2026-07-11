@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, quote, urlparse, urlunparse
 URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
+EMBED_REVISION = "141"
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,7 @@ def extract_supported_links(text: str, include_suppressed: bool = False) -> List
 
 def build_fixembed_url(link: SupportedLink, quality: Optional[str] = None) -> str:
     """Build the public FixEmbed URL for a canonical supported link."""
-    url = f"https://fixembed.app/embed?url={quote(link.canonical_url, safe='')}"
+    url = f"https://fixembed.app/embed?url={quote(link.canonical_url, safe='')}&v={EMBED_REVISION}"
     return f"{url}&quality={quote(quality, safe='')}" if quality else url
 
 
