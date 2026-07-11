@@ -15,6 +15,7 @@ import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
+from message_context import format_tagged_users
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -159,12 +160,12 @@ processing_stats = {
     "by_service": {}
 }
 
-async def rate_limited_send(channel, content=None, embed=None):
-    await SEND_QUEUE.put((channel, content, embed))
+async def rate_limited_send(channel, content=None, embed=None, allowed_mentions=None):
+    await SEND_QUEUE.put((channel, content, embed, allowed_mentions))
 
 async def send_worker():
     while True:
-        channel, content, embed = await SEND_QUEUE.get()
+        channel, content, embed, allowed_mentions = await SEND_QUEUE.get()
         try:
             current_time = time.time()
             while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
@@ -177,7 +178,11 @@ async def send_worker():
                     message_timestamps.popleft()
 
             message_timestamps.append(time.time())
-            await channel.send(content=content, embed=embed)
+            await channel.send(
+                content=content,
+                embed=embed,
+                allowed_mentions=allowed_mentions,
+            )
         except Exception as e:
             logging.error(f"Queue send failed: {e}")
         finally:
@@ -1421,8 +1426,21 @@ async def on_message(message):
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
                         formatted_links.append(f"Sent by {sender}")
+                    tagged_users = format_tagged_users(message.mentions, message.author.id)
+                    if tagged_users:
+                        formatted_links.append(tagged_users)
+                    allowed_mentions = discord.AllowedMentions(
+                        users=[message.author] if mention_users and not premium else [],
+                        roles=False,
+                        everyone=False,
+                        replied_user=False,
+                    )
                     for chunk in chunk_lines(formatted_links):
-                        await rate_limited_send(message.channel, content=chunk)
+                        await rate_limited_send(
+                            message.channel,
+                            content=chunk,
+                            allowed_mentions=allowed_mentions,
+                        )
                     await message.delete()
                 elif delivery_mode == "suppress":
                     await message.edit(suppress=True)
