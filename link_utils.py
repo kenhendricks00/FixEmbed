@@ -67,6 +67,16 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
         shortcode = segments[1]
         return "Instagram", f"https://www.instagram.com/{kind}/{shortcode}/", f"Instagram • {shortcode}"
 
+    if (
+        host == "instagram.com"
+        and len(segments) >= 3
+        and segments[0].lower() == "share"
+        and segments[1].lower() in {"p", "reel"}
+    ):
+        share_type, share_token = segments[1].lower(), segments[2]
+        canonical = f"https://www.instagram.com/share/{share_type}/{share_token}/"
+        return "Instagram", canonical, f"Instagram • {share_token}"
+
     if host in {"reddit.com", "old.reddit.com"} and len(segments) >= 4 and segments[0].lower() == "r" and segments[2].lower() in {"comments", "s"}:
         community = segments[1]
         canonical = urlunparse(("https", "www.reddit.com", parsed.path, "", "", ""))

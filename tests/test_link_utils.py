@@ -15,6 +15,18 @@ class SocialServiceTests(unittest.TestCase):
     def test_unknown_host_is_not_classified_by_path_substrings(self):
         self.assertIsNone(social_service("https://example.org/x.com/user/status/123"))
 
+    def test_instagram_share_url_is_forwarded_to_first_party_resolver(self):
+        url = "https://www.instagram.com/share/reel/BAAAAExample/?utm_source=ig_web_copy_link"
+
+        links = extract_supported_links(url)
+
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].service, "Instagram")
+        self.assertEqual(
+            links[0].canonical_url,
+            "https://www.instagram.com/share/reel/BAAAAExample/",
+        )
+
     def test_extract_supported_links_preserves_order_and_metadata(self):
         links = extract_supported_links(
             "first https://x.com/openai/status/123 then "

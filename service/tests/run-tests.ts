@@ -319,6 +319,41 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler resolves share URLs through Instagram before rendering',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/share/p/')) {
+                    const response = new Response('', { status: 200 });
+                    Object.defineProperty(response, 'url', {
+                        value: 'https://www.instagram.com/p/Resolved123/',
+                    });
+                    return response;
+                }
+                if (url.includes('/p/Resolved123/embed/captioned/')) {
+                    return new Response(
+                        '<script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Resolved post"}</script>',
+                        { status: 200 },
+                    );
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/share/p/BAAAAExample/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.url, 'https://www.instagram.com/p/Resolved123/');
+                assert.equal(requested.length, 2);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler exposes reel video from the VxInstagram recovery response',
         run: async () => {
             const originalFetch = globalThis.fetch;

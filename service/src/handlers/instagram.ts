@@ -291,10 +291,38 @@ export const instagramHandler: PlatformHandler = {
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
-        const parsed = parseInstagramUrl(url);
+        let resolvedUrl = url;
+        let parsed = parseInstagramUrl(resolvedUrl);
+
+        if (!parsed && /instagram\.com\/share\/(?:p|reel)\//i.test(url)) {
+            try {
+                const response = await fetch(url, {
+                    redirect: 'follow',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml',
+                        'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                    },
+                });
+                resolvedUrl = response.url || url;
+                parsed = parseInstagramUrl(resolvedUrl);
+
+                if (!parsed && response.ok) {
+                    const html = await response.text();
+                    const canonicalMatch = html.match(
+                        /<(?:link|meta)[^>]+(?:href|content)=["'](https:\/\/(?:www\.)?instagram\.com\/(?:p|reels?)\/[^"']+)["'][^>]*>/i,
+                    );
+                    if (canonicalMatch) {
+                        resolvedUrl = canonicalMatch[1].replace(/&amp;/g, '&');
+                        parsed = parseInstagramUrl(resolvedUrl);
+                    }
+                }
+            } catch (error) {
+                console.warn('Instagram share URL resolution failed:', error);
+            }
+        }
 
         if (!parsed) {
-            return { success: false, error: 'Invalid Instagram URL' };
+            return { success: false, error: 'Unable to resolve Instagram share URL', redirect: url };
         }
 
         // Stories don't have embed support
