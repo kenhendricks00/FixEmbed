@@ -587,7 +587,7 @@ async def debug_info(interaction: discord.Interaction, channel: Optional[discord
         inline=False
     )
 
-    shard_id = client.shard_id if client.shard_id is not None else 0
+    shard_id = guild.shard_id
     embed.add_field(
         name="FixEmbed Stats",
         value=(
