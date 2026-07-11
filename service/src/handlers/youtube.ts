@@ -217,7 +217,7 @@ export const youtubeHandler: PlatformHandler = {
                             'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
                         },
                     });
-                    if (response.ok) {
+                    if (response.status < 500) {
                         const html = (await response.text()).slice(0, 5_000_000);
                         const data = parseYouTubeCommunityPostHtml(html, canonicalUrl);
                         if (data) return { success: true, source: 'first-party', data };

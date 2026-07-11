@@ -355,6 +355,25 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'youtubeHandler uses public metadata included with a YouTube access-denied response',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(
+                '<meta property="og:description" content="Public post text"><meta property="og:image" content="https://yt3.example/public-post.jpg">',
+                { status: 403 },
+            );
+            try {
+                const response = await youtubeHandler.handle(
+                    'https://www.youtube.com/post/UgkxExample123',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.image, 'https://yt3.example/public-post.jpg');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler uses Instagram embed data before external fallbacks',
         run: async () => {
             const originalFetch = globalThis.fetch;
