@@ -1,9 +1,7 @@
 name = "fixembed-service"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
-
-# Account ID - uncomment and add yours
-# account_id = "your-account-id-here"
+account_id = "a34edcb892453f82fc274700c676895d"
 
 [vars]
 # Branding
