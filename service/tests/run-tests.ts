@@ -206,14 +206,14 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
-                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Caption"}</script></html>', { status: 200 });
+                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;y=2","text":"Caption"}</script></html>', { status: 200 });
             };
             try {
                 const response = await instagramHandler.handle('https://www.instagram.com/p/ABC123/', env);
                 assert.equal(requested.length, 1);
                 assert.match(requested[0], /^https:\/\/www\.instagram\.com\/p\/ABC123\/embed\/captioned\//);
                 assert.equal(response.source, 'first-party');
-                assert.equal(response.data?.image, 'https://scontent.example.com/photo.jpg');
+                assert.equal(response.data?.image, 'https://scontent.example.com/photo.jpg?x=1&y=2');
             } finally { globalThis.fetch = originalFetch; }
         },
     },

@@ -674,6 +674,14 @@ export const instagramHandler: PlatformHandler = {
 
 // ========== Fallback Scraper ==========
 
+function decodeInstagramMediaUrl(value: string): string {
+    return value
+        .replace(/\\u0026/g, '&')
+        .replace(/\\\//g, '/')
+        .replace(/&amp;/g, '&')
+        .replace(/&#0*38;/g, '&');
+}
+
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
@@ -714,7 +722,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         // Pattern 1: Video from CDN (most reliable for actual videos)
         const cdnVideoMatch = html.match(/https:\/\/scontent[^"'\s]+\.mp4[^"'\s]*/);
         if (cdnVideoMatch) {
-            mediaUrl = cdnVideoMatch[0].replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
+            mediaUrl = decodeInstagramMediaUrl(cdnVideoMatch[0]);
             isVideo = true;
         }
 
@@ -729,7 +737,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             for (const pattern of videoPatterns) {
                 const match = html.match(pattern);
                 if (match) {
-                    mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    mediaUrl = decodeInstagramMediaUrl(match[1]);
                     isVideo = true;
                     break;
                 }
@@ -747,7 +755,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             for (const pattern of imagePatterns) {
                 const match = html.match(pattern);
                 if (match) {
-                    mediaUrl = (match[1] || match[0]).replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    mediaUrl = decodeInstagramMediaUrl(match[1] || match[0]);
                     break;
                 }
             }
@@ -764,7 +772,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             for (const pattern of jsonPatterns) {
                 const match = html.match(pattern);
                 if (match) {
-                    mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                    mediaUrl = decodeInstagramMediaUrl(match[1]);
                     isVideo = pattern.source.includes('video');
                     break;
                 }
