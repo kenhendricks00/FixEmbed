@@ -62,6 +62,7 @@ export interface HandlerResponse {
     data?: EmbedData;
     error?: string;
     redirect?: string;
+    source?: 'first-party' | 'fallback';
 }
 
 // Platform handler interface

@@ -130,13 +130,54 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'twitterHandler redirects valid posts to FxTwitter',
+        name: 'twitterHandler renders valid posts with first-party tweet data',
         run: async () => {
-            const response = await twitterHandler.handle('https://x.com/openai/status/1234567890', env);
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'A complete first-party FixEmbed tweet',
+                user: {
+                    name: 'OpenAI',
+                    screen_name: 'openai',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/openai.jpg',
+                },
+                created_at: '2026-07-11T00:00:00.000Z',
+                favorite_count: 42,
+                retweet_count: 5,
+                conversation_count: 3,
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-            assert.equal(response.success, false);
-            assert.equal(response.redirect, 'https://fxtwitter.com/openai/status/1234567890');
-            assert.equal(response.error, 'Redirecting to FxTwitter');
+            try {
+                const response = await twitterHandler.handle('https://x.com/openai/status/1234567890', env);
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, '@openai');
+                assert.equal(response.data?.description, 'A complete first-party FixEmbed tweet');
+                assert.equal(response.data?.platform, 'twitter');
+                assert.equal(response.redirect, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler uses FxTwitter only when the first-party request fails',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response('upstream unavailable', { status: 503 });
+
+            try {
+                const response = await twitterHandler.handle('https://x.com/openai/status/1234567890', env);
+
+                assert.equal(response.success, false);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.redirect, 'https://fxtwitter.com/openai/status/1234567890');
+                assert.match(response.error || '', /Twitter API error: 503/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {
