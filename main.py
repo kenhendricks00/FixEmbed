@@ -24,7 +24,7 @@ from premium_roles import (
 )
 
 # Version number
-VERSION = "1.4.7"
+VERSION = "1.4.8"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -84,6 +84,7 @@ SERVICE_EMOJI_FALLBACKS = {
     "YouTube": "▶️",
 }
 SERVICE_EMOJI_IDS = {
+    "YouTube": 1525579761479450686,
     "Pixiv": 1486920076589273148,
     "Threads": 1486919877980586034,
     "Reddit": 1486919699039129692,

@@ -85,7 +85,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=147&quality=high",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=148&quality=high",
         )
 
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):

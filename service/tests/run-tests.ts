@@ -298,6 +298,7 @@ const tests: TestCase[] = [
             assert.equal(data?.stats, '👍 1.2K  💬 34');
             assert.equal(data?.authorUrl, 'https://www.youtube.com/@creator');
             assert.equal(data?.authorAvatar, 'https://yt3.example/avatar.jpg');
+            assert.equal(data?.siteName, 'FixEmbed • ▶️ YouTube');
         },
     },
     {

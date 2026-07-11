@@ -13,7 +13,7 @@
 
 import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { decodeHtmlEntities, parseYouTubeUrl, truncateText } from '../utils/fetch.ts';
-import { platformColors } from '../utils/embed.ts';
+import { getBrandedSiteName, platformColors } from '../utils/embed.ts';
 
 // Invidious API instances
 const INVIDIOUS_INSTANCES = [
@@ -161,7 +161,7 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
         title: 'Community post',
         description: truncateText(description, 1000),
         url: canonicalUrl,
-        siteName: 'FixEmbed • YouTube',
+        siteName: getBrandedSiteName('youtube'),
         authorName: authorName || undefined,
         authorUrl: authorPath ? `https://www.youtube.com${authorPath}` : undefined,
         authorAvatar: avatar,
@@ -257,7 +257,7 @@ export const youtubeHandler: PlatformHandler = {
                         title: data.title,
                         description: `by ${data.author_name}`,
                         url: videoUrl,
-                        siteName: 'FixEmbed • YouTube',
+                        siteName: getBrandedSiteName('youtube'),
                         authorName: data.author_name,
                         authorUrl: data.author_url,
                         image: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
@@ -353,7 +353,7 @@ export const youtubeHandler: PlatformHandler = {
                         title: data.title,
                         description,
                         url: videoUrl,
-                        siteName: `YouTube • ${duration}`,
+                        siteName: getBrandedSiteName('youtube', duration),
                         authorName: data.author,
                         authorUrl: `https://www.youtube.com${data.authorUrl}`,
                         image: thumbnail,
@@ -388,7 +388,7 @@ export const youtubeHandler: PlatformHandler = {
                         title: data.title,
                         description: `by ${data.author_name}`,
                         url: videoUrl,
-                        siteName: 'YouTube',
+                        siteName: getBrandedSiteName('youtube'),
                         authorName: data.author_name,
                         authorUrl: data.author_url,
                         image: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
@@ -409,7 +409,7 @@ export const youtubeHandler: PlatformHandler = {
                 title: 'YouTube Video',
                 description: 'Watch on YouTube',
                 url: videoUrl,
-                siteName: 'YouTube',
+                siteName: getBrandedSiteName('youtube'),
                 image: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                 color: platformColors.youtube,
                 platform: 'youtube',

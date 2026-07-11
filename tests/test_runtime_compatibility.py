@@ -8,6 +8,11 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertNotIn("trigger_typing", main_source)
 
+    def test_youtube_application_emoji_is_configured(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn('"YouTube": 1525579761479450686', main_source)
+
 
 if __name__ == "__main__":
     unittest.main()

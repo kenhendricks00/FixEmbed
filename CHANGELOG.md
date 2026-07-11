@@ -1,3 +1,17 @@
+## v1.4.8 (07/11/2026)
+
+#### **🔧 Enhancements**
+- **`Application Emoji Integration`**
+  - Added the new YouTube application emoji to service settings and status views.
+  - YouTube embed branding now follows the same icon-first layout as other supported platforms.
+
+#### **🔧 Backend Changes**
+- **`Consistent Platform Branding`**
+  - Routed every YouTube metadata path through the shared branded-name formatter so first-party and fallback cards stay consistent.
+
+#### **🧪 Testing**
+- Added regression coverage for the YouTube application emoji ID and branded embed header.
+
 ## v1.4.7 (07/11/2026)
 
 #### **🚀 New Features**
