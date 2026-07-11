@@ -11,8 +11,8 @@
  * - Falls back to oEmbed if Invidious fails
  */
 
-import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { parseYouTubeUrl, truncateText } from '../utils/fetch.ts';
+import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { decodeHtmlEntities, parseYouTubeUrl, truncateText } from '../utils/fetch.ts';
 import { platformColors } from '../utils/embed.ts';
 
 // Invidious API instances
@@ -68,6 +68,106 @@ interface YouTubeOEmbed {
     thumbnail_url: string;
 }
 
+interface TextRuns {
+    runs?: Array<{ text?: string }>;
+    simpleText?: string;
+}
+
+interface CommunityPostRenderer {
+    authorText?: TextRuns;
+    authorEndpoint?: { browseEndpoint?: { canonicalBaseUrl?: string } };
+    authorThumbnail?: { thumbnails?: Array<{ url?: string; width?: number; height?: number }> };
+    contentText?: TextRuns;
+    voteCount?: TextRuns;
+    replyCount?: TextRuns;
+    backstageAttachment?: {
+        backstageImageRenderer?: {
+            image?: { thumbnails?: Array<{ url?: string; width?: number; height?: number }> };
+        };
+    };
+}
+
+function textFromRuns(value?: TextRuns): string {
+    if (value?.simpleText) return value.simpleText;
+    return value?.runs?.map((run) => run.text || '').join('').trim() || '';
+}
+
+function extractJsonObjectAfterMarker(html: string, marker: string): string | null {
+    const markerIndex = html.indexOf(marker);
+    if (markerIndex < 0) return null;
+    const start = html.indexOf('{', markerIndex + marker.length);
+    if (start < 0) return null;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < html.length; index++) {
+        const character = html[index];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (character === '\\') escaped = true;
+            else if (character === '"') inString = false;
+            continue;
+        }
+        if (character === '"') inString = true;
+        else if (character === '{') depth++;
+        else if (character === '}' && --depth === 0) return html.slice(start, index + 1);
+    }
+    return null;
+}
+
+function metadataContent(html: string, key: string): string {
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [
+        new RegExp(`<meta[^>]+(?:property|name|itemprop)=["']${escapedKey}["'][^>]+content=["']([^"']*)["']`, 'i'),
+        new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name|itemprop)=["']${escapedKey}["']`, 'i'),
+    ];
+    for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match) return decodeHtmlEntities(match[1]);
+    }
+    return '';
+}
+
+export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string): EmbedData | null {
+    let renderer: CommunityPostRenderer | null = null;
+    const rendererJson = extractJsonObjectAfterMarker(html, '"backstagePostRenderer"');
+    if (rendererJson) {
+        try {
+            renderer = JSON.parse(rendererJson) as CommunityPostRenderer;
+        } catch {
+            renderer = null;
+        }
+    }
+
+    const description = textFromRuns(renderer?.contentText) || metadataContent(html, 'og:description');
+    const authorName = textFromRuns(renderer?.authorText) || metadataContent(html, 'author');
+    const authorPath = renderer?.authorEndpoint?.browseEndpoint?.canonicalBaseUrl;
+    const images = renderer?.backstageAttachment?.backstageImageRenderer?.image?.thumbnails || [];
+    const image = [...images]
+        .sort((left, right) => (right.width || 0) * (right.height || 0) - (left.width || 0) * (left.height || 0))[0]?.url
+        || metadataContent(html, 'og:image');
+    const avatar = renderer?.authorThumbnail?.thumbnails?.at(-1)?.url;
+    const likes = textFromRuns(renderer?.voteCount);
+    const replies = textFromRuns(renderer?.replyCount);
+    const stats = [likes && `👍 ${likes}`, replies && `💬 ${replies}`].filter(Boolean).join('  ');
+
+    if (!description && !image) return null;
+    return {
+        title: 'Community post',
+        description: truncateText(description, 1000),
+        url: canonicalUrl,
+        siteName: 'FixEmbed • YouTube',
+        authorName: authorName || undefined,
+        authorUrl: authorPath ? `https://www.youtube.com${authorPath}` : undefined,
+        authorAvatar: avatar,
+        image: image || undefined,
+        color: platformColors.youtube,
+        platform: 'youtube',
+        stats: stats || undefined,
+    };
+}
+
 // Format large numbers
 function formatNumber(num: number): string {
     if (num >= 1_000_000) {
@@ -97,9 +197,31 @@ export const youtubeHandler: PlatformHandler = {
         /youtu\.be\/([^?]+)/i,
         /youtube\.com\/shorts\/([^?]+)/i,
         /youtube\.com\/embed\/([^?]+)/i,
+        /youtube\.com\/post\/([^?]+)/i,
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
+        const communityPostMatch = url.match(/youtube\.com\/post\/([^?&#/]+)/i);
+        if (communityPostMatch) {
+            const canonicalUrl = `https://www.youtube.com/post/${communityPostMatch[1]}`;
+            try {
+                const response = await fetch(canonicalUrl, {
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                    },
+                });
+                if (response.ok) {
+                    const data = parseYouTubeCommunityPostHtml(await response.text(), canonicalUrl);
+                    if (data) return { success: true, source: 'first-party', data };
+                }
+            } catch (error) {
+                console.warn('YouTube community post request failed:', error);
+            }
+            return { success: false, redirect: canonicalUrl, error: 'Community post metadata unavailable' };
+        }
+
         const parsed = parseYouTubeUrl(url);
 
         if (!parsed) {

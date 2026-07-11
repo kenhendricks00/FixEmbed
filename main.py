@@ -62,6 +62,11 @@ SERVICES = {
         "patterns": [r"bilibili\.com/video/([\w]+)", r"b23\.tv/([\w]+)"],
         "base_url": "fixembed.app",
         "display_format": "Bilibili • {0}"
+    },
+    "YouTube": {
+        "patterns": [r"youtube\.com/post/([\w-]+)"],
+        "base_url": "fixembed.app",
+        "display_format": "YouTube • Community Post"
     }
 }
 
@@ -75,6 +80,7 @@ SERVICE_EMOJI_FALLBACKS = {
     "Pixiv": "🎨",
     "Bluesky": "🦋",
     "Bilibili": "📺",
+    "YouTube": "▶️",
 }
 SERVICE_EMOJI_IDS = {
     "Pixiv": 1486920076589273148,

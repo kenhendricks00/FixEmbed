@@ -48,6 +48,7 @@ def social_service(url: str) -> Optional[str]:
         "bskyx.app": "Bluesky",
         "bilibili.com": "Bilibili",
         "b23.tv": "Bilibili",
+        "youtube.com": "YouTube",
     }
     return hosts.get(hostname)
 
@@ -103,6 +104,10 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     if host == "b23.tv" and segments:
         video_id = segments[0]
         return "Bilibili", f"https://b23.tv/{video_id}", f"Bilibili • {video_id}"
+
+    if host == "youtube.com" and len(segments) >= 2 and segments[0].lower() == "post":
+        post_id = segments[1]
+        return "YouTube", f"https://www.youtube.com/post/{post_id}", "YouTube • Community Post"
 
     return None
 

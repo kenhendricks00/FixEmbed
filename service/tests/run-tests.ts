@@ -4,7 +4,7 @@ import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
 import { redditHandler } from '../src/handlers/reddit.ts';
-import { youtubeHandler } from '../src/handlers/youtube.ts';
+import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
 import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
@@ -265,6 +265,62 @@ const tests: TestCase[] = [
                 assert.match(requested[0], /^https:\/\/www\.youtube\.com\/oembed/);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Official video');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'YouTube community posts render creator text stats and full-size media',
+        run: () => {
+            const html = `<script>var ytInitialData = {
+                "contents": {"backstagePostRenderer": {
+                    "postId": "UgkxExample123",
+                    "authorText": {"runs": [{"text": "Creator Name"}]},
+                    "authorEndpoint": {"browseEndpoint": {"canonicalBaseUrl": "/@creator"}},
+                    "authorThumbnail": {"thumbnails": [{"url": "https://yt3.example/avatar.jpg", "width": 88}]},
+                    "contentText": {"runs": [{"text": "A detailed community update with an image."}]},
+                    "voteCount": {"simpleText": "1.2K"},
+                    "replyCount": {"runs": [{"text": "34"}]},
+                    "backstageAttachment": {"backstageImageRenderer": {"image": {"thumbnails": [
+                        {"url": "https://yt3.example/small.jpg", "width": 320, "height": 180},
+                        {"url": "https://yt3.example/full.jpg", "width": 1280, "height": 720}
+                    ]}}}
+                }}
+            };</script>`;
+
+            const data = parseYouTubeCommunityPostHtml(
+                html,
+                'https://www.youtube.com/post/UgkxExample123',
+            );
+
+            assert.equal(data?.authorName, 'Creator Name');
+            assert.equal(data?.description, 'A detailed community update with an image.');
+            assert.equal(data?.image, 'https://yt3.example/full.jpg');
+            assert.equal(data?.stats, '👍 1.2K  💬 34');
+            assert.equal(data?.authorUrl, 'https://www.youtube.com/@creator');
+        },
+    },
+    {
+        name: 'youtubeHandler fetches community posts directly from YouTube',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(
+                    '<meta property="og:description" content="Official community update"><meta property="og:image" content="https://yt3.example/post.jpg"><meta itemprop="author" content="Creator">',
+                    { status: 200 },
+                );
+            };
+            try {
+                const response = await youtubeHandler.handle(
+                    'https://www.youtube.com/post/UgkxExample123',
+                    env,
+                );
+                assert.equal(requested.length, 1);
+                assert.equal(requested[0], 'https://www.youtube.com/post/UgkxExample123');
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.image, 'https://yt3.example/post.jpg');
             } finally { globalThis.fetch = originalFetch; }
         },
     },
