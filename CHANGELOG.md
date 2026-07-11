@@ -129,6 +129,7 @@
   - Added separate media recovery paths for VxInstagram and KKInstagram before the existing Snapsave fallback.
   - Normalized Instagram's HTML-escaped CDN query strings so Discord receives valid media URLs instead of double-escaped links.
   - Added an embed revision parameter so Discord recrawls corrected media instead of retaining stale caption-only cards.
+  - Simplified Instagram cards to show attribution and the caption once instead of repeating the same text in the title and body.
 
 #### **🔧 Backend Changes**
 - **`Instagram Regression Coverage`**

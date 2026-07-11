@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, quote, urlparse, urlunparse
 URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
-EMBED_REVISION = "141"
+EMBED_REVISION = "142"
 
 
 @dataclass(frozen=True)

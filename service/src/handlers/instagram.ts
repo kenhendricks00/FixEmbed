@@ -809,7 +809,9 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             source: 'first-party',
             data: {
                 title: caption ? truncateText(caption, 100) : 'Post',
-                description: caption ? truncateText(caption, 280) : '',
+                // The caption is already the linked title. Repeating it in the
+                // description makes Discord render the same text twice.
+                description: '',
                 url: canonicalUrl,
                 siteName: getBrandedSiteName('instagram'),
                 authorName: username ? `@${username}` : undefined,

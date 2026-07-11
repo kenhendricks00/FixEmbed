@@ -214,6 +214,8 @@ const tests: TestCase[] = [
                 assert.match(requested[0], /^https:\/\/www\.instagram\.com\/p\/ABC123\/embed\/captioned\//);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.image, 'https://scontent.example.com/photo.jpg?x=1&y=2');
+                assert.equal(response.data?.title, 'Caption');
+                assert.equal(response.data?.description, '');
             } finally { globalThis.fetch = originalFetch; }
         },
     },

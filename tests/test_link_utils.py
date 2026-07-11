@@ -35,7 +35,7 @@ class SocialServiceTests(unittest.TestCase):
 
     def test_extract_supported_links_normalizes_existing_fixembed_urls(self):
         links = extract_supported_links(
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=141"
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=142"
         )
 
         self.assertEqual(len(links), 1)
@@ -61,7 +61,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=141&quality=high",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=142&quality=high",
         )
 
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):
