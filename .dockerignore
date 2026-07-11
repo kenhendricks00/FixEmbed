@@ -1,0 +1,10 @@
+.env
+.git
+.github
+__pycache__
+*.py[cod]
+*.db
+*.sqlite3
+service/node_modules
+service/dist
+service/.wrangler

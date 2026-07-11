@@ -3,7 +3,7 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { parseBlueskyUrl, fetchJSON, truncateText } from '../utils/fetch.ts';
+import { parseBlueskyUrl, fetchJSON } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
 interface BlueskyPost {
@@ -55,10 +55,17 @@ interface BlueskyPost {
     };
 }
 
+export function buildBlueskyContent(text: string, handle: string): { title: string; description: string } {
+    return {
+        title: `@${handle}`,
+        description: text,
+    };
+}
+
 export const blueskyHandler: PlatformHandler = {
     name: 'bluesky',
     patterns: [
-        /bsky\.app\/profile\/([^\/]+)\/post\/([^\/\?]+)/i,
+        /bskyx?\.app\/profile\/([^\/]+)\/post\/([^\/\?]+)/i,
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
@@ -94,8 +101,7 @@ export const blueskyHandler: PlatformHandler = {
             const author = post.author;
             const record = post.record;
 
-            // Build description - just the post text, no stats
-            const description = truncateText(record.text, 280);
+            const content = buildBlueskyContent(record.text, author.handle);
 
             // Stats go to oEmbed row, not description
             const statsStr = formatStats({
@@ -115,10 +121,8 @@ export const blueskyHandler: PlatformHandler = {
             return {
                 success: true,
                 data: {
-                    // Title is the post content (or handle if empty)
-                    title: description || `@${author.handle}`,
-                    // Description shows the full post if title was truncated
-                    description: '',
+                    title: content.title,
+                    description: content.description,
                     url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
                     siteName: getBrandedSiteName('bluesky'),
                     // authorName shows handle - don't duplicate display name

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
+import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
@@ -62,6 +63,11 @@ const tests: TestCase[] = [
             );
 
             assert.deepEqual(
+                parseInstagramUrl('https://instagram.com/reels/C7abc123xyz/'),
+                { shortcode: 'C7abc123xyz', type: 'reel' },
+            );
+
+            assert.deepEqual(
                 parseInstagramUrl('https://www.instagram.com/stories/exampleuser/31415926535/'),
                 { shortcode: '31415926535', type: 'story' },
             );
@@ -79,6 +85,21 @@ const tests: TestCase[] = [
                 parseBlueskyUrl('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t'),
                 { handle: 'bsky.app', postId: '3lb5u6adjs22t' },
             );
+
+            assert.deepEqual(
+                parseBlueskyUrl('https://bskyx.app/profile/example.bsky.social/post/3lask667wfj2b'),
+                { handle: 'example.bsky.social', postId: '3lask667wfj2b' },
+            );
+        },
+    },
+    {
+        name: 'Bluesky embeds preserve the full post text',
+        run: () => {
+            const text = 'a'.repeat(300);
+            assert.deepEqual(buildBlueskyContent(text, 'example.bsky.social'), {
+                title: '@example.bsky.social',
+                description: text,
+            });
         },
     },
     {
@@ -97,6 +118,7 @@ const tests: TestCase[] = [
             assert.equal(findHandler('https://www.threads.net/@zuck/post/Cu8M4wXLZQx')?.name, 'threads');
             assert.equal(findHandler('https://www.threads.net/t/Cu8M4wXLZQx')?.name, 'threads');
             assert.equal(findHandler('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t')?.name, 'bluesky');
+            assert.equal(findHandler('https://bskyx.app/profile/example.bsky.social/post/3lask667wfj2b')?.name, 'bluesky');
             assert.equal(findHandler('https://www.pixiv.net/en/artworks/101844438')?.name, 'pixiv');
             assert.equal(findHandler('https://www.bilibili.com/video/BV1xx411c7mD')?.name, 'bilibili');
         },

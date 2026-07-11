@@ -11,7 +11,7 @@
     "test": "node --experimental-strip-types tests/run-tests.ts"
   },
   "dependencies": {
-    "hono": "^4.3.0"
+    "hono": "^4.12.29"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",

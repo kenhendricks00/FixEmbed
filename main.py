@@ -14,6 +14,7 @@ import time
 import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
+from link_utils import social_service
 
 # Version number
 VERSION = "1.2.7"
@@ -27,7 +28,7 @@ SERVICES = {
         "display_format": "Twitter • {0}"
     },
     "Instagram": {
-        "patterns": [r"instagram\.com/(?:p|reel)/([\w-]+)"],
+        "patterns": [r"instagram\.com/(?:p|reels?)/([\w-]+)"],
         "base_url": "fixembed.app",
         "display_format": "Instagram • {0}"
     },
@@ -47,7 +48,7 @@ SERVICES = {
         "display_format": "Pixiv • {0}"
     },
     "Bluesky": {
-        "patterns": [r"bsky\.app/profile/([^/]+)/post/([\w-]+)"],
+        "patterns": [r"bskyx?\.app/profile/([^/]+)/post/([\w-]+)"],
         "base_url": "fixembed.app",
         "display_format": "Bluesky • {0}"
     },
@@ -530,7 +531,7 @@ async def fix_link(interaction: discord.Interaction, link: str):
     """Convert a social media link to an embed-friendly version."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+    link_pattern = r"https?://(?:www\.)?(twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reels?)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bskyx?\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
     match = re.search(link_pattern, link)
     
     if not match:
@@ -542,13 +543,14 @@ async def fix_link(interaction: discord.Interaction, link: str):
     display_text = ""
     
     # Determine display text based on platform
-    if 'twitter.com' in matched_path or 'x.com' in matched_path:
+    service = social_service(original_link)
+    if service == "Twitter":
         user_match = re.findall(r"(?:twitter\.com|x\.com)/(\w+)/status/\d+", matched_path)
         user = user_match[0] if user_match else "Unknown"
         display_text = f"Twitter • {user}"
         
-    elif 'instagram.com' in matched_path:
-        user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)", matched_path)
+    elif service == "Instagram":
+        user_match = re.findall(r"instagram\.com/(?:p|reels?)/([\w-]+)", matched_path)
         user = user_match[0] if user_match else "Unknown"
         display_text = f"Instagram • {user}"
         
@@ -568,8 +570,8 @@ async def fix_link(interaction: discord.Interaction, link: str):
             user = user_match[0][0]
             display_text = f"Threads • @{user}"
         
-    elif 'bsky.app' in matched_path:
-        bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", matched_path)
+    elif service == "Bluesky":
+        bsky_match = re.findall(r"bskyx?\.app/profile/([^/]+)/post/([\w-]+)", matched_path)
         if bsky_match:
             user = bsky_match[0][0]
             display_text = f"Bluesky • {user}"
@@ -599,7 +601,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
     import urllib.parse
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     # Standard link pattern to capture all the relevant links (YouTube removed)
-    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
+    link_pattern = r"(https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reels?)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bskyx?\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+))"
     matches = re.findall(link_pattern, message.content)
     
     if not matches:
@@ -611,13 +613,14 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
     for original_link in matches:
         display_text = ""
         
-        if 'twitter.com' in original_link or 'x.com' in original_link:
+        service = social_service(original_link)
+        if service == "Twitter":
             user_match = re.findall(r"(?:twitter\.com|x\.com)/(\w+)/status/\d+", original_link)
             user = user_match[0] if user_match else "Unknown"
             display_text = f"Twitter • {user}"
             
-        elif 'instagram.com' in original_link:
-            user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)", original_link)
+        elif service == "Instagram":
+            user_match = re.findall(r"instagram\.com/(?:p|reels?)/([\w-]+)", original_link)
             user = user_match[0] if user_match else "Unknown"
             display_text = f"Instagram • {user}"
             
@@ -637,8 +640,8 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
                 user = user_match[0][0]
                 display_text = f"Threads • @{user}"
             
-        elif 'bsky.app' in original_link:
-            bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
+        elif service == "Bluesky":
+            bsky_match = re.findall(r"bskyx?\.app/profile/([^/]+)/post/([\w-]+)", original_link)
             if bsky_match:
                 user = bsky_match[0][0]
                 display_text = f"Bluesky • {user}"
@@ -1486,7 +1489,7 @@ async def on_message(message):
     if channel_states.get(message.channel.id, True):
         try:
             # Standard link pattern to capture all the relevant links
-            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reel)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bsky\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
+            link_pattern = r"https?://(?:www\.)?(?:twitter\.com/\w+/status/\d+|x\.com/\w+/status/\d+|instagram\.com/(?:p|reels?)/[\w-]+|reddit\.com/r/\w+/s/\w+|reddit\.com/r/\w+/comments/\w+/\w+|old\.reddit\.com/r/\w+/comments/\w+/\w+|pixiv\.net/(?:en/)?artworks/\d+|threads\.(?:net|com)/@[^/]+/post/[\w-]+|bskyx?\.app/profile/[^/]+/post/[\w-]+|bilibili\.com/video/[\w]+|b23\.tv/[\w]+)"
             matches = list(re.finditer(link_pattern, message.content))
 
             if len(matches) > 1:
@@ -1508,7 +1511,8 @@ async def on_message(message):
                 service = ""
                 user_or_community = ""
 
-                if 'twitter.com' in original_link or 'x.com' in original_link:
+                detected_service = social_service(original_link)
+                if detected_service == "Twitter":
                     service = "Twitter"
                     user_match = re.findall(
                         r"(?:twitter\.com|x\.com)/(\w+)/status/\d+",
@@ -1516,9 +1520,9 @@ async def on_message(message):
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
 
-                elif 'instagram.com' in original_link:
+                elif detected_service == "Instagram":
                     service = "Instagram"
-                    user_match = re.findall(r"instagram\.com/(?:p|reel)/([\w-]+)",
+                    user_match = re.findall(r"instagram\.com/(?:p|reels?)/([\w-]+)",
                                             original_link)
                     user_or_community = user_match[
                         0] if user_match else "Unknown"
@@ -1544,9 +1548,9 @@ async def on_message(message):
                         modified_link = f"fixthreads.net/@{user_or_community}/post/{post_id}"
                         display_text = f"Threads • @{user_or_community}"
 
-                elif 'bsky.app' in original_link:
+                elif detected_service == "Bluesky":
                     service = "Bluesky"
-                    bsky_match = re.findall(r"bsky\.app/profile/([^/]+)/post/([\w-]+)", original_link)
+                    bsky_match = re.findall(r"bskyx?\.app/profile/([^/]+)/post/([\w-]+)", original_link)
                     if len(bsky_match) > 0:
                         user_or_community, post_id = bsky_match[0]
                         modified_link = f"bskyx.app/profile/{user_or_community}/post/{post_id}"
