@@ -1,3 +1,9 @@
+## v1.3.1 (07/11/2026)
+
+#### **Fixes**
+- Removed a deprecated `TextChannel.trigger_typing()` call that caused automatic conversion to fail when a message contained multiple supported links.
+- Added a runtime compatibility regression check so the unsupported discord.py API cannot return unnoticed.
+
 ## v1.3.0 (07/11/2026)
 
 #### **New Features**

@@ -17,7 +17,7 @@ from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
 
 # Version number
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -1384,9 +1384,6 @@ async def on_message(message):
     if channel_states.get(message.channel.id, True):
         try:
             links = extract_supported_links(message.content)
-            if len(links) > 1:
-                await message.channel.trigger_typing()
-
             formatted_links = []
             for item in links:
                 default_enabled = item.service in enabled_services
