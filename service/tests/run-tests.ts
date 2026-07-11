@@ -218,6 +218,56 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler keeps media when Instagram embed metadata has no media URL',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/DadSNf5EdUy/embed/captioned')) {
+                    return new Response('<div class="Caption">A post caption</div>', { status: 200 });
+                }
+                if (url.includes('vxinstagram.com')) {
+                    return new Response('', { status: 404 });
+                }
+                if (url.includes('kkinstagram.com')) {
+                    return new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+                        status: 200,
+                        headers: { 'Content-Type': 'image/jpeg' },
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle('https://www.instagram.com/p/DadSNf5EdUy/', env);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.image, 'https://kkinstagram.com/p/DadSNf5EdUy/');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler exposes reel video from the VxInstagram recovery response',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/DaneAqzR3eV/embed/captioned')) {
+                    return new Response('<div class="Caption">A reel caption</div>', { status: 200 });
+                }
+                if (url.includes('vxinstagram.com/reel/DaneAqzR3eV')) {
+                    return new Response('<meta property="og:video" content="https://vxinstagram.com/offload/DaneAqzR3eV/0.mp4">', { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle('https://www.instagram.com/reel/DaneAqzR3eV/', env);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/video\/instagram\?url=/);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'twitterHandler renders valid posts with first-party tweet data',
         run: async () => {
             const originalFetch = globalThis.fetch;

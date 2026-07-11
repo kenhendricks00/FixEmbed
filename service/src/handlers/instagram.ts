@@ -20,6 +20,7 @@ import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
 async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
     success: boolean;
     image?: string;
+    video?: string;
     username?: string;
     description?: string;
     isVideo?: boolean;
@@ -49,15 +50,16 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
         const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
         const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
         const ogType = html.match(/<meta property="og:type" content="([^"]+)"/)?.[1];
+        const ogVideo = html.match(/<meta property="og:video(?::url|:secure_url)?" content="([^"]+)"/)?.[1];
 
         // Check if it's a video (vxinstagram typically redirects videos to snapsave)
-        const isVideo = ogType?.includes('video') || html.includes('og:video');
+        const isVideo = Boolean(ogVideo || ogType?.includes('video') || html.includes('og:video'));
 
         // Only use image if it's a generated composite (carousel)
         // Standard single images use a proxy link that often fails or expires
         const isComposite = ogImage?.includes('/generated/');
 
-        if (!isComposite) {
+        if (!isComposite && !ogVideo) {
             return { success: false, error: 'Not a carousel/composite image' };
         }
 
@@ -68,6 +70,7 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
         return {
             success: true,
             image: ogImage,
+            video: ogVideo,
             username: undefined, // Don't return username from vxinstagram to avoid wrong attribution
             description: ogDesc || ogTitle,
             isVideo,
@@ -318,6 +321,31 @@ export const instagramHandler: PlatformHandler = {
             // Try VxInstagram first for better image/carousel support
             const vxResult = await scrapeVxInstagram(parsed.shortcode, parsed.type);
 
+            if (vxResult.success && vxResult.isVideo && vxResult.video) {
+                const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+                const metadata = nativeResult.data;
+                return {
+                    success: true,
+                    source: 'fallback',
+                    data: {
+                        title: metadata?.title || 'Reel',
+                        description: metadata?.description || vxResult.description || '',
+                        url: canonicalUrl,
+                        siteName: getBrandedSiteName('instagram'),
+                        authorName: metadata?.authorName,
+                        video: {
+                            url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
+                            width: 720,
+                            height: 1280,
+                            thumbnail: vxResult.image,
+                        },
+                        image: vxResult.image,
+                        color: platformColors.instagram,
+                        platform: 'instagram',
+                    },
+                };
+            }
+
             if (vxResult.success && vxResult.image && !vxResult.isVideo) {
                 // VxInstagram found an image (possibly composite carousel)
 
@@ -391,6 +419,65 @@ export const instagramHandler: PlatformHandler = {
                         siteName: getBrandedSiteName('instagram'),
                         // authorName: authorName, // OLD: Don't set author field to avoid duplication
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
+                        color: platformColors.instagram,
+                        platform: 'instagram',
+                    },
+                };
+            }
+
+            // Instagram's embed HTML no longer consistently includes media URLs.
+            // KKInstagram resolves the public post/reel to Instagram's CDN, so use
+            // it as the media-only recovery path while preserving our own metadata
+            // and branded rendering.
+            const kkMediaUrl = `https://kkinstagram.com/${parsed.type === 'reel' ? 'reel' : 'p'}/${parsed.shortcode}/`;
+            let kkAvailable = false;
+            try {
+                const kkResponse = await fetch(kkMediaUrl, {
+                    headers: {
+                        'Accept': 'image/*,video/*',
+                        'Range': 'bytes=0-0',
+                        'User-Agent': 'Discordbot/2.0',
+                    },
+                });
+                const contentType = kkResponse.headers.get('Content-Type') || '';
+                kkAvailable = kkResponse.ok && (contentType.startsWith('image/') || contentType.startsWith('video/'));
+            } catch (error) {
+                console.warn('KKInstagram media recovery failed:', error);
+            }
+
+            if (kkAvailable && parsed.type === 'reel') {
+                const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+                return {
+                    success: true,
+                    source: 'fallback',
+                    data: {
+                        ...(nativeResult.data || {}),
+                        title: nativeResult.data?.title || 'Reel',
+                        description: nativeResult.data?.description || '',
+                        url: canonicalUrl,
+                        siteName: getBrandedSiteName('instagram'),
+                        video: {
+                            url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(kkMediaUrl)}`,
+                            width: 720,
+                            height: 1280,
+                        },
+                        color: platformColors.instagram,
+                        platform: 'instagram',
+                    },
+                };
+            }
+
+            if (kkAvailable) {
+                return {
+                    success: true,
+                    source: 'fallback',
+                    data: {
+                        ...(nativeResult.data || {}),
+                        title: nativeResult.data?.title || 'Post',
+                        description: nativeResult.data?.description || '',
+                        url: canonicalUrl,
+                        siteName: getBrandedSiteName('instagram'),
+                        image: kkMediaUrl,
                         color: platformColors.instagram,
                         platform: 'instagram',
                     },

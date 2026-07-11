@@ -120,3 +120,14 @@
 - **`Updated README.md`**
   - Added comprehensive Premium section detailing perks and setup.
   - Documented new link suppression behavior.
+## v1.4.1 (07/11/2026)
+
+#### **🔧 Fixes**
+- **`Instagram Media Rendering`**
+  - Restored media for Instagram image posts when Instagram's embed document contains captions but omits media URLs.
+  - Restored playable reel video embeds through FixEmbed's media proxy when the direct Instagram response is incomplete.
+  - Added separate media recovery paths for VxInstagram and KKInstagram before the existing Snapsave fallback.
+
+#### **🔧 Backend Changes**
+- **`Instagram Regression Coverage`**
+  - Added post and reel tests that prevent caption-only Instagram embeds from returning unnoticed.
