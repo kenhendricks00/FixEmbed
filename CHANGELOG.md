@@ -1,3 +1,27 @@
+## v1.4.7 (07/11/2026)
+
+#### **🚀 New Features**
+- **`YouTube Community Posts`**
+  - Added first-party embeds for YouTube community post links.
+  - Community cards include the creator, post text, engagement stats, avatar, and the largest available image.
+
+#### **🔧 Enhancements**
+- **`Instagram Share Links`**
+  - Added support for Instagram `/share/p/` and `/share/reel/` URLs.
+  - Share links are resolved directly through Instagram before entering FixEmbed's existing post and reel pipeline.
+- **`Tagged User Context`**
+  - Messages replaced in delete mode now preserve the users tagged in the original message.
+  - Preserved tags are displayed without sending duplicate mention notifications.
+
+#### **🔧 Backend Changes**
+- **`First-Party Community Post Parser`**
+  - Added resilient parsing for YouTube post data and Open Graph metadata with native-link fallback behavior.
+- **`Safe Mention Delivery`**
+  - Extended the Discord send queue to carry explicit allowed-mention policies.
+
+#### **🧪 Testing**
+- Added regression coverage for YouTube community layouts, Instagram share resolution, and tagged-user preservation.
+
 ## v1.4.6 (07/11/2026)
 
 #### **🚀 New Features**
