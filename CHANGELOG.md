@@ -8,7 +8,7 @@
 
 ## v1.3.0 (07/11/2026)
 
-#### **New Features**
+#### **🚀 New Features**
 - **`First-Party X/Twitter Embeds`**
   - FixEmbed now fetches and renders X/Twitter post text, authors, media, and engagement data through its own Cloudflare Worker.
   - FxTwitter remains available only as an emergency fallback when first-party rendering cannot complete.
@@ -16,7 +16,7 @@
   - `/fix` now converts every supported link in one invocation while preserving the original order.
   - Already-fixed FixEmbed, FxTwitter, and Bluesky proxy links normalize back to canonical source URLs.
 
-#### **Enhancements**
+#### **🔧 Enhancements**
 - **`One Canonical Link Engine`**
   - Slash commands, the message context command, and automatic conversion now share the same host-safe parser, labels, suppression rules, and FixEmbed URL builder.
   - Multi-link automatic conversion sends and deletes or suppresses once per message instead of repeating those actions for each link.
@@ -26,22 +26,26 @@
 - **`Release Metadata Guard`**
   - Added an automated release check so the bot version, manifests, service package, and changelog cannot silently drift apart.
 
-#### **Fixes**
-- Fixed Instagram `/reels/` links across the bot and embed service.
-- Fixed Bluesky handles ending in `x.com` being misclassified as Twitter.
-- Added support for already-fixed `bskyx.app` links.
-- Preserved the full text of Bluesky posts in embeds.
-- Enabled Discord automatic sharding so large-scale gateway startup succeeds reliably.
+#### **🔧 Fixes**
+- **`Instagram Reels`**
+  - Fixed Instagram `/reels/` links across the bot and embed service.
+- **`Bluesky Link Recognition`**
+  - Fixed Bluesky handles ending in `x.com` being misclassified as Twitter.
+  - Added support for already-fixed `bskyx.app` links.
+- **`Bluesky Post Text`**
+  - Preserved the full text of Bluesky posts in embeds.
+- **`Discord Sharding`**
+  - Enabled Discord automatic sharding so large-scale gateway startup succeeds reliably.
 
 ## v1.2.7 (03/28/2026)
 
-#### **New Features**
+#### **🚀 New Features**
 - **`New Status Page`**
   - Added a public status dashboard for the embed service with per-platform uptime, latency, and incident notices.
 - **`Power User Commands`**
   - Added `/delivery`, `/quality`, `/rule`, and `/status` commands for faster advanced configuration and diagnostics.
 
-#### **Enhancements**
+#### **🔧 Enhancements**
 - **`Icons for All Services`**
   - Added or completed branded icons for every supported service.
 - **`Default Conversion Behavior`**
@@ -58,7 +62,7 @@
 - **`Node-Compatible Service Imports`**
   - Updated the Cloudflare Worker TypeScript imports to run cleanly under direct local Node-based test execution.
 
-#### **Documentation**
+#### **📝 Documentation**
 - **`README Updates`**
   - Updated user-facing supported service strings across all translations.
 
