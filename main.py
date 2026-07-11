@@ -16,6 +16,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
 from message_context import format_tagged_users
+from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -391,6 +392,7 @@ async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
     client.db = await init_db()
+    await migrate_youtube_service_default(client.db)
     await load_channel_states(client.db)
     await load_settings(client.db)
     await load_channel_service_rules(client.db)

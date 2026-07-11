@@ -18,6 +18,8 @@
   - Added resilient parsing for YouTube post data and Open Graph metadata with native-link fallback behavior.
 - **`Safe Mention Delivery`**
   - Extended the Discord send queue to carry explicit allowed-mention policies.
+- **`Existing Server Migration`**
+  - Added a one-time migration that enables YouTube community posts for existing guilds while preserving later administrator opt-outs.
 
 #### **🧪 Testing**
 - Added regression coverage for YouTube community layouts, Instagram share resolution, and tagged-user preservation.
