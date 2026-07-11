@@ -291,12 +291,24 @@ export const instagramHandler: PlatformHandler = {
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
+        let inputUrl: URL;
+        try {
+            inputUrl = new URL(url);
+        } catch {
+            return { success: false, error: 'Invalid Instagram URL' };
+        }
+        const inputHost = inputUrl.hostname.toLowerCase().replace(/^www\./, '');
+        if (inputUrl.protocol !== 'https:' || inputHost !== 'instagram.com') {
+            return { success: false, error: 'Invalid Instagram URL' };
+        }
+
         let resolvedUrl = url;
         let parsed = parseInstagramUrl(resolvedUrl);
 
         if (!parsed && /instagram\.com\/share\/(?:p|reel)\//i.test(url)) {
             try {
-                const response = await fetch(url, {
+                const safeShareUrl = `https://www.instagram.com${inputUrl.pathname}`;
+                const response = await fetch(safeShareUrl, {
                     redirect: 'follow',
                     headers: {
                         'Accept': 'text/html,application/xhtml+xml',

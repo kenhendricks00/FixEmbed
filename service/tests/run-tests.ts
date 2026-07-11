@@ -410,6 +410,25 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler rejects share URLs on lookalike hosts without fetching them',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let fetched = false;
+            globalThis.fetch = async () => {
+                fetched = true;
+                return new Response('', { status: 200 });
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://attacker.example/instagram.com/share/p/BAAAAExample/',
+                    env,
+                );
+                assert.equal(response.success, false);
+                assert.equal(fetched, false);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler exposes reel video from the VxInstagram recovery response',
         run: async () => {
             const originalFetch = globalThis.fetch;

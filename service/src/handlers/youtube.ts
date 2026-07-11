@@ -213,7 +213,8 @@ export const youtubeHandler: PlatformHandler = {
                     },
                 });
                 if (response.ok) {
-                    const data = parseYouTubeCommunityPostHtml(await response.text(), canonicalUrl);
+                    const html = (await response.text()).slice(0, 5_000_000);
+                    const data = parseYouTubeCommunityPostHtml(html, canonicalUrl);
                     if (data) return { success: true, source: 'first-party', data };
                 }
             } catch (error) {
