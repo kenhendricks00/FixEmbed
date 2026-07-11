@@ -1,3 +1,13 @@
+## v1.4.4 (07/11/2026)
+
+#### **🔧 Enhancements**
+- **`Reliable Reddit Post Cards`**
+  - Added a first-party recovery path through Reddit's official embed page when its legacy JSON endpoint denies access.
+  - Reddit cards now preserve the actual post title, author, image, score, and comment count instead of falling back to Reddit's generic community embed.
+
+#### **🧪 Testing**
+- Added regression coverage for Reddit JSON `403` responses and official embed recovery.
+
 ## v1.4.3 (07/11/2026)
 
 #### **🔧 Enhancements**

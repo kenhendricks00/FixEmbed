@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
+import { redditHandler } from '../src/handlers/reddit.ts';
 import { youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
@@ -320,6 +321,45 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'fallback');
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/video\/instagram\?url=/);
             } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'redditHandler recovers post data from Reddit embed HTML when JSON is forbidden',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.endsWith('.json')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                if (url.startsWith('https://embed.reddit.com/')) {
+                    return new Response(`
+                        <a href="https://www.reddit.com/user/Distinct_Ingenuity21/">author</a>
+                        <shreddit-embed-title>usage limits reset for the 5th time today</shreddit-embed-title>
+                        <img src="https://preview.redd.it/example.png?width=591&amp;format=png">
+                        <div data-testid="upvote"><faceplate-number number="218" pretty></faceplate-number></div>
+                        <span>View 75 comments</span>
+                    `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await redditHandler.handle(
+                    'https://reddit.com/r/codex/comments/1utc8qv/usage_limits_reset_for_the_5th_time_today/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'r/codex • usage limits reset for the 5th time today');
+                assert.equal(response.data?.authorName, 'u/Distinct_Ingenuity21');
+                assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
+                assert.match(response.data?.stats || '', /218/);
+                assert.match(response.data?.stats || '', /75/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {

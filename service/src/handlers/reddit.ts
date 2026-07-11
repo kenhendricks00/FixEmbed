@@ -3,7 +3,7 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { parseRedditUrl, fetchJSON, truncateText } from '../utils/fetch.ts';
+import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
 interface RedditPost {
@@ -43,6 +43,69 @@ interface RedditPost {
     created_utc: number;
     score: number;
     num_comments: number;
+}
+
+function decodeRedditHtml(value: string): string {
+    return value
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .trim();
+}
+
+function safeDecodeURIComponent(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+async function recoverFromRedditEmbed(
+    subreddit: string,
+    postId: string,
+): Promise<HandlerResponse | null> {
+    const displaySubreddit = safeDecodeURIComponent(subreddit);
+    const encodedSubreddit = encodeURIComponent(displaySubreddit);
+    const encodedPostId = encodeURIComponent(safeDecodeURIComponent(postId));
+    const canonicalUrl = `https://www.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`;
+    const response = await fetchWithTimeout(`https://embed.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`, {
+        headers: {
+            'Accept': 'text/html',
+            'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+        },
+    });
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const title = html.match(/<shreddit-embed-title>([\s\S]*?)<\/shreddit-embed-title>/i)?.[1];
+    if (!title) return null;
+
+    const author = html.match(/reddit\.com\/user\/([^/"?]+)/i)?.[1];
+    const image = html.match(/<img\s+src="(https:\/\/preview\.redd\.it\/[^"]+)"/i)?.[1];
+    const score = Number(html.match(/data-testid="upvote"[\s\S]{0,1000}?<faceplate-number\s+number="(\d+)"/i)?.[1]) || undefined;
+    const comments = Number(html.match(/View\s+([\d,]+)\s+comments?/i)?.[1].replace(/,/g, '')) || undefined;
+    const cleanTitle = decodeRedditHtml(title.replace(/<[^>]+>/g, ''));
+    const displayAuthor = author ? safeDecodeURIComponent(author) : undefined;
+
+    return {
+        success: true,
+        source: 'first-party',
+        data: {
+            title: `r/${displaySubreddit} • ${truncateText(cleanTitle, 100)}`,
+            description: '',
+            url: canonicalUrl,
+            siteName: getBrandedSiteName('reddit'),
+            authorName: displayAuthor ? `u/${displayAuthor}` : undefined,
+            authorUrl: displayAuthor ? `https://www.reddit.com/user/${encodeURIComponent(displayAuthor)}/` : undefined,
+            image: image ? decodeRedditHtml(image) : undefined,
+            color: platformColors.reddit,
+            platform: 'reddit',
+            stats: formatStats({ comments, likes: score }),
+        },
+    };
 }
 
 export const redditHandler: PlatformHandler = {
@@ -138,6 +201,12 @@ export const redditHandler: PlatformHandler = {
                 },
             };
         } catch (error) {
+            try {
+                const recovered = await recoverFromRedditEmbed(parsed.subreddit, parsed.postId);
+                if (recovered) return recovered;
+            } catch (recoveryError) {
+                console.error('Reddit embed recovery error:', recoveryError);
+            }
             console.error('Reddit handler error:', error);
             return {
                 success: false,
