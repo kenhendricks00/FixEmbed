@@ -131,7 +131,7 @@ function metadataContent(html: string, key: string): string {
 
 export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string): EmbedData | null {
     let renderer: CommunityPostRenderer | null = null;
-    const rendererJson = extractJsonObjectAfterMarker(html, '"backstagePostRenderer"');
+    const rendererJson = extractJsonObjectAfterMarker(html, '"backstagePostRenderer":');
     if (rendererJson) {
         try {
             renderer = JSON.parse(rendererJson) as CommunityPostRenderer;
@@ -141,13 +141,17 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
     }
 
     const description = textFromRuns(renderer?.contentText) || metadataContent(html, 'og:description');
-    const authorName = textFromRuns(renderer?.authorText) || metadataContent(html, 'author');
+    const openGraphTitle = metadataContent(html, 'og:title');
+    const authorName = textFromRuns(renderer?.authorText)
+        || metadataContent(html, 'author')
+        || openGraphTitle.replace(/^Post from\s+/i, '');
     const authorPath = renderer?.authorEndpoint?.browseEndpoint?.canonicalBaseUrl;
     const images = renderer?.backstageAttachment?.backstageImageRenderer?.image?.thumbnails || [];
     const image = [...images]
         .sort((left, right) => (right.width || 0) * (right.height || 0) - (left.width || 0) * (left.height || 0))[0]?.url
         || metadataContent(html, 'og:image');
-    const avatar = renderer?.authorThumbnail?.thumbnails?.at(-1)?.url;
+    const rawAvatar = renderer?.authorThumbnail?.thumbnails?.at(-1)?.url;
+    const avatar = rawAvatar?.startsWith('//') ? `https:${rawAvatar}` : rawAvatar;
     const likes = textFromRuns(renderer?.voteCount);
     const replies = textFromRuns(renderer?.replyCount);
     const stats = [likes && `👍 ${likes}`, replies && `💬 ${replies}`].filter(Boolean).join('  ');

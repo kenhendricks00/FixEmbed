@@ -271,12 +271,12 @@ const tests: TestCase[] = [
     {
         name: 'YouTube community posts render creator text stats and full-size media',
         run: () => {
-            const html = `<script>var ytInitialData = {
+            const html = `<script>const preloadNames = ["backstagePostRenderer"];</script><script>var ytInitialData = {
                 "contents": {"backstagePostRenderer": {
                     "postId": "UgkxExample123",
                     "authorText": {"runs": [{"text": "Creator Name"}]},
                     "authorEndpoint": {"browseEndpoint": {"canonicalBaseUrl": "/@creator"}},
-                    "authorThumbnail": {"thumbnails": [{"url": "https://yt3.example/avatar.jpg", "width": 88}]},
+                    "authorThumbnail": {"thumbnails": [{"url": "//yt3.example/avatar.jpg", "width": 88}]},
                     "contentText": {"runs": [{"text": "A detailed community update with an image."}]},
                     "voteCount": {"simpleText": "1.2K"},
                     "replyCount": {"runs": [{"text": "34"}]},
@@ -297,6 +297,7 @@ const tests: TestCase[] = [
             assert.equal(data?.image, 'https://yt3.example/full.jpg');
             assert.equal(data?.stats, '👍 1.2K  💬 34');
             assert.equal(data?.authorUrl, 'https://www.youtube.com/@creator');
+            assert.equal(data?.authorAvatar, 'https://yt3.example/avatar.jpg');
         },
     },
     {
