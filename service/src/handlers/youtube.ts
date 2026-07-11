@@ -204,21 +204,27 @@ export const youtubeHandler: PlatformHandler = {
         const communityPostMatch = url.match(/youtube\.com\/post\/([^?&#/]+)/i);
         if (communityPostMatch) {
             const canonicalUrl = `https://www.youtube.com/post/${communityPostMatch[1]}`;
-            try {
-                const response = await fetch(canonicalUrl, {
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
-                    },
-                });
-                if (response.ok) {
-                    const html = (await response.text()).slice(0, 5_000_000);
-                    const data = parseYouTubeCommunityPostHtml(html, canonicalUrl);
-                    if (data) return { success: true, source: 'first-party', data };
+            const officialUrls = [
+                canonicalUrl,
+                `https://m.youtube.com/post/${communityPostMatch[1]}`,
+            ];
+            for (const officialUrl of officialUrls) {
+                try {
+                    const response = await fetch(officialUrl, {
+                        headers: {
+                            'Accept': 'text/html,application/xhtml+xml',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                        },
+                    });
+                    if (response.ok) {
+                        const html = (await response.text()).slice(0, 5_000_000);
+                        const data = parseYouTubeCommunityPostHtml(html, canonicalUrl);
+                        if (data) return { success: true, source: 'first-party', data };
+                    }
+                } catch (error) {
+                    console.warn(`YouTube community post request failed for ${officialUrl}:`, error);
                 }
-            } catch (error) {
-                console.warn('YouTube community post request failed:', error);
             }
             return { success: false, redirect: canonicalUrl, error: 'Community post metadata unavailable' };
         }

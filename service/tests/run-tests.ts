@@ -325,6 +325,36 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'youtubeHandler retries the official mobile page when desktop metadata is unavailable',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.startsWith('https://www.youtube.com/')) {
+                    return new Response('<html>No post metadata</html>', { status: 200 });
+                }
+                return new Response(
+                    '<meta property="og:description" content="Mobile community update"><meta property="og:image" content="https://yt3.example/mobile-post.jpg">',
+                    { status: 200 },
+                );
+            };
+            try {
+                const response = await youtubeHandler.handle(
+                    'https://www.youtube.com/post/UgkxExample123',
+                    env,
+                );
+                assert.deepEqual(requested, [
+                    'https://www.youtube.com/post/UgkxExample123',
+                    'https://m.youtube.com/post/UgkxExample123',
+                ]);
+                assert.equal(response.success, true);
+                assert.equal(response.data?.image, 'https://yt3.example/mobile-post.jpg');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler uses Instagram embed data before external fallbacks',
         run: async () => {
             const originalFetch = globalThis.fetch;
