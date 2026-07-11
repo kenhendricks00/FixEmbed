@@ -5,6 +5,7 @@ import { twitterHandler } from '../src/handlers/twitter.ts';
 import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
+import { statusHtml } from '../src/utils/static_site.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -191,17 +192,32 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'status probes treat redirects as operational instead of outages',
+        name: 'status probes identify emergency redirects as degraded fallback operation',
         run: () => {
             const assessment = assessProbeResult({
                 success: false,
+                source: 'fallback',
                 redirect: 'https://fxtwitter.com/openai/status/1234567890',
-                error: 'Redirecting to FxTwitter',
+                error: 'Twitter API error: 503',
+            }, 120);
+
+            assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.mode, 'fallback');
+            assert.match(assessment.notice || '', /emergency fallback/i);
+            assert.equal(assessment.responseCode, 302);
+        },
+    },
+    {
+        name: 'status probes identify successful native handlers as first-party',
+        run: () => {
+            const assessment = assessProbeResult({
+                success: true,
+                source: 'first-party',
             }, 120);
 
             assert.equal(assessment.status, 'operational');
+            assert.equal(assessment.mode, 'first-party');
             assert.equal(assessment.notice, null);
-            assert.equal(assessment.responseCode, 302);
         },
     },
     {
@@ -213,8 +229,17 @@ const tests: TestCase[] = [
             }, 180);
 
             assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.mode, 'unavailable');
             assert.equal(assessment.notice, 'HTTP 404: Not Found');
             assert.equal(assessment.responseCode, 424);
+        },
+    },
+    {
+        name: 'status dashboard labels live checks without claiming synthetic uptime history',
+        run: () => {
+            assert.match(statusHtml, /Current latency/);
+            assert.match(statusHtml, /first-party rendering checks/i);
+            assert.doesNotMatch(statusHtml, /Uptime 24h|Uptime 7d|Uptime 30d/);
         },
     },
 ];

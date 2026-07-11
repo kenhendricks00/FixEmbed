@@ -2,6 +2,7 @@ export type PlatformStatus = 'operational' | 'degraded' | 'outage';
 
 export interface ProbeAssessment {
     status: PlatformStatus;
+    mode: 'first-party' | 'fallback' | 'unavailable';
     notice: string | null;
     responseCode: number | null;
 }
@@ -20,20 +21,15 @@ export function deriveStatusFromLatency(latencyMs: number, success: boolean): Pl
     return 'operational';
 }
 
-export function buildUptimeValue(base: number, status: PlatformStatus): number {
-    if (status === 'outage') return Math.max(90, base - 8);
-    if (status === 'degraded') return Math.max(95, base - 3);
-    return base;
-}
-
 export function assessProbeResult(
-    result: { success: boolean; error?: string; redirect?: string },
+    result: { success: boolean; error?: string; redirect?: string; source?: 'first-party' | 'fallback' },
     latencyMs: number,
 ): ProbeAssessment {
     if (result.success) {
         const status = deriveStatusFromLatency(latencyMs, true);
         return {
             status,
+            mode: result.source || 'first-party',
             notice: status === 'degraded' ? `High latency observed (${latencyMs}ms).` : null,
             responseCode: 200,
         };
@@ -41,8 +37,9 @@ export function assessProbeResult(
 
     if (result.redirect) {
         return {
-            status: 'operational',
-            notice: null,
+            status: 'degraded',
+            mode: 'fallback',
+            notice: `First-party rendering failed; emergency fallback is active${result.error ? ` (${result.error})` : '.'}`,
             responseCode: 302,
         };
     }
@@ -52,6 +49,7 @@ export function assessProbeResult(
 
     return {
         status: looksLikeSampleContentIssue ? 'degraded' : 'outage',
+        mode: 'unavailable',
         notice: errorMessage,
         responseCode: looksLikeSampleContentIssue ? 424 : 500,
     };

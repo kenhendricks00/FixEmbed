@@ -2290,7 +2290,7 @@ export const statusHtml = `<!DOCTYPE html>
             <div class="container">
                 <div class="status-header">
                     <h1>Reliability Dashboard</h1>
-                    <p class="section-subtitle">Public per-platform uptime, latency, and degraded mode notices.</p>
+                    <p class="section-subtitle">Live first-party rendering checks, fallback state, and current latency. No invented uptime history.</p>
                     <div id="overallStatus" class="status-chip status-operational">
                         <span class="status-dot"></span>
                         <span>Operational</span>
@@ -2312,7 +2312,7 @@ export const statusHtml = `<!DOCTYPE html>
                         <div id="metricIssues" class="value">-</div>
                     </div>
                     <div class="status-metric">
-                        <div class="label">Average p50 latency</div>
+                        <div class="label">Average current latency</div>
                         <div id="metricLatency" class="value">-</div>
                     </div>
                 </div>
@@ -2323,16 +2323,14 @@ export const statusHtml = `<!DOCTYPE html>
                             <tr>
                                 <th>Platform</th>
                                 <th>Status</th>
-                                <th>Uptime 24h</th>
-                                <th>Uptime 7d</th>
-                                <th>Uptime 30d</th>
-                                <th>p50</th>
-                                <th>p95</th>
+                                <th>Mode</th>
+                                <th>Current latency</th>
+                                <th>Checked</th>
                                 <th>Notice</th>
                             </tr>
                         </thead>
                         <tbody id="statusRows">
-                            <tr><td colspan="8" class="muted">Loading platform checks…</td></tr>
+                            <tr><td colspan="6" class="muted">Loading platform checks…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2349,8 +2347,13 @@ export const statusHtml = `<!DOCTYPE html>
             return 'status-operational';
         }
 
-        function formatPercent(value) {
-            return Number(value).toFixed(2) + '%';
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
         }
 
         async function loadStatus() {
@@ -2366,7 +2369,7 @@ export const statusHtml = `<!DOCTYPE html>
             const operationalCount = rows.filter((row) => row.status === 'operational').length;
             const issuesCount = rows.length - operationalCount;
             const avgLatency = rows.length
-                ? Math.round(rows.reduce((sum, row) => sum + Number(row.p50LatencyMs || 0), 0) / rows.length)
+                ? Math.round(rows.reduce((sum, row) => sum + Number(row.currentLatencyMs || 0), 0) / rows.length)
                 : 0;
 
             document.getElementById('metricPlatforms').textContent = String(rows.length);
@@ -2378,14 +2381,12 @@ export const statusHtml = `<!DOCTYPE html>
             const tbody = document.getElementById('statusRows');
             tbody.innerHTML = rows.map((row) => {
                 return '<tr>'
-                    + '<td>' + row.platform + '</td>'
+                    + '<td>' + escapeHtml(row.platform) + '</td>'
                     + '<td><span class="status-chip ' + statusClass(row.status) + '"><span class="status-dot"></span><span>' + row.status + '</span></span></td>'
-                    + '<td>' + formatPercent(row.uptime24h) + '</td>'
-                    + '<td>' + formatPercent(row.uptime7d) + '</td>'
-                    + '<td>' + formatPercent(row.uptime30d) + '</td>'
-                    + '<td>' + row.p50LatencyMs + 'ms</td>'
-                    + '<td>' + row.p95LatencyMs + 'ms</td>'
-                    + '<td class="muted">' + (row.notice || '—') + '</td>'
+                    + '<td>' + escapeHtml(row.mode) + '</td>'
+                    + '<td>' + Number(row.currentLatencyMs || 0) + 'ms</td>'
+                    + '<td>' + escapeHtml(new Date(row.checkedAt).toLocaleTimeString()) + '</td>'
+                    + '<td class="muted">' + escapeHtml(row.notice || '—') + '</td>'
                     + '</tr>';
             }).join('');
 
@@ -2395,8 +2396,8 @@ export const statusHtml = `<!DOCTYPE html>
                 noticeList.innerHTML = '<div class="status-metric"><strong>No active incidents.</strong><div class="muted">All platforms are currently serving normally.</div></div>';
             } else {
                 noticeList.innerHTML = notices.map((notice) => {
-                    return '<div class="notice-card"><strong>' + notice.platform + ' · ' + notice.level + '</strong>'
-                        + '<div>' + notice.message + '</div>'
+                    return '<div class="notice-card"><strong>' + escapeHtml(notice.platform) + ' · ' + escapeHtml(notice.level) + '</strong>'
+                        + '<div>' + escapeHtml(notice.message) + '</div>'
                         + '<div class="muted">Updated: ' + new Date(notice.updatedAt).toLocaleString() + '</div>'
                         + '</div>';
                 }).join('');
@@ -2404,7 +2405,7 @@ export const statusHtml = `<!DOCTYPE html>
         }
 
         loadStatus().catch((error) => {
-            document.getElementById('statusRows').innerHTML = '<tr><td colspan="8" class="muted">Could not load status data. Please retry.</td></tr>';
+            document.getElementById('statusRows').innerHTML = '<tr><td colspan="6" class="muted">Could not load status data. Please retry.</td></tr>';
             document.getElementById('lastUpdated').textContent = error.message;
         });
         setInterval(() => loadStatus().catch(() => {}), 30000);

@@ -14,18 +14,15 @@ import type { Env } from './types.ts';
 import { findHandler } from './handlers/index.ts';
 import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
-import { assessProbeResult, buildUptimeValue, type PlatformStatus } from './utils/status.ts';
+import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
 interface PlatformStatusRow {
     platform: string;
-    uptime24h: number;
-    uptime7d: number;
-    uptime30d: number;
-    p50LatencyMs: number;
-    p95LatencyMs: number;
+    currentLatencyMs: number;
     status: PlatformStatus;
+    mode: 'first-party' | 'fallback' | 'unavailable';
     notice: string | null;
     checkedAt: string;
     responseCode: number | null;
@@ -53,12 +50,9 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
     if (!handler) {
         return {
             platform: probe.platform,
-            uptime24h: 0,
-            uptime7d: 0,
-            uptime30d: 0,
-            p50LatencyMs: 0,
-            p95LatencyMs: 0,
+            currentLatencyMs: 0,
             status: 'outage',
+            mode: 'unavailable',
             notice: 'No handler configured for platform sample URL.',
             checkedAt,
             responseCode: null,
@@ -73,12 +67,9 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
 
         return {
             platform: probe.platform,
-            uptime24h: buildUptimeValue(99.95, assessment.status),
-            uptime7d: buildUptimeValue(99.9, assessment.status),
-            uptime30d: buildUptimeValue(99.8, assessment.status),
-            p50LatencyMs: latencyMs,
-            p95LatencyMs: Math.round(latencyMs * 1.35),
+            currentLatencyMs: latencyMs,
             status: assessment.status,
+            mode: assessment.mode,
             notice: assessment.notice,
             checkedAt,
             responseCode: assessment.responseCode,
@@ -86,12 +77,9 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
     } catch (error) {
         return {
             platform: probe.platform,
-            uptime24h: 92.5,
-            uptime7d: 95.4,
-            uptime30d: 97.2,
-            p50LatencyMs: 0,
-            p95LatencyMs: 0,
+            currentLatencyMs: 0,
             status: 'outage',
+            mode: 'unavailable',
             notice: error instanceof Error ? error.message : 'Unknown probe error.',
             checkedAt,
             responseCode: null,
