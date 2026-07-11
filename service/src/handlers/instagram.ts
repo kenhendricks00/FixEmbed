@@ -308,6 +308,13 @@ export const instagramHandler: PlatformHandler = {
         }
 
         try {
+            // First-party FixEmbed path: use Instagram's own embed document and
+            // render its metadata ourselves before consulting embed services.
+            const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
+            if (nativeResult.success && (nativeResult.data?.image || nativeResult.data?.video)) {
+                return nativeResult;
+            }
+
             // Try VxInstagram first for better image/carousel support
             const vxResult = await scrapeVxInstagram(parsed.shortcode, parsed.type);
 
@@ -376,6 +383,7 @@ export const instagramHandler: PlatformHandler = {
 
                 return {
                     success: true,
+                    source: 'fallback',
                     data: {
                         title: authorName || 'Post',
                         description: desc ? truncateText(desc, 280) : '',
@@ -430,6 +438,7 @@ export const instagramHandler: PlatformHandler = {
 
             const result: HandlerResponse = {
                 success: true,
+                source: 'fallback',
                 data: {
                     title: parsed.type === 'reel' ? 'Reel' : 'Post',
                     description: description
@@ -696,6 +705,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
 
         const result: HandlerResponse = {
             success: true,
+            source: 'first-party',
             data: {
                 title: caption ? truncateText(caption, 100) : 'Post',
                 description: caption ? truncateText(caption, 280) : '',

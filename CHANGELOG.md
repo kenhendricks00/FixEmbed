@@ -1,3 +1,25 @@
+## v1.4.0 (07/11/2026)
+
+#### **🚀 New Features**
+- **`Direct-First Embed Pipeline`**
+  - Every supported platform now attempts an original-platform data source before any external embed service.
+  - FixEmbed owns URL handling, metadata parsing, branded rendering, media proxying, error handling, and fallback selection on its Cloudflare Worker.
+
+#### **🔧 Enhancements**
+- **`Instagram and YouTube Ownership`**
+  - Instagram now uses its native embed document before VxInstagram or Snapsave.
+  - YouTube now uses its official oEmbed endpoint before Invidious.
+- **`Pixiv and Bilibili Ownership`**
+  - Pixiv and Bilibili now query their original-platform metadata endpoints before Phixiv or VxBilibili.
+- **`Honest Source Reporting`**
+  - Handler responses identify direct rendering as first-party and external recovery paths as fallbacks.
+
+#### **🔧 Backend Changes**
+- **`Emergency Fallback Policy`**
+  - FxTwitter, VxInstagram, Snapsave, Phixiv, VxBilibili, and Invidious remain available only when their respective direct path fails.
+- **`Direct-Path Regression Coverage`**
+  - Added tests that verify Instagram, YouTube, Pixiv, and Bilibili contact their original platforms before external services.
+
 ## v1.3.1 (07/11/2026)
 
 #### **🔧 Fixes**

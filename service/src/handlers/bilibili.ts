@@ -1,18 +1,63 @@
 /**
  * FixEmbed Service - Bilibili Handler
  * 
- * Bilibili blocks direct API access from Cloudflare Workers (HTTP 412).
- * This implementation scrapes vxbilibili.com HTML for OG tags instead,
- * similar to how we use phixiv.net for Pixiv.
+ * Fetches Bilibili video data directly and renders it through FixEmbed.
+ * VxBilibili remains an emergency fallback when Bilibili blocks Worker traffic.
  * 
  * Key features:
- * - Scrapes vxbilibili.com for OG metadata
+ * - Direct Bilibili API metadata is the primary path
+ * - Scrapes vxbilibili.com only as an emergency fallback
  * - Gets title, thumbnail, description from OG tags
  * - Falls back to basic redirect if scraping fails
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
+
+interface BilibiliVideoResponse {
+    code?: number;
+    data?: {
+        title?: string;
+        desc?: string;
+        pic?: string;
+        owner?: { name?: string; mid?: number };
+    };
+}
+
+async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null> {
+    try {
+        const response = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`, {
+            headers: {
+                'Accept': 'application/json',
+                'Referer': `https://www.bilibili.com/video/${bvid}`,
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        });
+        if (!response.ok) return null;
+        const payload = await response.json() as BilibiliVideoResponse;
+        const video = payload?.data;
+        if (payload?.code !== 0 || !video?.title) return null;
+        const image = typeof video.pic === 'string' && video.pic.startsWith('//') ? `https:${video.pic}` : video.pic;
+        return {
+            success: true,
+            source: 'first-party',
+            data: {
+                title: video.title,
+                description: video.desc || '',
+                url: `https://www.bilibili.com/video/${bvid}`,
+                siteName: getBrandedSiteName('bilibili'),
+                authorName: video.owner?.name,
+                authorUrl: video.owner?.mid ? `https://space.bilibili.com/${video.owner.mid}` : undefined,
+                image,
+                color: platformColors.bilibili,
+                platform: 'bilibili',
+            },
+        };
+    } catch (error) {
+        console.warn('Bilibili direct request failed:', error);
+        return null;
+    }
+}
 
 // Scrape vxbilibili.com HTML for OG tags
 async function scrapeVxBilibili(bvid: string): Promise<{
@@ -115,10 +160,13 @@ export const bilibiliHandler: PlatformHandler = {
         }
 
         const canonicalUrl = `https://www.bilibili.com/video/${bvid}`;
-        const embedDomain = (env as any).EMBED_DOMAIN || 'fixembed.app';
+        const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
 
         try {
-            // Scrape vxbilibili.com for OG tags (direct Bilibili API is blocked)
+            const directResult = await fetchBilibiliVideo(bvid);
+            if (directResult) return directResult;
+
+            // Emergency fallback when Bilibili rejects the direct Worker request.
             const scrapeResult = await scrapeVxBilibili(bvid);
 
             if (scrapeResult.success && (scrapeResult.title || scrapeResult.image)) {
@@ -130,6 +178,7 @@ export const bilibiliHandler: PlatformHandler = {
 
                 return {
                     success: true,
+                    source: 'fallback',
                     data: {
                         title: scrapeResult.title || 'Bilibili Video',
                         description: scrapeResult.description || '',
@@ -152,6 +201,7 @@ export const bilibiliHandler: PlatformHandler = {
             // Fallback to basic redirect
             return {
                 success: true,
+                source: 'first-party',
                 data: {
                     title: 'Bilibili Video',
                     description: `Watch on Bilibili`,

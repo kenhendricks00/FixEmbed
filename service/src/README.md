@@ -90,7 +90,7 @@ service/
 │   ├── index.ts              # Main router, endpoints, video proxies
 │   ├── handlers/             # Platform-specific handlers
 │   │   ├── twitter.ts        # Twitter/X Syndication API
-│   │   ├── instagram.ts      # VxInstagram + Snapsave fallback
+│   │   ├── instagram.ts      # Instagram direct + external emergency fallbacks
 │   │   ├── threads.ts        # Meta Threads GraphQL API
 │   │   ├── bluesky.ts        # AT Protocol
 │   │   ├── reddit.ts         # Reddit JSON API
@@ -119,7 +119,7 @@ All embeds follow a consistent format:
 ## Credits
 
 - Instagram carousel images via [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram)
-- Instagram fallback via [Snapsave](https://snapsave.app)
+- Direct source-platform requests are primary for every handler; external embed services are emergency fallbacks only.
 - Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
 - Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
 - Built with [Hono](https://hono.dev/) framework

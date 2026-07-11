@@ -35,7 +35,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
-- **First-Party X/Twitter Embeds**: FixEmbed normally renders X posts through its own Cloudflare service, with an emergency fallback if the upstream source is unavailable.
+- **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 
 # 📋 Key Features
 1. **Multi-Platform Support**:
@@ -96,7 +96,7 @@ If you need support or have any questions, you can join the [support server](htt
 
 # 📜 Credits
 - Instagram carousel images via [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram)
-- Instagram fallback via [Snapsave](https://snapsave.app)
+- Emergency fallbacks: FxTwitter, VxInstagram/Snapsave, Phixiv, VxBilibili, and Invidious remain available only when direct source-platform requests fail.
 - Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
 - Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
 - Built with [Hono](https://hono.dev/) framework

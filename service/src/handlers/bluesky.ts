@@ -120,6 +120,7 @@ export const blueskyHandler: PlatformHandler = {
 
             return {
                 success: true,
+                source: 'first-party',
                 data: {
                     title: content.title,
                     description: content.description,

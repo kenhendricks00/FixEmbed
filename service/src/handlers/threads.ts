@@ -244,6 +244,7 @@ export const threadsHandler: PlatformHandler = {
 
                 const result: HandlerResponse = {
                     success: true,
+                    source: 'first-party',
                     data: {
                         title: description || 'Thread',
                         description: '', // Stats go via oEmbed, not in description
@@ -302,6 +303,7 @@ export const threadsHandler: PlatformHandler = {
 
                     return {
                         success: true,
+                        source: 'first-party',
                         data: {
                             title: data.title ? truncateText(data.title, 100) : 'Thread',
                             description: data.title ? truncateText(data.title, 280) : '',
@@ -322,6 +324,7 @@ export const threadsHandler: PlatformHandler = {
             // Final fallback: return basic info
             return {
                 success: true,
+                source: 'first-party',
                 data: {
                     title: 'Thread',
                     description: '',

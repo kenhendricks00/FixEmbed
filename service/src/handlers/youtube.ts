@@ -1,7 +1,8 @@
 /**
  * FixEmbed Service - YouTube Handler
  * 
- * Uses Invidious API to fetch video metadata AND direct stream URLs.
+ * Uses YouTube's official oEmbed endpoint first, then Invidious for richer
+ * metadata and direct stream URLs when the official response is unavailable.
  * Based on koutube implementation (https://github.com/iGerman00/koutube)
  * 
  * Key features:
@@ -107,7 +108,34 @@ export const youtubeHandler: PlatformHandler = {
 
         const videoId = parsed.videoId;
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const embedDomain = (env as any).EMBED_DOMAIN || 'embed.ken.tools';
+        const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+
+        // First-party FixEmbed path: fetch metadata directly from YouTube and
+        // render the card ourselves. External frontends are fallbacks only.
+        try {
+            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
+            const response = await fetch(oembedUrl, { headers: { 'Accept': 'application/json' } });
+            if (response.ok) {
+                const data = await response.json() as YouTubeOEmbed;
+                return {
+                    success: true,
+                    source: 'first-party',
+                    data: {
+                        title: data.title,
+                        description: `by ${data.author_name}`,
+                        url: videoUrl,
+                        siteName: 'FixEmbed • YouTube',
+                        authorName: data.author_name,
+                        authorUrl: data.author_url,
+                        image: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                        color: platformColors.youtube,
+                        platform: 'youtube',
+                    },
+                };
+            }
+        } catch (error) {
+            console.warn('YouTube official oEmbed request failed:', error);
+        }
 
         // Try Invidious API for full video data
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -187,6 +215,7 @@ export const youtubeHandler: PlatformHandler = {
 
                 return {
                     success: true,
+                    source: 'fallback',
                     data: {
                         title: data.title,
                         description,
@@ -221,6 +250,7 @@ export const youtubeHandler: PlatformHandler = {
                 const data = await response.json() as YouTubeOEmbed;
                 return {
                     success: true,
+                    source: 'first-party',
                     data: {
                         title: data.title,
                         description: `by ${data.author_name}`,
@@ -241,6 +271,7 @@ export const youtubeHandler: PlatformHandler = {
         // Final fallback
         return {
             success: true,
+            source: 'first-party',
             data: {
                 title: 'YouTube Video',
                 description: 'Watch on YouTube',

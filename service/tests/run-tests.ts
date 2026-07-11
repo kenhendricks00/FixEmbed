@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
+import { instagramHandler } from '../src/handlers/instagram.ts';
+import { youtubeHandler } from '../src/handlers/youtube.ts';
+import { pixivHandler } from '../src/handlers/pixiv.ts';
+import { bilibiliHandler } from '../src/handlers/bilibili.ts';
 import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
@@ -128,6 +132,88 @@ const tests: TestCase[] = [
         name: 'findHandler returns null for unsupported URLs',
         run: () => {
             assert.equal(findHandler('https://example.com/not-supported'), null);
+        },
+    },
+    {
+        name: 'pixivHandler uses Pixiv artwork data before Phixiv fallback',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(JSON.stringify({ error: false, body: {
+                    title: 'Artwork', description: 'Description', userName: 'Artist', userId: '42',
+                    urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
+                } }), { status: 200 });
+            };
+            try {
+                const response = await pixivHandler.handle('https://www.pixiv.net/artworks/123', env);
+                assert.equal(requested.length, 1);
+                assert.match(requested[0], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123/);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Artwork');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'bilibiliHandler uses Bilibili API data before VxBilibili fallback',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(JSON.stringify({ code: 0, data: {
+                    title: 'Video', desc: 'Description', pic: '//i0.hdslb.com/video.jpg',
+                    owner: { name: 'Creator', mid: 42 },
+                } }), { status: 200 });
+            };
+            try {
+                const response = await bilibiliHandler.handle('https://www.bilibili.com/video/BV1xx411c7mD', env);
+                assert.equal(requested.length, 1);
+                assert.match(requested[0], /^https:\/\/api\.bilibili\.com\/x\/web-interface\/view/);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Video');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'youtubeHandler uses official YouTube oEmbed before external fallbacks',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(JSON.stringify({
+                    title: 'Official video', author_name: 'Creator',
+                    author_url: 'https://www.youtube.com/@creator',
+                    thumbnail_url: 'https://i.ytimg.com/vi/abc123/hqdefault.jpg',
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            };
+            try {
+                const response = await youtubeHandler.handle('https://youtu.be/abc123', env);
+                assert.equal(requested.length, 1);
+                assert.match(requested[0], /^https:\/\/www\.youtube\.com\/oembed/);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Official video');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler uses Instagram embed data before external fallbacks',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Caption"}</script></html>', { status: 200 });
+            };
+            try {
+                const response = await instagramHandler.handle('https://www.instagram.com/p/ABC123/', env);
+                assert.equal(requested.length, 1);
+                assert.match(requested[0], /^https:\/\/www\.instagram\.com\/p\/ABC123\/embed\/captioned\//);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.image, 'https://scontent.example.com/photo.jpg');
+            } finally { globalThis.fetch = originalFetch; }
         },
     },
     {

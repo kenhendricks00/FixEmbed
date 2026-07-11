@@ -1,18 +1,67 @@
 /**
  * FixEmbed Service - Pixiv Handler
  * 
- * Implements Pixiv embed support by scraping phixiv.net HTML.
- * Direct Pixiv API calls are blocked by Cloudflare (403), so we use
- * phixiv.net as our data source - they provide OG tags we can scrape.
+ * Fetches Pixiv artwork data directly and renders it through FixEmbed.
+ * Phixiv remains an emergency fallback when Pixiv blocks Worker traffic.
  * 
  * Key features:
- * - Scrapes phixiv.net HTML for OG metadata
- * - Uses phixiv's image proxy URLs (they handle Pixiv's Referer requirement)
- * - Falls back to basic embed if phixiv is unavailable
+ * - Direct Pixiv metadata is the primary path
+ * - Phixiv is used only as an emergency fallback
+ * - Falls back to a branded basic embed if both sources are unavailable
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
+
+interface PixivArtworkResponse {
+    error?: boolean;
+    body?: {
+        title?: string;
+        description?: string;
+        userName?: string;
+        userId?: string;
+        urls?: { regular?: string; original?: string };
+    };
+}
+
+async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerResponse | null> {
+    try {
+        const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
+            headers: {
+                'Accept': 'application/json',
+                'Referer': `https://www.pixiv.net/artworks/${illustId}`,
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        });
+        if (!response.ok) return null;
+        const payload = await response.json() as PixivArtworkResponse;
+        const artwork = payload?.body;
+        if (payload?.error || !artwork?.title) return null;
+        const sourceImage = artwork.urls?.regular || artwork.urls?.original;
+        const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+        const image = sourceImage
+            ? `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceImage)}`
+            : undefined;
+        return {
+            success: true,
+            source: 'first-party',
+            data: {
+                title: artwork.title,
+                description: artwork.description?.replace(/<[^>]+>/g, '') || '',
+                url: `https://www.pixiv.net/artworks/${illustId}`,
+                siteName: getBrandedSiteName('pixiv'),
+                authorName: artwork.userName,
+                authorUrl: artwork.userId ? `https://www.pixiv.net/users/${artwork.userId}` : undefined,
+                image,
+                color: platformColors.pixiv,
+                platform: 'pixiv',
+            },
+        };
+    } catch (error) {
+        console.warn('Pixiv direct request failed:', error);
+        return null;
+    }
+}
 
 // Scrape phixiv.net HTML for OG tags
 async function scrapePhixivHtml(illustId: string): Promise<{
@@ -74,7 +123,7 @@ export const pixivHandler: PlatformHandler = {
         /pixiv\.net\/i\/(\d+)/i,
     ],
 
-    async handle(url: string, _env: Env): Promise<HandlerResponse> {
+    async handle(url: string, env: Env): Promise<HandlerResponse> {
         // Parse artwork ID from URL
         let illustId: string | null = null;
 
@@ -91,12 +140,16 @@ export const pixivHandler: PlatformHandler = {
         const canonicalUrl = `https://www.pixiv.net/artworks/${illustId}`;
 
         try {
-            // Scrape phixiv.net HTML for OG tags (direct Pixiv API is blocked)
+            const directResult = await fetchPixivArtwork(illustId, env);
+            if (directResult) return directResult;
+
+            // Emergency fallback when Pixiv rejects the direct Worker request.
             const scrapeResult = await scrapePhixivHtml(illustId);
 
             if (scrapeResult.success && scrapeResult.image) {
                 return {
                     success: true,
+                    source: 'fallback',
                     data: {
                         title: scrapeResult.title || 'Pixiv Artwork',
                         description: scrapeResult.description || '',
@@ -114,6 +167,7 @@ export const pixivHandler: PlatformHandler = {
             // Fallback to basic redirect
             return {
                 success: true,
+                source: 'first-party',
                 data: {
                     title: 'Pixiv Artwork',
                     description: `View artwork #${illustId} on Pixiv`,

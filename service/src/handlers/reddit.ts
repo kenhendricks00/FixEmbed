@@ -122,6 +122,7 @@ export const redditHandler: PlatformHandler = {
 
             return {
                 success: true,
+                source: 'first-party',
                 data: {
                     title: `r/${post.subreddit} • ${truncateText(post.title, 100)}`,
                     description,
