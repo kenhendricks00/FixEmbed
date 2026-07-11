@@ -675,11 +675,14 @@ export const instagramHandler: PlatformHandler = {
 // ========== Fallback Scraper ==========
 
 function decodeInstagramMediaUrl(value: string): string {
-    return value
+    let decoded = value
         .replace(/\\u0026/g, '&')
         .replace(/\\\//g, '/')
-        .replace(/&amp;/g, '&')
         .replace(/&#0*38;/g, '&');
+    while (decoded.includes('&amp;')) {
+        decoded = decoded.replace(/&amp;/g, '&');
+    }
+    return decoded;
 }
 
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {

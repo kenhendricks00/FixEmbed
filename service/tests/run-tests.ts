@@ -206,7 +206,7 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
-                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;y=2","text":"Caption"}</script></html>', { status: 200 });
+                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;amp;y=2","text":"Caption"}</script></html>', { status: 200 });
             };
             try {
                 const response = await instagramHandler.handle('https://www.instagram.com/p/ABC123/', env);
