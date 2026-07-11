@@ -7,13 +7,13 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FixEmbed - Fix Discord Embeds for Social Media</title>
     <meta name="description"
-        content="FixEmbed is a Discord bot that fixes the lack of embed support for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, and more.">
+        content="FixEmbed is a Discord bot that fixes embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts.">
 
     <!-- Open Graph / Discord Embed -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta property="og:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more. Get rich video previews directly in Discord!">
+        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts. Get rich previews directly in Discord!">
     <meta property="og:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
     <meta property="og:url" content="https://fixembed.app">
@@ -24,7 +24,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more.">
+        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts.">
     <meta name="twitter:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 
@@ -134,8 +134,8 @@ export const indexHtml = `<!DOCTYPE html>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
                     <h3>Multi-Platform Support</h3>
-                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and more to
-                        come.</p>
+                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube
+                        community posts.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-user"></i></div>
@@ -178,7 +178,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Share social media links</h3>
-                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, or Bilibili.
+                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, or YouTube community posts.
                         </p>
                     </div>
                 </div>
@@ -234,6 +234,11 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="platform-icon"><i class="fas fa-play-circle"></i></div>
                     <h3>Bilibili</h3>
                     <p>Embeds Bilibili videos with full media support.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fab fa-youtube"></i></div>
+                    <h3>YouTube</h3>
+                    <p>Displays community posts with creator details, engagement stats, and full-size media.</p>
                 </div>
             </div>
         </div>
@@ -1658,7 +1663,7 @@ export const tosHtml = `<!DOCTYPE html>
                     <p>The Service is provided "as is" without warranties of any kind, either express or implied. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
-                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Modifications to Terms</h3>
                     <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the new terms.</p>
@@ -1954,6 +1959,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>Bluesky</td><td>bsky.app</td></tr>
 
                             <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
+                            <tr><td>YouTube Community Posts</td><td>youtube.com/post</td></tr>
                         </tbody>
                     </table>
                 </div>

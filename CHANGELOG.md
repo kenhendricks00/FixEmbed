@@ -12,6 +12,9 @@
 #### **🧪 Testing**
 - Added regression coverage for the YouTube application emoji ID and branded embed header.
 
+#### **📝 Documentation**
+- Updated the website, website documentation, metadata, and README to advertise YouTube Community Post support consistently.
+
 ## v1.4.7 (07/11/2026)
 
 #### **🚀 New Features**

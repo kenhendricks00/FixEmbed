@@ -10,7 +10,7 @@ import { bilibiliHandler } from '../src/handlers/bilibili.ts';
 import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
-import { statusHtml } from '../src/utils/static_site.ts';
+import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
@@ -751,6 +751,15 @@ const tests: TestCase[] = [
             assert.equal(assessment.mode, 'unavailable');
             assert.equal(assessment.notice, 'HTTP 404: Not Found');
             assert.equal(assessment.responseCode, 424);
+        },
+    },
+    {
+        name: 'public website advertises YouTube community post support',
+        run: () => {
+            assert.match(indexHtml, /<h3>YouTube<\/h3>/);
+            assert.match(indexHtml, /YouTube community posts/i);
+            assert.match(docsHtml, /YouTube Community Posts/);
+            assert.match(docsHtml, /youtube\.com\/post/);
         },
     },
     {
