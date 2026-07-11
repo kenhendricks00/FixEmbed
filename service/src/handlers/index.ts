@@ -10,6 +10,7 @@ export { instagramHandler } from './instagram.ts';
 export { threadsHandler } from './threads.ts';
 export { pixivHandler } from './pixiv.ts';
 export { bilibiliHandler } from './bilibili.ts';
+export { youtubeHandler } from './youtube.ts';
 
 import { twitterHandler } from './twitter.ts';
 import { redditHandler } from './reddit.ts';
@@ -18,6 +19,7 @@ import { instagramHandler } from './instagram.ts';
 import { threadsHandler } from './threads.ts';
 import { pixivHandler } from './pixiv.ts';
 import { bilibiliHandler } from './bilibili.ts';
+import { youtubeHandler } from './youtube.ts';
 import type { PlatformHandler } from '../types.ts';
 
 // All handlers in priority order
@@ -29,6 +31,7 @@ export const handlers: PlatformHandler[] = [
     threadsHandler,
     pixivHandler,
     bilibiliHandler,
+    youtubeHandler,
 ];
 
 /**

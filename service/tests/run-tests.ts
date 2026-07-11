@@ -126,6 +126,7 @@ const tests: TestCase[] = [
             assert.equal(findHandler('https://bskyx.app/profile/example.bsky.social/post/3lask667wfj2b')?.name, 'bluesky');
             assert.equal(findHandler('https://www.pixiv.net/en/artworks/101844438')?.name, 'pixiv');
             assert.equal(findHandler('https://www.bilibili.com/video/BV1xx411c7mD')?.name, 'bilibili');
+            assert.equal(findHandler('https://www.youtube.com/watch?v=dQw4w9WgXcQ')?.name, 'youtube');
         },
     },
     {
