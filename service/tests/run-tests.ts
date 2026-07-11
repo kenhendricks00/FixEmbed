@@ -252,7 +252,7 @@ const tests: TestCase[] = [
             globalThis.fetch = async (input) => {
                 const url = String(input);
                 if (url.includes('instagram.com/p/DaneAqzR3eV/embed/captioned')) {
-                    return new Response('<div class="Caption">A reel caption</div>', { status: 200 });
+                    return new Response('<div class="Caption">A reel caption</div><script>{"display_url":"https:\\/\\/scontent.example.com\\/poster.jpg"}</script>', { status: 200 });
                 }
                 if (url.includes('vxinstagram.com/reel/DaneAqzR3eV')) {
                     return new Response('<meta property="og:video" content="https://vxinstagram.com/offload/DaneAqzR3eV/0.mp4">', { status: 200 });

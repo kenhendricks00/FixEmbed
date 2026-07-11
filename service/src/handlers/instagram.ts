@@ -314,7 +314,10 @@ export const instagramHandler: PlatformHandler = {
             // First-party FixEmbed path: use Instagram's own embed document and
             // render its metadata ourselves before consulting embed services.
             const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
-            if (nativeResult.success && (nativeResult.data?.image || nativeResult.data?.video)) {
+            const nativeHasRequiredMedia = parsed.type === 'reel'
+                ? Boolean(nativeResult.data?.video)
+                : Boolean(nativeResult.data?.image || nativeResult.data?.video);
+            if (nativeResult.success && nativeHasRequiredMedia) {
                 return nativeResult;
             }
 
