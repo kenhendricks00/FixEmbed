@@ -36,6 +36,21 @@
 #### **🧪 Testing**
 - Added regression coverage for duplicate creator titles, distinct descriptions, and Instagram engagement stats.
 
+## v1.4.1 (07/11/2026)
+
+#### **🔧 Fixes**
+- **`Instagram Media Rendering`**
+  - Restored media for Instagram image posts when Instagram's embed document contains captions but omits media URLs.
+  - Restored playable reel video embeds through FixEmbed's media proxy when the direct Instagram response is incomplete.
+  - Added separate media recovery paths for VxInstagram and KKInstagram before the existing Snapsave fallback.
+  - Normalized Instagram's HTML-escaped CDN query strings so Discord receives valid media URLs instead of double-escaped links.
+  - Added an embed revision parameter so Discord recrawls corrected media instead of retaining stale caption-only cards.
+  - Simplified Instagram cards to show attribution and the caption once instead of repeating the same text in the title and body.
+
+#### **🔧 Backend Changes**
+- **`Instagram Regression Coverage`**
+  - Added post and reel tests that prevent caption-only Instagram embeds from returning unnoticed.
+
 ## v1.4.0 (07/11/2026)
 
 #### **🚀 New Features**
@@ -158,17 +173,3 @@
 - **`Updated README.md`**
   - Added comprehensive Premium section detailing perks and setup.
   - Documented new link suppression behavior.
-## v1.4.1 (07/11/2026)
-
-#### **🔧 Fixes**
-- **`Instagram Media Rendering`**
-  - Restored media for Instagram image posts when Instagram's embed document contains captions but omits media URLs.
-  - Restored playable reel video embeds through FixEmbed's media proxy when the direct Instagram response is incomplete.
-  - Added separate media recovery paths for VxInstagram and KKInstagram before the existing Snapsave fallback.
-  - Normalized Instagram's HTML-escaped CDN query strings so Discord receives valid media URLs instead of double-escaped links.
-  - Added an embed revision parameter so Discord recrawls corrected media instead of retaining stale caption-only cards.
-  - Simplified Instagram cards to show attribution and the caption once instead of repeating the same text in the title and body.
-
-#### **🔧 Backend Changes**
-- **`Instagram Regression Coverage`**
-  - Added post and reel tests that prevent caption-only Instagram embeds from returning unnoticed.
