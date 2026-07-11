@@ -26,6 +26,14 @@ export function assessProbeResult(
     latencyMs: number,
 ): ProbeAssessment {
     if (result.success) {
+        if (result.source === 'fallback') {
+            return {
+                status: 'degraded',
+                mode: 'fallback',
+                notice: 'Direct rendering failed; an emergency fallback supplied the embed.',
+                responseCode: 200,
+            };
+        }
         const status = deriveStatusFromLatency(latencyMs, true);
         return {
             status,

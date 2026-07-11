@@ -278,6 +278,15 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'status probes mark successful external recovery as degraded fallback operation',
+        run: () => {
+            const assessment = assessProbeResult({ success: true, source: 'fallback' }, 120);
+            assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.mode, 'fallback');
+            assert.match(assessment.notice || '', /emergency fallback/i);
+        },
+    },
+    {
         name: 'status probes identify emergency redirects as degraded fallback operation',
         run: () => {
             const assessment = assessProbeResult({
