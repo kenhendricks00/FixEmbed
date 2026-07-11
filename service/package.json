@@ -1,6 +1,6 @@
 {
   "name": "fixembed-service",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Unified embed service for Discord - fixes embeds for Twitter, Instagram, Reddit, and more",
   "type": "module",
   "main": "src/index.ts",

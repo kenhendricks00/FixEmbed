@@ -15,9 +15,14 @@ import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
+from premium_roles import (
+    reconcile_supporter_roles,
+    sync_supporter_role,
+    sync_supporter_role_for_member,
+)
 
 # Version number
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -183,6 +188,8 @@ def create_footer(embed, client):
 
 # Premium SKU ID (loaded from .env at bottom of file)
 PREMIUM_SKU_ID = None
+SUPPORT_GUILD_ID = 1195810157112852540
+SUPPORTER_ROLE_ID = 1195810157112852547
 
 def get_guild_lang(guild_id):
     """Get the language setting for a guild, defaulting to English."""
@@ -376,6 +383,16 @@ async def on_ready():
     await load_channel_states(client.db)
     await load_settings(client.db)
     await load_channel_service_rules(client.db)
+    if PREMIUM_SKU_ID:
+        try:
+            await reconcile_supporter_roles(
+                client,
+                int(PREMIUM_SKU_ID),
+                SUPPORT_GUILD_ID,
+                SUPPORTER_ROLE_ID,
+            )
+        except Exception as error:
+            logging.exception("Premium supporter role reconciliation failed: %s", error)
     change_status.start()
     client.loop.create_task(send_worker())
 
@@ -1560,6 +1577,9 @@ async def on_entitlement_create(entitlement):
         if guild_id in bot_settings:
             bot_settings[guild_id]["is_premium"] = True
         logging.info(f"Premium activated for guild {guild_id}")
+    if PREMIUM_SKU_ID:
+        await sync_supporter_role(
+            client, entitlement, int(PREMIUM_SKU_ID), SUPPORT_GUILD_ID, SUPPORTER_ROLE_ID)
 
 @client.event
 async def on_entitlement_update(entitlement):
@@ -1570,6 +1590,9 @@ async def on_entitlement_update(entitlement):
         if guild_id in bot_settings:
             bot_settings[guild_id]["is_premium"] = is_active
         logging.info(f"Premium {'activated' if is_active else 'deactivated'} for guild {guild_id}")
+    if PREMIUM_SKU_ID:
+        await sync_supporter_role(
+            client, entitlement, int(PREMIUM_SKU_ID), SUPPORT_GUILD_ID, SUPPORTER_ROLE_ID)
 
 @client.event
 async def on_entitlement_delete(entitlement):
@@ -1579,6 +1602,28 @@ async def on_entitlement_delete(entitlement):
         if guild_id in bot_settings:
             bot_settings[guild_id]["is_premium"] = False
         logging.info(f"Premium removed for guild {guild_id}")
+    if PREMIUM_SKU_ID:
+        await sync_supporter_role(
+            client,
+            entitlement,
+            int(PREMIUM_SKU_ID),
+            SUPPORT_GUILD_ID,
+            SUPPORTER_ROLE_ID,
+            active=False,
+        )
+
+
+@client.event
+async def on_member_join(member):
+    """Grant returning Premium purchasers their Supporters role on join."""
+    if PREMIUM_SKU_ID and member.guild.id == SUPPORT_GUILD_ID:
+        await sync_supporter_role_for_member(
+            client,
+            member,
+            int(PREMIUM_SKU_ID),
+            SUPPORT_GUILD_ID,
+            SUPPORTER_ROLE_ID,
+        )
 
 # Loading the bot token from .env
 load_dotenv()

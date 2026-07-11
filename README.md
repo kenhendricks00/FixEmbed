@@ -69,6 +69,7 @@ Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the
 - 🎨 **Custom Embed Colors** — Set a custom hex color for all FixEmbed messages via `/settings` → Embed Color
 - 🤖 **Bot Message Processing** — FixEmbed will process links posted by other bots
 - 🏷️ **No "Sent by" Label** — Clean embeds without the attribution footer
+- 💎 **Supporters Role** — Receive the `Supporters` role in the FixEmbed Support Server while Premium is active
 - ❤️ **Support Development** — Help keep FixEmbed running and improving!
 
 # 🚀 Invite FixEmbed to Your Server

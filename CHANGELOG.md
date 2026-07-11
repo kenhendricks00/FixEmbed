@@ -1,3 +1,18 @@
+## v1.4.6 (07/11/2026)
+
+#### **🚀 New Features**
+- **`Premium Supporters Role`**
+  - Active Premium purchasers now automatically receive the `Supporters` role in the FixEmbed Support Server.
+  - Subscribers who join the support server after purchasing Premium receive the role when they arrive.
+
+#### **🔧 Enhancements**
+- **`Subscription Lifecycle Sync`**
+  - Existing entitlements are reconciled when the bot starts so current subscribers are recognized immediately.
+  - Entitlement creation and renewal preserve the role, while expiration, deletion, and refunds remove it.
+
+#### **🧪 Testing**
+- Added regression coverage for role grants, expirations, unrelated SKUs, and subscribers outside the support server.
+
 ## v1.4.5 (07/11/2026)
 
 #### **🚀 New Features**
