@@ -1,3 +1,21 @@
+## v1.4.2 (07/11/2026)
+
+#### **🔧 Enhancements**
+- **`Consistent Platform Card Layout`**
+  - Standardized every platform on the same creator, content, optional description, engagement, and media hierarchy.
+  - Removed creator names from the content-title position when the handle or person is already displayed above it.
+  - Prevented identical titles and descriptions from rendering twice.
+- **`Instagram Engagement Context`**
+  - Added likes and comment counts when Instagram includes them in its first-party embed data.
+
+#### **🔧 Backend Changes**
+- **`Shared Layout Normalization`**
+  - Added one renderer-level normalization policy so first-party and fallback handlers remain visually consistent.
+  - Updated Instagram recovery paths to preserve creator attribution without replacing the post caption.
+
+#### **🧪 Testing**
+- Added regression coverage for duplicate creator titles, distinct descriptions, and Instagram engagement stats.
+
 ## v1.4.0 (07/11/2026)
 
 #### **🚀 New Features**

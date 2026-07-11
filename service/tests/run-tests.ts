@@ -10,6 +10,7 @@ import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { statusHtml } from '../src/utils/static_site.ts';
+import { normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -33,6 +34,39 @@ const env: Env = {
 };
 
 const tests: TestCase[] = [
+    {
+        name: 'normalizeEmbedLayout promotes post text when the title repeats the creator',
+        run: () => {
+            const normalized = normalizeEmbedLayout({
+                title: 'brooke_annm',
+                description: 'Your annual reminder that Costco is an F1 ticket plug',
+                url: 'https://www.instagram.com/reel/example/',
+                siteName: 'FixEmbed • Instagram',
+                authorName: '@brooke_annm',
+                platform: 'instagram',
+            });
+
+            assert.equal(normalized.authorName, '@brooke_annm');
+            assert.equal(normalized.title, 'Your annual reminder that Costco is an F1 ticket plug');
+            assert.equal(normalized.description, '');
+        },
+    },
+    {
+        name: 'normalizeEmbedLayout preserves distinct titles and descriptions',
+        run: () => {
+            const normalized = normalizeEmbedLayout({
+                title: 'A useful video',
+                description: 'A separate summary of the video.',
+                url: 'https://www.youtube.com/watch?v=example',
+                siteName: 'FixEmbed • YouTube',
+                authorName: 'Creator',
+                platform: 'youtube',
+            });
+
+            assert.equal(normalized.title, 'A useful video');
+            assert.equal(normalized.description, 'A separate summary of the video.');
+        },
+    },
     {
         name: 'cleanUrl removes tracking params but preserves the canonical path',
         run: () => {
@@ -206,7 +240,7 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
-                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;amp;y=2","text":"Caption"}</script></html>', { status: 200 });
+                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;amp;y=2","text":"Caption","edge_media_preview_like":{"count":1284},"edge_media_to_parent_comment":{"count":37}}</script></html>', { status: 200 });
             };
             try {
                 const response = await instagramHandler.handle('https://www.instagram.com/p/ABC123/', env);
@@ -216,6 +250,8 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://scontent.example.com/photo.jpg?x=1&y=2');
                 assert.equal(response.data?.title, 'Caption');
                 assert.equal(response.data?.description, '');
+                assert.match(response.data?.stats || '', /1\.3K/);
+                assert.match(response.data?.stats || '', /37/);
             } finally { globalThis.fetch = originalFetch; }
         },
     },

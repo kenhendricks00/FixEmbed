@@ -12,7 +12,7 @@
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseInstagramUrl, truncateText } from '../utils/fetch.ts';
-import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata
@@ -336,6 +336,7 @@ export const instagramHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         authorName: metadata?.authorName,
+                        stats: metadata?.stats,
                         video: {
                             url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
                             width: 720,
@@ -416,11 +417,11 @@ export const instagramHandler: PlatformHandler = {
                     success: true,
                     source: 'fallback',
                     data: {
-                        title: authorName || 'Post',
-                        description: desc ? truncateText(desc, 280) : '',
+                        title: desc ? truncateText(desc, 100) : 'Post',
+                        description: '',
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
-                        // authorName: authorName, // OLD: Don't set author field to avoid duplication
+                        authorName: authorName || undefined,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
@@ -604,8 +605,7 @@ export const instagramHandler: PlatformHandler = {
                     }
 
                     if (authorName) {
-                        // result.data!.authorName = authorName; // Don't set author field to avoid duplication
-                        result.data!.title = authorName; // User requested: Author Name as Title
+                        result.data!.authorName = authorName;
                     }
 
                     // Update description if we have a better one
@@ -618,11 +618,6 @@ export const instagramHandler: PlatformHandler = {
                 console.warn('Failed to fetch extra metadata:', e);
             }
 
-            // Fallback: If we still have generic title but have authorName (e.g. from existing logic), set it
-            if ((result.data!.title === 'Post' || result.data!.title === 'Reel') && result.data!.authorName) {
-                result.data!.title = result.data!.authorName;
-                result.data!.authorName = undefined; // Clear author field to avoid duplication
-            }
             // Clean description: Remove author name if it appears at the start
             // This happens often (e.g. "username Caption text")
             // Clean description: Remove author name if it appears at the start
@@ -704,6 +699,23 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         }
 
         const html = await response.text();
+
+        const extractCount = (patterns: RegExp[]): number | undefined => {
+            for (const pattern of patterns) {
+                const value = html.match(pattern)?.[1];
+                if (value !== undefined) return Number(value.replace(/,/g, ''));
+            }
+            return undefined;
+        };
+        const likes = extractCount([
+            /"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
+            /"like_count"\s*:\s*(\d+)/,
+        ]);
+        const comments = extractCount([
+            /"edge_media_to_parent_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
+            /"comment_count"\s*:\s*(\d+)/,
+            /View all\s+(\d[\d,]*)\s+comments/i,
+        ]);
 
         // Extract username - multiple patterns
         let username = '';
@@ -817,6 +829,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 authorName: username ? `@${username}` : undefined,
                 color: platformColors.instagram,
                 platform: 'instagram',
+                stats: formatStats({ likes, comments }),
             },
         };
 

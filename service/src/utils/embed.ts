@@ -9,10 +9,50 @@ import type { EmbedData } from '../types.ts';
  */
 export const FIXEMBED_LOGO = 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png';
 
+const GENERIC_POST_TITLES = new Set(['post', 'reel', 'thread', 'tweet']);
+
+function comparableIdentity(value?: string): string {
+    return (value || '')
+        .toLowerCase()
+        .replace(/^@/, '')
+        .replace(/\s*\(@[^)]+\)\s*$/, '')
+        .trim();
+}
+
+/**
+ * Keep every platform on the same Discord card hierarchy: creator, content,
+ * optional supporting description, engagement stats, then media.
+ */
+export function normalizeEmbedLayout(embed: EmbedData): EmbedData {
+    const title = embed.title.trim();
+    const description = embed.description.trim();
+    const titleIdentity = comparableIdentity(title);
+    const repeatsCreator = Boolean(titleIdentity) && [
+        comparableIdentity(embed.authorName),
+        comparableIdentity(embed.authorHandle),
+    ].some((identity) => identity === titleIdentity);
+    const genericTitle = GENERIC_POST_TITLES.has(title.toLowerCase());
+
+    if (description && (repeatsCreator || genericTitle)) {
+        return {
+            ...embed,
+            title: description.length > 100 ? `${description.slice(0, 97).trimEnd()}...` : description,
+            description: '',
+        };
+    }
+
+    return {
+        ...embed,
+        title,
+        description: description === title ? '' : description,
+    };
+}
+
 /**
  * Generate Open Graph meta tags for Discord/Telegram embeds
  */
 export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
+    embed = normalizeEmbedLayout(embed);
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
 
