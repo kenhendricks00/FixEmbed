@@ -80,10 +80,11 @@ Click the following link to invite FixEmbed to your server: [Invite FixEmbed](ht
 You can host the bot yourself using Docker:
 <br>
 ```bash
-docker pull kenhendricks00/fixembed
-docker run -d kenhendricks00/fixembed
+cp .env.example .env
+# Fill in BOT_TOKEN and PREMIUM_SKU_ID in .env, then:
+docker pull kenhendricks00/fixembed:latest
+docker run --env-file .env -d kenhendricks00/fixembed:latest
 ```
-Just don't forget to set your bot's token using <code>BOT_TOKEN</code>
 
 # 💬 Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.

@@ -1,5 +1,9 @@
 # Environment variables
 .env
+.env.local
+.env.*.local
+*.pem
+*.key
 
 # Python
 __pycache__/

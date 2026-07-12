@@ -42,3 +42,25 @@ jobs:
       - run: npm audit --omit=dev
       - run: npm test
       - run: npx tsc --noEmit
+
+  docker:
+    needs: [python, service]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build --tag kenhendricks00/fixembed:${{ github.sha }} .
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Publish immutable and latest tags
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push kenhendricks00/fixembed:${{ github.sha }}
+          docker tag kenhendricks00/fixembed:${{ github.sha }} kenhendricks00/fixembed:latest
+          docker push kenhendricks00/fixembed:latest
