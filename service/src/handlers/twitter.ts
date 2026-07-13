@@ -93,24 +93,32 @@ export const twitterHandler: PlatformHandler = {
                 1000,
             );
             const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media || [];
-            const firstMedia = media[0];
+            const photos = media
+                .filter((item) => item.type === 'photo')
+                .map((item) => item.media_url_https);
+            const firstVideo = media.find((item) => item.type !== 'photo');
             let image: string | undefined;
+            let images: string[] | undefined;
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
-            if (firstMedia?.type === 'photo') {
-                image = firstMedia.media_url_https;
-            } else if (firstMedia) {
-                const videoUrl = bestVideoUrl(firstMedia);
+            if (photos.length === 1) {
+                [image] = photos;
+            } else if (photos.length > 1) {
+                images = photos;
+            }
+
+            if (firstVideo) {
+                const videoUrl = bestVideoUrl(firstVideo);
                 if (videoUrl) {
-                    const [widthRatio, heightRatio] = firstMedia.video_info?.aspect_ratio || [16, 9];
+                    const [widthRatio, heightRatio] = firstVideo.video_info?.aspect_ratio || [16, 9];
                     const width = 1280;
                     video = {
                         url: videoUrl,
                         width,
                         height: Math.round(width * (heightRatio / widthRatio)),
-                        thumbnail: firstMedia.media_url_https,
+                        thumbnail: firstVideo.media_url_https,
                     };
-                    image = firstMedia.media_url_https;
+                    image ||= firstVideo.media_url_https;
                 }
             }
 
@@ -127,6 +135,7 @@ export const twitterHandler: PlatformHandler = {
                     authorUrl: `https://x.com/${handle}`,
                     authorAvatar: tweet.user.profile_image_url_https,
                     image,
+                    images,
                     video,
                     color: platformColors.twitter,
                     platform: 'twitter',

@@ -574,6 +574,44 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler preserves every photo in a carousel',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1848831595014459513',
+                text: 'Three photos',
+                user: {
+                    name: 'SpaceX',
+                    screen_name: 'SpaceX',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/spacex.jpg',
+                },
+                created_at: '2024-10-22T00:00:00.000Z',
+                mediaDetails: [
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/one.jpg' },
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/two.jpg' },
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/three.jpg' },
+                ],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/SpaceX/status/1848831595014459513',
+                    env,
+                );
+
+                assert.deepEqual(response.data?.images, [
+                    'https://pbs.twimg.com/media/one.jpg',
+                    'https://pbs.twimg.com/media/two.jpg',
+                    'https://pbs.twimg.com/media/three.jpg',
+                ]);
+                assert.equal(response.data?.image, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;
