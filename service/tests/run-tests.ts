@@ -724,7 +724,7 @@ const tests: TestCase[] = [
                         '<script>{"display_url":"https:\\/\\/scontent.example\\/photo.jpg","text":"Caption"}</script>',
                     ].join(''), { status: 200 });
                 }
-                if (url.includes('/api/v1/users/web_profile_info/?username=creator')) {
+                if (url.includes('i.instagram.com/api/v1/users/web_profile_info/?username=creator')) {
                     return Response.json({
                         data: {
                             user: {

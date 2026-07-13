@@ -769,7 +769,7 @@ async function upgradeInstagramAvatar(username: string, avatarUrl: string): Prom
 
     try {
         const response = await fetch(
-            `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
+            `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
             {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
