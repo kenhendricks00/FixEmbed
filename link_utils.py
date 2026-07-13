@@ -10,7 +10,7 @@ URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
 PRECONVERTED_HOSTS = {"fixembed.app", "fixupx.com", "fxtwitter.com", "vxtwitter.com", "bskyx.app"}
-EMBED_REVISION = "153"
+EMBED_REVISION = "154"
 
 
 @dataclass(frozen=True)

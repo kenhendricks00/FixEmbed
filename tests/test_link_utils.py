@@ -114,7 +114,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=153&quality=high",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=154&quality=high",
         )
 
     def test_build_fixembed_url_preserves_twitter_translation_suffix(self):
@@ -122,7 +122,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=153&lang=es",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=154&lang=es",
         )
 
     def test_build_fixembed_url_preserves_gallery_and_mosaic_modifiers(self):
@@ -131,11 +131,11 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(gallery),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=153&mode=gallery",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=154&mode=gallery",
         )
         self.assertEqual(
             build_fixembed_url(mosaic),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=153&lang=es&mode=mosaic",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=154&lang=es&mode=mosaic",
         )
 
     def test_automatic_twitter_provider_can_use_fxtwitter_without_changing_manual_links(self):
@@ -147,7 +147,7 @@ class SocialServiceTests(unittest.TestCase):
         )
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=153&quality=high&lang=fr&mode=gallery",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=154&quality=high&lang=fr&mode=gallery",
         )
 
     def test_automatic_provider_switch_does_not_change_other_services(self):
