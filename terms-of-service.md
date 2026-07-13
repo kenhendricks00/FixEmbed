@@ -10,6 +10,6 @@ When using bot commands that use external services, additional terms may apply t
 
 To contact me ([Kenneth Hendricks](https://github.com/kenhendricks00)), the developer of FixEmbed, you can mention strikermonkeyxd (<code>1121099921655865375</code>) in the official [FixEmbed Support Discord server](https://discord.gg/QFxTAmtZdn).
 
-Also see [FixEmbed’s Privacy Policy](https://github.com/kenhendricks00/FixEmbedBot/blob/main/privacy-policy.md).
+Also see [FixEmbed’s Privacy Policy](https://github.com/kenhendricks00/FixEmbed/blob/main/privacy-policy.md).
 
 Thanks for using FixEmbed!

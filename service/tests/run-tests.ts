@@ -13,7 +13,14 @@ import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts'
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
-import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
+import {
+    docsHtml,
+    indexHtml,
+    privacyHtml,
+    statusHtml,
+    supportHtml,
+    tosHtml,
+} from '../src/utils/static_site.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
@@ -1808,6 +1815,17 @@ const tests: TestCase[] = [
             assert.match(indexHtml, /YouTube community posts/i);
             assert.match(docsHtml, /YouTube Community Posts/);
             assert.match(docsHtml, /youtube\.com\/post/);
+        },
+    },
+    {
+        name: 'every public page offers AGPL source and credits the creator',
+        run: () => {
+            const publicPages = [indexHtml, tosHtml, privacyHtml, docsHtml, supportHtml, statusHtml];
+
+            for (const page of publicPages) {
+                assert.match(page, /Source \(AGPL-3\.0\)/);
+                assert.match(page, /Kenneth Hendricks/);
+            }
         },
     },
     {

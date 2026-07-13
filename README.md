@@ -113,3 +113,9 @@ Members of the support server automatically receive the **Voter** role after vot
 - Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
 - Built with [Hono](https://hono.dev/) framework
 - Deployed on [Cloudflare Workers](https://workers.cloudflare.com/)
+
+# License
+
+Copyright (c) 2024-2026 Kenneth Hendricks.
+
+FixEmbed is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). If you modify FixEmbed and make the modified version available to users over a network, you must offer those users the corresponding source code under the same license. Modified versions must preserve applicable legal notices and identify their changes as required by the license.

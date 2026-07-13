@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Licensing**
+- Relicensed FixEmbed from MIT to the GNU Affero General Public License v3.0 or later.
+- Added visible author attribution and source links to the hosted service and Discord `/about` surface.
+
 #### **🚀 New Features**
 - **`Richer First-Party X Embeds`**
   - Preserve every photo in X/Twitter carousel posts.

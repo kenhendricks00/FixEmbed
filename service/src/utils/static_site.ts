@@ -357,9 +357,9 @@ docker run -d kenhendricks00/fixembed</code></pre>
                         <a href="/status">Status</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank">GitHub</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed" target="_blank">Source (AGPL-3.0)</a>
                     </div>
-                    <p class="copyright">© 2023-2026 FixEmbed</p>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
                 </div>
             </div>
         </div>
@@ -1687,9 +1687,9 @@ export const tosHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a>
                     </div>
-                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
                 </div>
             </div>
         </div>
@@ -1794,9 +1794,9 @@ export const privacyHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a>
                     </div>
-                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
                 </div>
             </div>
         </div>
@@ -1979,9 +1979,9 @@ export const docsHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a>
                     </div>
-                    <p class="copyright">© 2023-2025 FixEmbed</p>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
                 </div>
             </div>
         </div>
@@ -2150,9 +2150,9 @@ export const supportHtml = `<!DOCTYPE html>
                         <a href="/docs">Docs</a>
                         <a href="/tos">Terms</a>
                         <a href="/privacy">Privacy</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed">GitHub</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a>
                     </div>
-                    <p class="copyright">© 2023-2026 FixEmbed</p>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
                 </div>
             </div>
         </div>
@@ -2345,6 +2345,26 @@ export const statusHtml = `<!DOCTYPE html>
             </div>
         </section>
     </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <span class="footer-logo">FixEmbed</span>
+                    <p>A Discord bot that fixes the lack of embed support in Discord.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="/docs">Docs</a>
+                        <a href="/tos">Terms</a>
+                        <a href="/privacy">Privacy</a>
+                        <a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a>
+                    </div>
+                    <p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p>
+                </div>
+            </div>
+        </div>
+    </footer>
 
     <script>
         function statusClass(status) {

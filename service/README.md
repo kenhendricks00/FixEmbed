@@ -137,4 +137,6 @@ All embeds follow a consistent format:
 
 ## License
 
-MIT - See [LICENSE](../LICENSE) for details.
+Copyright (c) 2024-2026 Kenneth Hendricks. Licensed under the [GNU Affero General Public License v3.0 or later](../LICENSE).
+
+Modified network deployments must offer their users the corresponding source code under the same license.

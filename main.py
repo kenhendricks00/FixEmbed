@@ -518,7 +518,7 @@ async def about(interaction: discord.Interaction):
         value=(
             "- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
             "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
-            "- [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbedBot)\n"
+            "- [Source Code (AGPL-3.0-or-later)](https://github.com/kenhendricks00/FixEmbed)\n"
             "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)"
         ),
         inline=False)
@@ -529,6 +529,13 @@ async def about(interaction: discord.Interaction):
             "- [Snapsave](https://snapsave.app)\n"
             "- [Phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
             "- [VxBilibili](https://github.com/niconi21/vxBilibili), created by niconi21\n"
+        ),
+        inline=False)
+    embed.add_field(
+        name="License & Attribution",
+        value=(
+            "FixEmbed was created by Kenneth Hendricks and is licensed under "
+            "[AGPL-3.0-or-later](https://github.com/kenhendricks00/FixEmbed/blob/main/LICENSE)."
         ),
         inline=False)
     create_footer(embed, client)
