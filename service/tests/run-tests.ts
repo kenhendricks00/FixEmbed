@@ -9,7 +9,7 @@ import { redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
-import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
+import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
@@ -644,6 +644,63 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
                 assert.match(response.data?.stats || '', /218/);
                 assert.match(response.data?.stats || '', /75/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler preserves creator identity and every carousel image',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('resolveHandle')) {
+                    return Response.json({ did: 'did:plc:creator' });
+                }
+                if (url.includes('getPostThread')) {
+                    return Response.json({
+                        thread: {
+                            post: {
+                                author: {
+                                    did: 'did:plc:creator',
+                                    handle: 'creator.bsky.social',
+                                    displayName: 'Creator Name',
+                                    avatar: 'https://cdn.bsky.app/avatar.jpg',
+                                },
+                                record: {
+                                    text: 'A Bluesky carousel.',
+                                    createdAt: '2026-07-13T19:00:00.000Z',
+                                },
+                                embed: {
+                                    images: [
+                                        { fullsize: 'https://cdn.bsky.app/one.jpg', thumb: 'https://cdn.bsky.app/one-thumb.jpg', alt: 'One' },
+                                        { fullsize: 'https://cdn.bsky.app/two.jpg', thumb: 'https://cdn.bsky.app/two-thumb.jpg', alt: 'Two' },
+                                    ],
+                                },
+                                likeCount: 34,
+                                repostCount: 5,
+                                replyCount: 12,
+                            },
+                        },
+                    });
+                }
+                throw new Error('Unexpected request: ' + url);
+            };
+
+            try {
+                const response = await blueskyHandler.handle(
+                    'https://bsky.app/profile/creator.bsky.social/post/abc123',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorName, 'Creator Name');
+                assert.equal(response.data?.authorHandle, '@creator.bsky.social');
+                assert.deepEqual(response.data?.images, [
+                    'https://cdn.bsky.app/one.jpg',
+                    'https://cdn.bsky.app/two.jpg',
+                ]);
             } finally {
                 globalThis.fetch = originalFetch;
             }

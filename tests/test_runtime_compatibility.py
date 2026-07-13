@@ -99,6 +99,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_threads", main_source)
 
+    def test_bluesky_uses_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from bluesky_embed import fetch_bluesky_layout", main_source)
+        self.assertIn('elif item.service == "Bluesky":', main_source)
+        self.assertIn("fetch_bluesky_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
+        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertNotIn("download_bluesky", main_source)
+
 
 if __name__ == "__main__":
     unittest.main()

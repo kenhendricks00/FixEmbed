@@ -110,10 +110,16 @@ export const blueskyHandler: PlatformHandler = {
                 comments: post.replyCount,
             });
 
-            // Check for images
+            // Preserve the complete Bluesky carousel for Components V2.
             let image: string | undefined;
+            let images: string[] | undefined;
             if (post.embed?.images && post.embed.images.length > 0) {
-                image = post.embed.images[0].fullsize;
+                const imageUrls = post.embed.images
+                    .map((item) => item.fullsize)
+                    .filter(Boolean)
+                    .slice(0, 4);
+                if (imageUrls.length === 1) [image] = imageUrls;
+                if (imageUrls.length > 1) images = imageUrls;
             } else if (post.embed?.external?.thumb) {
                 image = post.embed.external.thumb;
             }
@@ -126,11 +132,12 @@ export const blueskyHandler: PlatformHandler = {
                     description: content.description,
                     url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
                     siteName: getBrandedSiteName('bluesky'),
-                    // authorName shows handle - don't duplicate display name
-                    authorName: `@${author.handle}`,
+                    authorName: author.displayName?.trim() || `@${author.handle}`,
+                    authorHandle: `@${author.handle}`,
                     authorUrl: `https://bsky.app/profile/${author.handle}`,
                     authorAvatar: author.avatar,
                     image,
+                    images,
                     color: platformColors.bluesky,
                     platform: 'bluesky',
                     timestamp: record.createdAt,
