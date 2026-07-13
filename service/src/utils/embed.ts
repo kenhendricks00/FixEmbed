@@ -17,7 +17,6 @@ function escapeHtml(str: string): string {
 }
 
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
-const INSTAGRAM_ACTIVITY_REVISION = '21';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
@@ -130,17 +129,13 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     embed = normalizeEmbedLayout(embed);
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
-    // Instagram needs a poster for Discord's creator-first Activity card to
-    // keep the playable media inside the bordered embed. Posterless reels use
-    // native Open Graph video as the safe fallback.
-    const hasInstagramActivityMedia = embed.video
-        ? Boolean(embed.video.thumbnail || embed.image)
-        : Boolean(embed.images?.length || embed.image);
-    const supportsDiscordActivityCard = embed.platform !== 'instagram' || hasInstagramActivityMedia;
+    // Instagram uses a non-federated player card so Discord cannot append an
+    // Activity server hostname to the creator label.
+    const supportsDiscordActivityCard = embed.platform !== 'instagram';
     const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter' && supportsDiscordActivityCard;
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
     const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
-    const displayTitle = embed.platform === 'twitter' && embed.authorName && embed.authorHandle
+    const displayTitle = (embed.platform === 'twitter' || embed.platform === 'instagram') && embed.authorName && embed.authorHandle
         ? `${embed.authorName} (${embed.authorHandle})`
         : embed.title;
 
@@ -234,7 +229,10 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // Note: Previously excluded Instagram to force large images, but testing if it still works with oEmbed
     const oembedUrl = new URL('https://fixembed.app/oembed');
     oembedUrl.searchParams.set('url', embed.url);
-    if (embed.siteName) oembedUrl.searchParams.set('provider', embed.siteName);
+    const oembedProvider = embed.platform === 'instagram' && embed.authorName && embed.authorHandle
+        ? `${embed.authorName} (${embed.authorHandle})`
+        : embed.siteName;
+    if (oembedProvider) oembedUrl.searchParams.set('provider', oembedProvider);
     if (embed.stats) oembedUrl.searchParams.set('stats', embed.stats);
     if (embed.authorName) oembedUrl.searchParams.set('author', embed.authorName);
     if (embed.title) oembedUrl.searchParams.set('title', embed.title);
@@ -243,9 +241,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     if (supportsDiscordActivityCard) {
         const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
-        const activitySourceUrl = embed.platform === 'instagram'
-            ? `${embed.url}${embed.url.includes('?') ? '&' : '?'}fixembed_activity=${INSTAGRAM_ACTIVITY_REVISION}`
-            : embed.url;
+        const activitySourceUrl = embed.url;
         const encodedActivity = embed.platform === 'twitter' && twitterStatusId
             ? encodeSnowcode({ i: twitterStatusId })
             : encodeActivitySource(activitySourceUrl);

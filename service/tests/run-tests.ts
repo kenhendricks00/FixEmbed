@@ -1090,7 +1090,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord Instagram reels with a poster use the creator-first Activity card',
+        name: 'Discord Instagram reels with a poster use a domain-free player card',
         run: () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
@@ -1111,20 +1111,19 @@ const tests: TestCase[] = [
                 platform: 'instagram',
             }, 'Discordbot/2.0');
 
-            assert.match(
-                html,
-                /href='https:\/\/fixembed\.app\/users\/creator\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/,
-            );
+            assert.doesNotMatch(html, /application\/activity\+json/);
+            assert.match(html, /property="og:video"/);
+            assert.match(html, /property="og:image"/);
+            assert.match(html, /property="og:title" content="Creator \(@creator\)"/);
+            assert.match(html, /provider=Creator\+%28%40creator%29/);
             assert.match(
                 html,
                 /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
             );
-            assert.doesNotMatch(html, /property="og:video"/);
-            assert.doesNotMatch(html, /property="og:image"/);
         },
     },
     {
-        name: 'Instagram Activity cards use Discord compact creator identity',
+        name: 'Instagram player cards do not advertise a federated identity',
         run: async () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
@@ -1147,40 +1146,8 @@ const tests: TestCase[] = [
                 platform: 'instagram',
             }, 'Discordbot/2.0');
             const encoded = html.match(/\/users\/creator\/statuses\/(\d+)/)?.[1];
-            assert.ok(encoded);
+            assert.equal(encoded, undefined);
 
-            const originalFetch = globalThis.fetch;
-            globalThis.fetch = async (input) => {
-                const url = String(input);
-                if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
-                    return new Response([
-                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg" alt="creator" /></a>',
-                        '<span class="UsernameText">creator</span>',
-                        '<div class="Caption">creator<br /><br />Actual reel caption &#064;cota</div>',
-                        '<script>window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
-                        '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};</script>',
-                    ].join(''), { status: 200 });
-                }
-                return new Response('', { status: 404 });
-            };
-
-            try {
-                const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
-                assert.equal(response.status, 200);
-                const activity = await response.json() as any;
-                assert.equal(activity.account.id, 'creator');
-                assert.equal(activity.url, sourceUrl);
-                assert.equal(activity.uri, sourceUrl);
-                assert.equal(activity.account.display_name, 'creator (@creator)');
-                assert.equal(activity.account.username, undefined);
-                assert.equal(activity.account.acct, undefined);
-                assert.equal(activity.account.url, 'https://www.instagram.com/creator/');
-                assert.equal(activity.account.uri, 'https://www.instagram.com/creator/');
-                assert.equal(activity.media_attachments[0].type, 'video');
-                assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');
-            } finally {
-                globalThis.fetch = originalFetch;
-            }
         },
     },
     {
