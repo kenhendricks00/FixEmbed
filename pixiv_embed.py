@@ -26,6 +26,10 @@ def _clean_handle(value: Any) -> str:
     return str(value or "").strip().lstrip("@")
 
 
+def _escape_markdown(value: str) -> str:
+    return re.sub(r"([\\`*_{}\[\]()<>#+\-.!|])", r"\\\1", value)
+
+
 def _artwork_timestamp(value: Any) -> int:
     raw = str(value or "").strip()
     if raw:
@@ -122,12 +126,20 @@ def build_pixiv_layout(
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
 
-    creator_label = author_name
-    if author_handle and author_handle.casefold() != author_name.casefold():
-        creator_label = f"{author_name} (@{author_handle})"
-    creator_line = (
-        f"**[{creator_label}]({author_url})**" if author_url else f"**{creator_label}**"
-    )
+    escaped_author_name = _escape_markdown(author_name)
+    escaped_author_handle = _escape_markdown(author_handle)
+    if author_url and escaped_author_handle:
+        creator_line = (
+            f"**{escaped_author_name} (**"
+            f"[**@{escaped_author_handle}**]({author_url})"
+            "**)**"
+        )
+    elif author_url:
+        creator_line = f"**[{escaped_author_name}]({author_url})**"
+    elif escaped_author_handle:
+        creator_line = f"**{escaped_author_name} (@{escaped_author_handle})**"
+    else:
+        creator_line = f"**{escaped_author_name}**"
     title_line = f"**[{title}]({source_url})**" if source_url else f"**{title}**"
     header_text = "\n".join(part for part in (creator_line, title_line, description) if part)
 

@@ -60,8 +60,8 @@ class PixivEmbedTests(unittest.TestCase):
             "title": "A finished illustration",
             "description": "Artwork caption with the complete creator description.",
             "url": "https://www.pixiv.net/artworks/123456",
-            "authorName": "Artist Name",
-            "authorHandle": "@artist_account",
+            "authorName": "aion21",
+            "authorHandle": "@master_nj_aion",
             "authorUrl": "https://www.pixiv.net/users/42",
             "authorAvatar": "https://fixembed.app/proxy/pixiv?url=avatar",
             "stats": "💬 12  ❤️ 1.4K  👁️ 28K  🔖 300",
@@ -83,7 +83,11 @@ class PixivEmbedTests(unittest.TestCase):
         self.assertEqual(container["type"], 17)
         self.assertEqual(container["accent_color"], 0x0096FA)
         self.assertIn("A finished illustration", header["components"][0]["content"])
-        self.assertIn("[Artist Name (@artist_account)]", header["components"][0]["content"])
+        self.assertIn(
+            "**aion21 (**[**@master\\_nj\\_aion**](https://www.pixiv.net/users/42)**)**",
+            header["components"][0]["content"],
+        )
+        self.assertNotIn("[aion21 (", header["components"][0]["content"])
         self.assertIn(payload["description"], header["components"][0]["content"])
         self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
         self.assertEqual(
