@@ -20,6 +20,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertNotIn("download_instagram_video", main_source)
         self.assertNotIn("video_file = discord.File(", main_source)
         self.assertNotIn("instagram_cards", main_source)
+        self.assertIn('if item.service == "Instagram":', main_source)
+        self.assertIn("formatted_links.append(automatic_url)", main_source)
 
 
 if __name__ == "__main__":

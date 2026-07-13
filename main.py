@@ -1434,7 +1434,10 @@ async def on_message(message):
                         media_quality,
                         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
                     )
-                    formatted_links.append(f"[{item.display_text}]({automatic_url})")
+                    if item.service == "Instagram":
+                        formatted_links.append(automatic_url)
+                    else:
+                        formatted_links.append(f"[{item.display_text}]({automatic_url})")
                     processed_link_cache[dedup_key] = time.time()
                     service_stats = processing_stats["by_service"].setdefault(item.service, {"ok": 0, "fail": 0})
                     service_stats["ok"] += 1
