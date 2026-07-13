@@ -1,6 +1,6 @@
 import unittest
 
-from instagram_embed import build_instagram_embed
+from instagram_embed import build_instagram_card, build_instagram_embed
 
 
 class InstagramEmbedTests(unittest.TestCase):
@@ -61,6 +61,20 @@ class InstagramEmbedTests(unittest.TestCase):
 
         self.assertIsNotNone(embed.timestamp)
         self.assertEqual(embed.timestamp.utcoffset().total_seconds(), 0)
+
+    def test_video_card_preserves_the_playable_video_url(self):
+        payload = {
+            "authorName": "brooke_annm",
+            "video": {
+                "url": "https://fixembed.app/video/instagram?url=video",
+                "thumbnail": "https://cdn.example/poster.jpg",
+            },
+        }
+
+        card = build_instagram_card(payload)
+
+        self.assertEqual(card.video_url, payload["video"]["url"])
+        self.assertEqual(card.embed.image.url, payload["video"]["thumbnail"])
 
 
 if __name__ == "__main__":

@@ -12,10 +12,11 @@ import aiosqlite
 import sqlite3
 import time
 import ast
+import io
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
-from instagram_embed import fetch_instagram_embed
+from instagram_embed import download_instagram_video, fetch_instagram_card
 from message_context import format_tagged_users
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
@@ -169,12 +170,12 @@ processing_stats = {
     "by_service": {}
 }
 
-async def rate_limited_send(channel, content=None, embed=None, allowed_mentions=None):
-    await SEND_QUEUE.put((channel, content, embed, allowed_mentions))
+async def rate_limited_send(channel, content=None, embed=None, file=None, allowed_mentions=None):
+    await SEND_QUEUE.put((channel, content, embed, file, allowed_mentions))
 
 async def send_worker():
     while True:
-        channel, content, embed, allowed_mentions = await SEND_QUEUE.get()
+        channel, content, embed, file, allowed_mentions = await SEND_QUEUE.get()
         try:
             current_time = time.time()
             while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
@@ -190,6 +191,7 @@ async def send_worker():
             await channel.send(
                 content=content,
                 embed=embed,
+                file=file,
                 allowed_mentions=allowed_mentions,
             )
         except Exception as e:
@@ -1421,7 +1423,7 @@ async def on_message(message):
                 include_fixembed=True,
             )
             formatted_links = []
-            instagram_embeds = []
+            instagram_cards = []
             for item in links:
                 default_enabled = item.service in enabled_services
                 service_enabled = get_service_rule(guild_id, message.channel.id, item.service, default_enabled)
@@ -1442,12 +1444,29 @@ async def on_message(message):
                                 if client.user is not None
                                 else None
                             )
-                            instagram_embeds.append(
-                                await fetch_instagram_embed(
-                                    item.canonical_url,
-                                    footer_icon_url,
-                                )
+                            card = await fetch_instagram_card(
+                                item.canonical_url,
+                                footer_icon_url,
                             )
+                            video_file = None
+                            if card.video_url:
+                                max_upload_bytes = getattr(message.guild, "filesize_limit", 10 * 1024 * 1024)
+                                video_bytes = await download_instagram_video(
+                                    card.video_url,
+                                    max_upload_bytes,
+                                )
+                                if video_bytes:
+                                    card.embed.remove_image()
+                                    video_file = discord.File(
+                                        io.BytesIO(video_bytes),
+                                        filename="instagram-video.mp4",
+                                    )
+                                else:
+                                    logging.warning(
+                                        "Instagram video exceeds the upload limit for guild %s",
+                                        guild_id,
+                                    )
+                            instagram_cards.append((card.embed, video_file))
                         except Exception as error:
                             logging.warning(
                                 "Instagram metadata fetch failed for %s: %s",
@@ -1462,7 +1481,7 @@ async def on_message(message):
                     service_stats["ok"] += 1
                     processing_stats["total_fixed"] += 1
 
-            if formatted_links or instagram_embeds:
+            if formatted_links or instagram_cards:
                 if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
@@ -1482,10 +1501,11 @@ async def on_message(message):
                             content=chunk,
                             allowed_mentions=allowed_mentions,
                         )
-                    for embed in instagram_embeds:
+                    for embed, video_file in instagram_cards:
                         await rate_limited_send(
                             message.channel,
                             embed=embed,
+                            file=video_file,
                             allowed_mentions=allowed_mentions,
                         )
                     await message.delete()
@@ -1493,13 +1513,13 @@ async def on_message(message):
                     await message.edit(suppress=True)
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for embed in instagram_embeds:
-                        await rate_limited_send(message.channel, embed=embed)
+                    for embed, video_file in instagram_cards:
+                        await rate_limited_send(message.channel, embed=embed, file=video_file)
                 else:
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for embed in instagram_embeds:
-                        await rate_limited_send(message.channel, embed=embed)
+                    for embed, video_file in instagram_cards:
+                        await rate_limited_send(message.channel, embed=embed, file=video_file)
 
         except discord.Forbidden:
             logging.warning(f"Missing permissions in channel {message.channel.id}")
