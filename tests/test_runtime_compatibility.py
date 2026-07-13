@@ -30,6 +30,30 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertGreaterEqual(main_source.count("silent=True"), 2)
 
+    def test_settings_workflow_uses_components_v2_without_legacy_embeds(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(
+            "@client.tree.command(name='delivery'", 1
+        )[0]
+
+        self.assertIn("class SettingsPageView(ui.LayoutView)", settings_section)
+        self.assertIn("class SettingsView(SettingsPageView)", settings_section)
+        self.assertIn("render_settings_layout(", settings_section)
+        self.assertNotIn("discord.Embed(", settings_section)
+        self.assertIn(
+            "interaction.response.send_message(view=SettingsView(interaction, guild_settings), ephemeral=True)",
+            settings_section,
+        )
+
+        alias_section = main_source.split("@client.tree.command(name='delivery'", 1)[1].split(
+            "@client.event\nasync def on_message", 1
+        )[0]
+        self.assertGreaterEqual(alias_section.count("SettingsNoticeView("), 4)
+        self.assertNotIn("discord.Embed(", alias_section)
+        self.assertIn("view=DebugSettingsView(interaction, settings)", main_source)
+        self.assertIn('title=f"{client.user.name} Activated"', main_source)
+        self.assertIn('title=f"{client.user.name} Deactivated"', main_source)
+
     def test_instagram_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 

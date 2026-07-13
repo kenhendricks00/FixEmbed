@@ -17,6 +17,7 @@ from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from instagram_embed import fetch_instagram_layout
 from message_context import format_tagged_users
+from settings_components import render_settings_layout
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
     reconcile_supporter_roles,
@@ -466,11 +467,13 @@ async def activate(interaction: discord.Interaction,
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     channel_states[channel.id] = True
     await update_channel_state(client.db, channel.id, True)
-    embed = discord.Embed(title=f"{client.user.name}",
-                          description=get_text(lang, "activated_for", channel=channel.mention),
-                          color=discord.Color(0x78b159))
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed)
+    view = SettingsNoticeView(
+        title=f"{client.user.name} Activated",
+        description=get_text(lang, "activated_for", channel=channel.mention),
+        accent_color=discord.Color(0x78B159),
+        footer="Activation",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(
     name='deactivate',
@@ -485,11 +488,13 @@ async def deactivate(interaction: discord.Interaction,
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     channel_states[channel.id] = False
     await update_channel_state(client.db, channel.id, False)
-    embed = discord.Embed(title=f"{client.user.name}",
-                          description=get_text(lang, "deactivated_for", channel=channel.mention),
-                          color=discord.Color.red())
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed)
+    view = SettingsNoticeView(
+        title=f"{client.user.name} Deactivated",
+        description=get_text(lang, "deactivated_for", channel=channel.mention),
+        accent_color=discord.Color.red(),
+        footer="Activation",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(
     name='about',
@@ -615,697 +620,454 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
         await interaction.followup.send(chunk)
 
 async def debug_info(interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
-    if not channel:
-        channel = interaction.channel
-
-    guild = interaction.guild
-    permissions = channel.permissions_for(guild.me)
-    fix_embed_status = channel_states.get(channel.id, True)
-    fix_embed_activated = all(channel_states.get(ch.id, True) for ch in guild.text_channels)
-
-    embed = discord.Embed(
-        title="Debug Information",
-        description="For more help, join the [support server](https://discord.gg/QFxTAmtZdn)",
-        color=get_guild_color(guild.id, discord.Color(0x7289DA)))
-    
-    embed.add_field(
-        name="Status and Permissions",
-        value=(
-            f'{f"🟢 **FixEmbed working in** {channel.mention}" if fix_embed_status else f"🔴 **FixEmbed not working in** {channel.mention}"}\n'
-            f"- {'🟢 FixEmbed activated' if fix_embed_status else '🔴 FixEmbed deactivated'}\n"
-            f"- {'🟢' if permissions.read_messages else '🔴'} Read message permission\n"
-            f"- {'🟢' if permissions.send_messages else '🔴'} Send message permission\n"
-            f"- {'🟢' if permissions.embed_links else '🔴'} Embed links permission\n"
-            f"- {'🟢' if permissions.manage_messages else '🔴'} Manage messages permission"
-        ),
-        inline=False
+    settings = bot_settings.get(
+        interaction.guild.id,
+        {
+            "enabled_services": DEFAULT_ENABLED_SERVICES,
+            "mention_users": True,
+            "delete_original": True,
+            "delivery_mode": "suppress",
+            "media_quality": "balanced",
+        },
+    )
+    await interaction.response.send_message(
+        view=DebugSettingsView(interaction, settings),
+        ephemeral=True,
     )
 
-    shard_id = guild.shard_id
-    embed.add_field(
-        name="FixEmbed Stats",
-        value=(
-            f"```\n"
-            f"Status: {'Activated' if fix_embed_activated else 'Deactivated'}\n"
-            f"Shard: {shard_id + 1}\n"
-            f"Uptime: {str(discord.utils.utcnow() - client.launch_time).split('.')[0]}\n"
-            f"Version: {VERSION}\n"
-            f"```"
-        ),
-        inline=False
-    )
 
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, bot_settings.get(interaction.guild.id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})))
+# Components V2 settings implementation used by the private configuration flow.
+
+
+class SettingsPageView(ui.LayoutView):
+    def __init__(self, interaction, settings, *, timeout=180):
+        super().__init__(timeout=timeout)
+        self.interaction = interaction
+        self.settings = settings
+
+    @property
+    def lang(self):
+        return self.settings.get("language", "en")
+
+    async def save(self):
+        await update_setting(
+            client.db,
+            self.interaction.guild.id,
+            self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
+            self.settings.get("mention_users", True),
+            self.settings.get("delete_original", True),
+            self.settings.get("language", "en"),
+            self.settings.get("embed_color"),
+            self.settings.get("delivery_mode", "suppress"),
+            self.settings.get("media_quality", "balanced"),
+        )
+
+    def render_page(self, *, title, description, status=None, controls=(), accent_color=None, footer="Settings"):
+        rows = list(controls)
+        if not isinstance(self, SettingsView):
+            rows.append((SettingsDropdown(self.interaction, self.settings),))
+        render_settings_layout(
+            self,
+            title=title,
+            description=description,
+            status=status,
+            controls=rows,
+            accent_color=accent_color or get_guild_color(self.interaction.guild.id),
+            footer=footer,
+        )
+        return self
+
+
+class SettingsNoticeView(ui.LayoutView):
+    def __init__(self, *, title, description, accent_color, footer, controls=()):
+        super().__init__(timeout=180)
+        render_settings_layout(
+            self,
+            title=title,
+            description=description,
+            controls=controls,
+            accent_color=accent_color,
+            footer=footer,
+        )
+
 
 class SettingsDropdown(ui.Select):
-
     def __init__(self, interaction, settings):
-        self.interaction = interaction
+        self.source_interaction = interaction
         self.settings = settings
         lang = settings.get("language", "en")
-        activated = all(
-            channel_states.get(ch.id, True)
-            for ch in interaction.guild.text_channels)
-        mention_users = settings.get("mention_users", True)
-        delivery_mode = settings.get("delivery_mode", "suppress")
-        
         options = [
-            discord.SelectOption(
-                label=get_text(lang, "fixembed_settings"),
-                description=get_text(lang, "fixembed_activate_deactivate"),
-                emoji="🟢" if activated else "🔴",
-                value="FixEmbed"
-            ),
-            discord.SelectOption(
-                label=get_text(lang, "mention_users"),
-                description=get_text(lang, "mention_users_toggle"),
-                emoji="🔔" if mention_users else "🔕",
-                value="Mention Users"
-            ),
-            discord.SelectOption(
-                label=get_text(lang, "delivery_method"),
-                description=get_text(lang, "delivery_method_toggle"),
-                emoji="🗑️" if delivery_mode == "delete" else ("🙈" if delivery_mode == "suppress" else "💬"),
-                value="Delivery Method"
-            ),
-            discord.SelectOption(
-                label=get_text(lang, "service_settings"),
-                description=get_text(lang, "service_settings_desc"),
-                emoji="⚙️",
-                value="Service Settings"),
-            discord.SelectOption(
-                label=get_text(lang, "quality_profile"),
-                description=get_text(lang, "quality_profile_desc"),
-                emoji="🎞️",
-                value="Quality Profile"),
-            discord.SelectOption(
-                label=get_text(lang, "channel_rules"),
-                description=get_text(lang, "channel_rules_desc"),
-                emoji="🧭",
-                value="Channel Rules"),
-            discord.SelectOption(
-                label=get_text(lang, "reliability_status"),
-                description=get_text(lang, "reliability_status_desc"),
-                emoji="📊",
-                value="Reliability Status"),
-            discord.SelectOption(
-                label=get_text(lang, "language"),
-                description=get_text(lang, "language_desc"),
-                emoji="🌐",
-                value="Language"),
-            discord.SelectOption(
-                label=get_text(lang, "debug"),
-                description=get_text(lang, "debug_desc"),
-                emoji="\U0001f41e",
-                value="Debug"
-            ),
-            discord.SelectOption(
-                label=get_text(lang, "embed_color"),
-                description=get_text(lang, "embed_color_desc"),
-                emoji="\U0001f48e",
-                value="Embed Color"
-            )
+            discord.SelectOption(label=get_text(lang, "fixembed_settings"), description=get_text(lang, "fixembed_activate_deactivate"), value="FixEmbed", emoji="⚙️"),
+            discord.SelectOption(label=get_text(lang, "mention_users"), description=get_text(lang, "mention_users_toggle"), value="Mention Users", emoji="🔔"),
+            discord.SelectOption(label=get_text(lang, "delivery_method"), description=get_text(lang, "delivery_method_toggle"), value="Delivery Method", emoji="📨"),
+            discord.SelectOption(label=get_text(lang, "service_settings"), description=get_text(lang, "service_settings_desc"), value="Service Settings", emoji="🧩"),
+            discord.SelectOption(label=get_text(lang, "quality_profile"), description=get_text(lang, "quality_profile_desc"), value="Quality Profile", emoji="🎞️"),
+            discord.SelectOption(label=get_text(lang, "channel_rules"), description=get_text(lang, "channel_rules_desc"), value="Channel Rules", emoji="🧭"),
+            discord.SelectOption(label=get_text(lang, "reliability_status"), description=get_text(lang, "reliability_status_desc"), value="Reliability Status", emoji="📊"),
+            discord.SelectOption(label=get_text(lang, "language"), description=get_text(lang, "language_desc"), value="Language", emoji="🌐"),
+            discord.SelectOption(label=get_text(lang, "debug"), description=get_text(lang, "debug_desc"), value="Debug", emoji="🐞"),
+            discord.SelectOption(label=get_text(lang, "embed_color"), description=get_text(lang, "embed_color_desc"), value="Embed Color", emoji="💎"),
         ]
-        super().__init__(placeholder=get_text(lang, "choose_option"),
-                         min_values=1,
-                         max_values=1,
-                         options=options)
+        super().__init__(placeholder=get_text(lang, "choose_option"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        lang = self.settings.get("language", "en")
-        status_activated = get_text(lang, "activated")
-        status_deactivated = get_text(lang, "deactivated")
-        
-        if self.values[0] == "Delivery Method":
-            delivery_mode = self.settings.get("delivery_mode", "suppress")
-            mode_text = {
-                "delete": "Delete original message and post fixed link",
-                "suppress": "Keep message, suppress original embed, and post fixed link",
-                "reply": "Keep original message and post fixed link"
-            }.get(delivery_mode, "Delete original message and post fixed link")
-            embed = discord.Embed(
-                title=get_text(lang, "delivery_method_title"),
-                description=f"Current mode: **{delivery_mode}**\n{mode_text}",
-                color=get_guild_color(self.interaction.guild.id))
-            view = DeliveryMethodSettingsView(delivery_mode, self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "FixEmbed":
-            activated = all(
-                channel_states.get(ch.id, True)
-                for ch in interaction.guild.text_channels)
-            working_status = get_text(lang, "working_in", channel="") if activated else get_text(lang, "not_working_in", channel="")
-            embed = discord.Embed(
-                title=get_text(lang, "fixembed_settings"),
-                description=f"{working_status.replace('**', '').strip()}\n\n{get_text(lang, 'note_apply_changes')}",
-                color=discord.Color.green() if activated else discord.Color.red())
-            view = FixEmbedSettingsView(activated, self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Mention Users":
-            mention_users = self.settings.get("mention_users", True)
-            embed = discord.Embed(
-                title=get_text(lang, "mention_users_title"),
-                description=get_text(lang, "user_mentions_status", status=status_activated if mention_users else status_deactivated),
-                color=discord.Color.green() if mention_users else discord.Color.red())
-            view = MentionUsersSettingsView(mention_users, self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Service Settings":
-            enabled_services = self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
-            service_status_list = "\n".join([
-                f"{'🟢' if service in enabled_services else '🔴'} {get_service_display_icon(interaction.guild, service)} {service}"
-                for service in DEFAULT_ENABLED_SERVICES
-            ])
-            embed = discord.Embed(
-                title=get_text(lang, "service_settings"),
-                description=f"{get_text(lang, 'activated_services')}\n{service_status_list}",
-                color=get_guild_color(self.interaction.guild.id))
-            view = ServiceSettingsView(self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Quality Profile":
-            current_quality = self.settings.get("media_quality", "balanced")
-            embed = discord.Embed(
-                title=get_text(lang, "quality_profile"),
-                description=get_text(lang, "quality_current_profile", profile=current_quality),
-                color=get_guild_color(self.interaction.guild.id))
-            view = QualitySettingsView(self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Channel Rules":
-            embed = discord.Embed(
-                title=get_text(lang, "channel_rules_title"),
-                description=get_text(lang, "channel_rules_instructions"),
-                color=get_guild_color(self.interaction.guild.id))
-            view = ChannelRulesSettingsView(self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Reliability Status":
-            by_service = processing_stats.get("by_service", {})
-            service_lines = []
-            for service in DEFAULT_ENABLED_SERVICES:
-                data = by_service.get(service, {"ok": 0, "fail": 0})
-                service_lines.append(f"- {get_service_display_icon(interaction.guild, service)} {service}: ✅ {data['ok']} | ❌ {data['fail']}")
-            embed = discord.Embed(title=get_text(lang, "reliability_status_title"), color=get_guild_color(self.interaction.guild.id))
-            embed.add_field(name=get_text(lang, "status_queue"), value=get_text(lang, "status_pending_sends", count=SEND_QUEUE.qsize()), inline=False)
-            embed.add_field(name=get_text(lang, "status_totals"), value=f"{get_text(lang, 'status_fixed', count=processing_stats['total_fixed'])}\n{get_text(lang, 'status_failed', count=processing_stats['total_failed'])}", inline=False)
-            embed.add_field(name=get_text(lang, "status_per_service"), value="\n".join(service_lines), inline=False)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        elif self.values[0] == "Debug":
-            await debug_info(interaction, interaction.channel)
-        elif self.values[0] == "Language":
-            current_lang = self.settings.get("language", "en")
-            current_lang_name = LANGUAGE_NAMES.get(current_lang, "English")
-            embed = discord.Embed(
-                title=get_text(lang, "language_title"),
-                description=get_text(lang, "language_current", language=current_lang_name),
-                color=get_guild_color(self.interaction.guild.id))
-            view = LanguageSettingsView(self.interaction, self.settings)
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        elif self.values[0] == "Embed Color":
-            premium = await is_guild_premium(self.interaction.guild.id)
-            if premium:
-                current_color = self.settings.get("embed_color")
-                color_desc = get_text(lang, "premium_current_color", color=current_color) if current_color else get_text(lang, "premium_no_color")
-                modal = EmbedColorModal(self.interaction, self.settings)
-                await interaction.response.send_modal(modal)
-            else:
-                embed = discord.Embed(
-                    title=get_text(lang, "embed_color_title"),
-                    description=get_text(lang, "premium_required"),
-                    color=discord.Color.gold())
-                view = discord.ui.View()
-                if PREMIUM_SKU_ID:
-                    btn = discord.ui.Button(style=discord.ButtonStyle.premium, sku_id=int(PREMIUM_SKU_ID))
-                    view.add_item(btn)
-                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        value = self.values[0]
+        if value == "Embed Color" and await is_guild_premium(interaction.guild.id):
+            await interaction.response.send_modal(EmbedColorModal(self.source_interaction, self.settings))
+            return
+
+        page_types = {
+            "FixEmbed": FixEmbedSettingsView,
+            "Mention Users": MentionUsersSettingsView,
+            "Delivery Method": DeliveryMethodSettingsView,
+            "Service Settings": ServiceSettingsView,
+            "Quality Profile": QualitySettingsView,
+            "Channel Rules": ChannelRulesSettingsView,
+            "Reliability Status": ReliabilitySettingsView,
+            "Language": LanguageSettingsView,
+            "Debug": DebugSettingsView,
+            "Embed Color": PremiumSettingsView,
+        }
+        view = page_types[value](self.source_interaction, self.settings)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
 
+class SettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        enabled = settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
+        delivery = settings.get("delivery_mode", "suppress")
+        quality = settings.get("media_quality", "balanced")
+        status = (
+            f"**Services:** {len(enabled)}/{len(DEFAULT_ENABLED_SERVICES)} enabled\n"
+            f"**Delivery:** {delivery.title()}  ·  **Quality:** {quality.title()}\n"
+            f"**Language:** {LANGUAGE_NAMES.get(settings.get('language', 'en'), 'English')}"
+        )
+        self.render_page(
+            title=get_text(self.lang, "settings_title"),
+            description=get_text(self.lang, "settings_description"),
+            status=status,
+            controls=((SettingsDropdown(interaction, settings),),),
+            footer="Server settings",
+        )
 
-class ServicesDropdown(ui.Select):
 
-    def __init__(self, interaction, parent_view, settings):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        self.settings = settings
-        enabled_services = settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
+class ServiceSelect(ui.Select):
+    def __init__(self, view):
+        enabled = view.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
         options = [
             discord.SelectOption(
                 label=service,
-                description=f"Activate or deactivate {service} links",
-                emoji=get_service_select_emoji(interaction.guild, service),
-                default=service in enabled_services)
-            for service in DEFAULT_ENABLED_SERVICES
-        ]
-        super().__init__(placeholder="Select services to activate...",
-                         min_values=1,
-                         max_values=len(options),
-                         options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        selected_services = self.values
-        guild_id = self.interaction.guild.id
-        self.settings["enabled_services"] = selected_services
-        await update_setting(client.db, guild_id, selected_services, self.settings["mention_users"], self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "suppress"), self.settings.get("media_quality", "balanced"))
-
-        self.parent_view.clear_items()
-        self.parent_view.add_item(
-            ServicesDropdown(self.interaction, self.parent_view, self.settings))
-        self.parent_view.add_item(SettingsDropdown(self.interaction, self.settings))
-
-        service_status_list = "\n".join([
-            f"{'🟢' if service in selected_services else '🔴'} {get_service_display_icon(self.interaction.guild, service)} {service}"
-            for service in DEFAULT_ENABLED_SERVICES
-        ])
-        embed = discord.Embed(
-            title="Service Settings",
-            description=f"Configure which services are activated.\n\n**Activated services:**\n{service_status_list}",
-            color=get_guild_color(self.interaction.guild.id))
-        
-        try:
-            await interaction.response.edit_message(embed=embed, view=self.parent_view)
-        except discord.errors.NotFound:
-            try:
-                await interaction.edit_original_response(embed=embed, view=self.parent_view)
-            except discord.errors.NotFound:
-                logging.error("Failed to edit original response: Unknown Webhook")
-        except discord.errors.InteractionResponded:
-            try:
-                await interaction.edit_original_response(embed=embed, view=self.parent_view)
-            except discord.errors.NotFound:
-                logging.error("Failed to edit original response: Unknown Webhook")
-
-class SettingsView(ui.View):
-
-    def __init__(self, interaction, settings):
-        super().__init__()
-        self.add_item(SettingsDropdown(interaction, settings))
-
-class ServiceSettingsView(ui.View):
-
-    def __init__(self, interaction, settings):
-        super().__init__()
-        self.add_item(ServicesDropdown(interaction, self, settings))
-        self.add_item(SettingsDropdown(interaction, settings))
-
-
-class QualityDropdown(ui.Select):
-    def __init__(self, interaction, parent_view, settings):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        self.settings = settings
-        lang = settings.get("language", "en")
-        current_quality = settings.get("media_quality", "balanced")
-        options = [
-            discord.SelectOption(label=get_text(lang, "quality_fastest"), value="fastest", description=get_text(lang, "quality_fastest_desc"), default=current_quality == "fastest"),
-            discord.SelectOption(label=get_text(lang, "quality_balanced"), value="balanced", description=get_text(lang, "quality_balanced_desc"), default=current_quality == "balanced"),
-            discord.SelectOption(label=get_text(lang, "quality_highest"), value="highest", description=get_text(lang, "quality_highest_desc"), default=current_quality == "highest"),
-        ]
-        super().__init__(placeholder=get_text(lang, "quality_select_placeholder"), min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        selected_quality = self.values[0]
-        self.settings["media_quality"] = selected_quality
-        await update_setting(
-            client.db,
-            self.interaction.guild.id,
-            self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
-            self.settings.get("mention_users", True),
-            self.settings.get("delete_original", True),
-            self.settings.get("language", "en"),
-            self.settings.get("embed_color"),
-            self.settings.get("delivery_mode", "suppress"),
-            selected_quality,
-        )
-        embed = discord.Embed(
-            title=get_text(self.settings.get("language", "en"), "quality_profile"),
-            description=get_text(self.settings.get("language", "en"), "quality_set", profile=selected_quality),
-            color=get_guild_color(self.interaction.guild.id))
-        await interaction.response.edit_message(embed=embed, view=self.parent_view)
-
-
-class QualitySettingsView(ui.View):
-    def __init__(self, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.interaction = interaction
-        self.settings = settings
-        self.add_item(QualityDropdown(interaction, self, settings))
-        self.add_item(SettingsDropdown(interaction, settings))
-
-
-class ChannelDropdown(ui.Select):
-    def __init__(self, interaction, parent_view):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        channels = interaction.guild.text_channels[:25]
-        options = [
-            discord.SelectOption(label=ch.name[:100], value=str(ch.id), default=(parent_view.selected_channel_id == ch.id))
-            for ch in channels
-        ]
-        super().__init__(placeholder=get_text(parent_view.settings.get("language", "en"), "channel_rules_pick_channel"), min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        self.parent_view.selected_channel_id = int(self.values[0])
-        await self.parent_view.refresh(interaction)
-
-
-class RuleServiceDropdown(ui.Select):
-    def __init__(self, interaction, parent_view):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        options = [
-            discord.SelectOption(
-                label=s,
-                value=s,
-                emoji=get_service_select_emoji(interaction.guild, s),
-                default=(parent_view.selected_service == s),
+                value=service,
+                emoji=get_service_select_emoji(view.interaction.guild, service),
+                default=service in enabled,
             )
-            for s in DEFAULT_ENABLED_SERVICES
+            for service in DEFAULT_ENABLED_SERVICES
         ]
-        super().__init__(placeholder=get_text(parent_view.settings.get("language", "en"), "channel_rules_pick_service"), min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Select services to activate...", min_values=1, max_values=len(options), options=options)
+        self.page = view
 
-    async def callback(self, interaction: discord.Interaction):
-        self.parent_view.selected_service = self.values[0]
-        await self.parent_view.refresh(interaction)
+    async def callback(self, interaction):
+        self.page.settings["enabled_services"] = list(self.values)
+        await self.page.save()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
 
 
-class RuleActionDropdown(ui.Select):
-    def __init__(self, interaction, parent_view):
-        self.interaction = interaction
-        self.parent_view = parent_view
+class ServiceSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.render()
+
+    def render(self):
+        enabled = self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
+        status = "\n".join(
+            f"{'\U0001f7e2' if service in enabled else '\U0001f534'} {get_service_display_icon(self.interaction.guild, service)} {service}"
+            for service in DEFAULT_ENABLED_SERVICES
+        )
+        self.render_page(
+            title=get_text(self.lang, "service_settings"),
+            description=get_text(self.lang, "service_settings_desc"),
+            status=status,
+            controls=((ServiceSelect(self),),),
+            footer="Service settings",
+        )
+
+
+class QualitySelect(ui.Select):
+    def __init__(self, view):
+        current = view.settings.get("media_quality", "balanced")
         options = [
-            discord.SelectOption(label=get_text(parent_view.settings.get("language", "en"), "channel_rules_force_on"), value="on", default=(parent_view.selected_action == "on")),
-            discord.SelectOption(label=get_text(parent_view.settings.get("language", "en"), "channel_rules_force_off"), value="off", default=(parent_view.selected_action == "off")),
-            discord.SelectOption(label=get_text(parent_view.settings.get("language", "en"), "channel_rules_default"), value="default", default=(parent_view.selected_action == "default")),
+            discord.SelectOption(label=get_text(view.lang, f"quality_{value}"), value=value, description=get_text(view.lang, f"quality_{value}_desc"), default=current == value)
+            for value in ("fastest", "balanced", "highest")
         ]
-        super().__init__(placeholder=get_text(parent_view.settings.get("language", "en"), "channel_rules_pick_action"), min_values=1, max_values=1, options=options)
+        super().__init__(placeholder=get_text(view.lang, "quality_select_placeholder"), options=options)
+        self.page = view
 
-    async def callback(self, interaction: discord.Interaction):
-        self.parent_view.selected_action = self.values[0]
-        await self.parent_view.refresh(interaction)
-
-
-class ApplyRuleButton(discord.ui.Button):
-    def __init__(self, parent_view):
-        super().__init__(label=get_text(parent_view.settings.get("language", "en"), "channel_rules_apply"), style=discord.ButtonStyle.green)
-        self.parent_view = parent_view
-
-    async def callback(self, interaction: discord.Interaction):
-        if not self.parent_view.selected_channel_id or not self.parent_view.selected_service or not self.parent_view.selected_action:
-            await interaction.response.send_message(get_text(self.parent_view.settings.get("language", "en"), "channel_rules_select_all"), ephemeral=True)
-            return
-        guild_id = self.parent_view.interaction.guild.id
-        channel_id = self.parent_view.selected_channel_id
-        service = self.parent_view.selected_service
-        action = self.parent_view.selected_action
-        if action == "default":
-            await client.db.execute("DELETE FROM channel_service_rules WHERE guild_id = ? AND channel_id = ? AND service = ?", (guild_id, channel_id, service))
-            await client.db.commit()
-            channel_service_rules.pop((guild_id, channel_id, service), None)
-        else:
-            await set_channel_service_rule(client.db, guild_id, channel_id, service, action)
-        channel = self.parent_view.interaction.guild.get_channel(channel_id)
-        channel_name = channel.mention if channel else str(channel_id)
-        embed = discord.Embed(
-            title=get_text(self.parent_view.settings.get("language", "en"), "channel_rules_title"),
-            description=get_text(self.parent_view.settings.get("language", "en"), "channel_rules_updated", channel=channel_name, service=service, action=action),
-            color=get_guild_color(self.parent_view.interaction.guild.id))
-        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+    async def callback(self, interaction):
+        self.page.settings["media_quality"] = self.values[0]
+        await self.page.save()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
 
 
-class ChannelRulesSettingsView(ui.View):
-    def __init__(self, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.interaction = interaction
-        self.settings = settings
+class QualitySettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.render()
+
+    def render(self):
+        current = self.settings.get("media_quality", "balanced")
+        self.render_page(
+            title=get_text(self.lang, "quality_profile"),
+            description=get_text(self.lang, "quality_profile_desc"),
+            status=get_text(self.lang, "quality_current_profile", profile=current),
+            controls=((QualitySelect(self),),),
+            footer="Media quality",
+        )
+
+
+class LanguageSelect(ui.Select):
+    def __init__(self, view):
+        current = view.settings.get("language", "en")
+        options = [
+            discord.SelectOption(label=name, value=code, emoji=LANGUAGE_FLAG_EMOJIS.get(code, "🌐"), default=code == current)
+            for code, name in LANGUAGE_NAMES.items()
+        ]
+        super().__init__(placeholder=get_text(current, "language_select"), options=options)
+        self.page = view
+
+    async def callback(self, interaction):
+        self.page.settings["language"] = self.values[0]
+        await self.page.save()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class LanguageSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.render()
+
+    def render(self):
+        current = LANGUAGE_NAMES.get(self.settings.get("language", "en"), "English")
+        self.render_page(
+            title=get_text(self.lang, "language_title"),
+            description=get_text(self.lang, "language_current", language=current),
+            controls=((LanguageSelect(self),),),
+            footer="Language",
+        )
+
+
+class ToggleSettingsView(SettingsPageView):
+    setting_key = ""
+    title_key = ""
+
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.render()
+
+    def current_value(self):
+        return bool(self.settings.get(self.setting_key, True))
+
+    def description(self):
+        status = get_text(self.lang, "activated") if self.current_value() else get_text(self.lang, "deactivated")
+        return get_text(self.lang, "user_mentions_status", status=status)
+
+    def render(self):
+        active = self.current_value()
+        button = discord.ui.Button(
+            label=get_text(self.lang, "activated") if active else get_text(self.lang, "deactivated"),
+            style=discord.ButtonStyle.green if active else discord.ButtonStyle.red,
+        )
+        button.callback = self.toggle
+        self.render_page(
+            title=get_text(self.lang, self.title_key),
+            description=self.description(),
+            controls=((button,),),
+            accent_color=discord.Color.green() if active else discord.Color.red(),
+        )
+
+    async def toggle(self, interaction):
+        self.settings[self.setting_key] = not self.current_value()
+        await self.save()
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+
+class MentionUsersSettingsView(ToggleSettingsView):
+    setting_key = "mention_users"
+    title_key = "mention_users_title"
+
+
+class FixEmbedSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.activated = all(channel_states.get(ch.id, True) for ch in interaction.guild.text_channels)
+        self.render()
+
+    def render(self):
+        status = get_text(self.lang, "activated") if self.activated else get_text(self.lang, "deactivated")
+        button = discord.ui.Button(label=status, style=discord.ButtonStyle.green if self.activated else discord.ButtonStyle.red)
+        button.callback = self.toggle
+        self.render_page(
+            title=get_text(self.lang, "fixembed_settings"),
+            description=f"**{status}**\n{get_text(self.lang, 'note_apply_changes')}",
+            controls=((button,),),
+            accent_color=discord.Color.green() if self.activated else discord.Color.red(),
+            footer="Activation",
+        )
+
+    async def toggle(self, interaction):
+        self.activated = not self.activated
+        for channel in self.interaction.guild.text_channels:
+            channel_states[channel.id] = self.activated
+            await update_channel_state(client.db, channel.id, self.activated)
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+
+class DeliverySelect(ui.Select):
+    MODES = {
+        "delete": "Delete source message, post fixed link",
+        "suppress": "Keep message, suppress original embed",
+        "reply": "Keep original and post fixed link",
+    }
+
+    def __init__(self, view):
+        current = view.settings.get("delivery_mode", "suppress")
+        options = [discord.SelectOption(label=name.title(), value=name, description=description, default=current == name) for name, description in self.MODES.items()]
+        super().__init__(placeholder="Choose delivery mode...", options=options)
+        self.page = view
+
+    async def callback(self, interaction):
+        mode = self.values[0]
+        self.page.settings["delivery_mode"] = mode
+        self.page.settings["delete_original"] = mode == "delete"
+        await self.page.save()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class DeliveryMethodSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        self.render()
+
+    def render(self):
+        mode = self.settings.get("delivery_mode", "suppress")
+        self.render_page(
+            title=get_text(self.lang, "delivery_method_title"),
+            description=DeliverySelect.MODES[mode],
+            status=f"**Current mode:** {mode.title()}",
+            controls=((DeliverySelect(self),),),
+            footer="Delivery",
+        )
+
+
+class RuleSelect(ui.Select):
+    def __init__(self, page, kind, options, placeholder):
+        super().__init__(placeholder=placeholder, options=options)
+        self.page = page
+        self.kind = kind
+
+    async def callback(self, interaction):
+        value = self.values[0]
+        setattr(self.page, self.kind, int(value) if self.kind == "selected_channel_id" else value)
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class ChannelRulesSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
         self.selected_channel_id = interaction.channel.id if interaction.channel else None
         self.selected_service = "Twitter"
         self.selected_action = "default"
-        self.add_item(ChannelDropdown(interaction, self))
-        self.add_item(RuleServiceDropdown(interaction, self))
-        self.add_item(RuleActionDropdown(interaction, self))
-        self.add_item(ApplyRuleButton(self))
-        self.add_item(SettingsDropdown(interaction, settings))
+        self.render()
 
-    async def refresh(self, interaction: discord.Interaction):
-        self.clear_items()
-        self.add_item(ChannelDropdown(self.interaction, self))
-        self.add_item(RuleServiceDropdown(self.interaction, self))
-        self.add_item(RuleActionDropdown(self.interaction, self))
-        self.add_item(ApplyRuleButton(self))
-        self.add_item(SettingsDropdown(self.interaction, self.settings))
+    def render(self):
+        channels = self.interaction.guild.text_channels[:25]
+        channel_options = [discord.SelectOption(label=ch.name[:100], value=str(ch.id), default=ch.id == self.selected_channel_id) for ch in channels]
+        service_options = [discord.SelectOption(label=name, value=name, emoji=get_service_select_emoji(self.interaction.guild, name), default=name == self.selected_service) for name in DEFAULT_ENABLED_SERVICES]
+        action_options = [discord.SelectOption(label=name.title(), value=name, default=name == self.selected_action) for name in ("on", "off", "default")]
+        apply_button = discord.ui.Button(label=get_text(self.lang, "channel_rules_apply"), style=discord.ButtonStyle.green)
+        apply_button.callback = self.apply_rule
         channel = self.interaction.guild.get_channel(self.selected_channel_id) if self.selected_channel_id else None
-        channel_name = channel.mention if channel else "None"
-        embed = discord.Embed(
-            title=get_text(self.settings.get("language", "en"), "channel_rules_title"),
-            description=get_text(self.settings.get("language", "en"), "channel_rules_selections", channel=channel_name, service=self.selected_service, action=self.selected_action),
-            color=get_guild_color(self.interaction.guild.id))
-        await interaction.response.edit_message(embed=embed, view=self)
+        status = get_text(self.lang, "channel_rules_selections", channel=channel.mention if channel else "None", service=self.selected_service, action=self.selected_action)
+        self.render_page(
+            title=get_text(self.lang, "channel_rules_title"),
+            description=get_text(self.lang, "channel_rules_instructions"),
+            status=status,
+            controls=(
+                (RuleSelect(self, "selected_channel_id", channel_options, get_text(self.lang, "channel_rules_pick_channel")),),
+                (RuleSelect(self, "selected_service", service_options, get_text(self.lang, "channel_rules_pick_service")),),
+                (RuleSelect(self, "selected_action", action_options, get_text(self.lang, "channel_rules_pick_action")),),
+                (apply_button,),
+            ),
+            footer="Channel rules",
+        )
 
-class LanguageDropdown(ui.Select):
-
-    def __init__(self, interaction, parent_view, settings):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        self.settings = settings
-        current_lang = settings.get("language", "en")
-        
-        options = [
-            discord.SelectOption(
-                label=name,
-                value=code,
-                description=f"Set language to {name}",
-                emoji=LANGUAGE_FLAG_EMOJIS.get(code, "🌐"),
-                default=(code == current_lang)
-            )
-            for code, name in LANGUAGE_NAMES.items()
-        ]
-        super().__init__(placeholder=get_text(current_lang, "language_select"),
-                         min_values=1,
-                         max_values=1,
-                         options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        selected_lang = self.values[0]
+    async def apply_rule(self, interaction):
         guild_id = self.interaction.guild.id
-        self.settings["language"] = selected_lang
-        
-        await update_setting(
-            client.db, 
-            guild_id, 
-            self.settings.get("enabled_services", DEFAULT_ENABLED_SERVICES),
-            self.settings.get("mention_users", True),
-            self.settings.get("delete_original", True),
-            selected_lang,
-            self.settings.get("embed_color"),
-            self.settings.get("delivery_mode", "suppress"),
-            self.settings.get("media_quality", "balanced")
+        key = (guild_id, self.selected_channel_id, self.selected_service)
+        if self.selected_action == "default":
+            await client.db.execute("DELETE FROM channel_service_rules WHERE guild_id = ? AND channel_id = ? AND service = ?", key)
+            await client.db.commit()
+            channel_service_rules.pop(key, None)
+        else:
+            await set_channel_service_rule(client.db, *key, self.selected_action)
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+
+class StaticSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings, *, title, description, status, footer):
+        super().__init__(interaction, settings)
+        self.render_page(title=title, description=description, status=status, footer=footer)
+
+
+class ReliabilitySettingsView(StaticSettingsView):
+    def __init__(self, interaction, settings):
+        lines = []
+        for service in DEFAULT_ENABLED_SERVICES:
+            data = processing_stats.get("by_service", {}).get(service, {"ok": 0, "fail": 0})
+            lines.append(f"{get_service_display_icon(interaction.guild, service)} **{service}:** ✅ {data['ok']}  ·  ❌ {data['fail']}")
+        status = (
+            f"**Pending sends:** {SEND_QUEUE.qsize()}\n"
+            f"**Fixed:** {processing_stats['total_fixed']}  ·  **Failed:** {processing_stats['total_failed']}\n\n"
+            + "\n".join(lines)
         )
-        
-        lang_name = LANGUAGE_NAMES.get(selected_lang, "English")
-        lang_flag = LANGUAGE_FLAG_EMOJIS.get(selected_lang, "🌐")
-        embed = discord.Embed(
-            title=f"{lang_flag} {get_text(selected_lang, 'language_title')}",
-            description=f"✅ {get_text(selected_lang, 'language_changed', language=lang_name)}",
-            color=discord.Color.green())
-        
-        # Update the dropdown to show new selection
-        self.parent_view.clear_items()
-        self.parent_view.add_item(LanguageDropdown(self.interaction, self.parent_view, self.settings))
-        self.parent_view.add_item(SettingsDropdown(self.interaction, self.settings))
-        
-        try:
-            await interaction.response.edit_message(embed=embed, view=self.parent_view)
-        except discord.errors.NotFound:
-            try:
-                await interaction.edit_original_response(embed=embed, view=self.parent_view)
-            except discord.errors.NotFound:
-                logging.error("Failed to edit language response")
-
-class LanguageSettingsView(ui.View):
-
-    def __init__(self, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.interaction = interaction
-        self.settings = settings
-        self.add_item(LanguageDropdown(interaction, self, settings))
-        self.add_item(SettingsDropdown(interaction, settings))
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        lang = self.settings.get("language", "en")
-        embed = discord.Embed(
-            title=get_text(lang, "language_title"),
-            description=get_text(lang, "view_timed_out"),
-            color=discord.Color.red())
-        try:
-            await self.interaction.edit_original_response(embed=embed, view=self)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit language response on timeout")
-
-class FixEmbedSettingsView(ui.View):
-
-    def __init__(self, activated, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.activated = activated
-        self.interaction = interaction
-        self.settings = settings
-        lang = settings.get("language", "en")
-        self.toggle_button = discord.ui.Button(
-            label=get_text(lang, "activated") if activated else get_text(lang, "deactivated"),
-            style=discord.ButtonStyle.green if activated else discord.ButtonStyle.red)
-        self.toggle_button.callback = self.toggle
-        self.add_item(self.toggle_button)
-        self.add_item(SettingsDropdown(interaction, settings))
-
-    async def toggle(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        lang = self.settings.get("language", "en")
-        
-        self.activated = not self.activated
-        for ch in self.interaction.guild.text_channels:
-            channel_states[ch.id] = self.activated
-            await update_channel_state(client.db, ch.id, self.activated)
-        self.toggle_button.label = get_text(lang, "activated") if self.activated else get_text(lang, "deactivated")
-        self.toggle_button.style = discord.ButtonStyle.green if self.activated else discord.ButtonStyle.red
-
-        working_status = get_text(lang, "working_in", channel="") if self.activated else get_text(lang, "not_working_in", channel="")
-        embed = discord.Embed(
-            title=get_text(lang, "fixembed_settings"),
-            description=f"{working_status.replace('**', '').strip()}\n\n{get_text(lang, 'note_apply_changes')}",
-            color=discord.Color.green() if self.activated else discord.Color.red())
-
-        try:
-            await interaction.edit_original_response(embed=embed, view=self, ephemeral=True)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit original response: Unknown Webhook")
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        lang = self.settings.get("language", "en")
-        embed = discord.Embed(
-            title=get_text(lang, "fixembed_settings"),
-            description=get_text(lang, "view_timed_out"),
-            color=discord.Color.red())
-        
-        try:
-            await self.interaction.edit_original_response(embed=embed, view=self, ephemeral=True)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit original response on timeout: Unknown Webhook")
+        super().__init__(interaction, settings, title=get_text(settings.get("language", "en"), "reliability_status_title"), description=get_text(settings.get("language", "en"), "reliability_status_desc"), status=status, footer="Reliability")
 
 
-class MentionUsersSettingsView(ui.View):
-
-    def __init__(self, mention_users, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.mention_users = mention_users
-        self.interaction = interaction
-        self.settings = settings
-        lang = settings.get("language", "en")
-        self.toggle_button = discord.ui.Button(
-            label=get_text(lang, "activated") if mention_users else get_text(lang, "deactivated"),
-            style=discord.ButtonStyle.green if mention_users else discord.ButtonStyle.red)
-        self.toggle_button.callback = self.toggle
-        self.add_item(self.toggle_button)
-        self.add_item(SettingsDropdown(interaction, settings))
-
-    async def toggle(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        lang = self.settings.get("language", "en")
-        
-        self.mention_users = not self.mention_users
-        self.settings["mention_users"] = self.mention_users
-        await update_setting(client.db, self.interaction.guild.id, self.settings["enabled_services"], self.mention_users, self.settings["delete_original"], self.settings.get("language", "en"), self.settings.get("embed_color"), self.settings.get("delivery_mode", "suppress"), self.settings.get("media_quality", "balanced"))
-        self.toggle_button.label = get_text(lang, "activated") if self.mention_users else get_text(lang, "deactivated")
-        self.toggle_button.style = discord.ButtonStyle.green if self.mention_users else discord.ButtonStyle.red
-
-        status = get_text(lang, "activated") if self.mention_users else get_text(lang, "deactivated")
-        embed = discord.Embed(
-            title=get_text(lang, "mention_users_title"),
-            description=get_text(lang, "user_mentions_status", status=status),
-            color=discord.Color.green() if self.mention_users else discord.Color.red())
-
-        try:
-            await interaction.edit_original_response(embed=embed, view=self)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit original response: Unknown Webhook")
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        lang = self.settings.get("language", "en")
-        embed = discord.Embed(
-            title=get_text(lang, "mention_users_title"),
-            description=get_text(lang, "view_timed_out"),
-            color=discord.Color.red())
-        
-        try:
-            await self.interaction.edit_original_response(embed=embed, view=self)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit original response on timeout: Unknown Webhook")
-
-class DeliveryMethodDropdown(ui.Select):
-    def __init__(self, interaction, parent_view, settings, current_mode):
-        self.interaction = interaction
-        self.parent_view = parent_view
-        self.settings = settings
-        options = [
-            discord.SelectOption(label="Delete Original", value="delete", description="Delete source message, post fixed link", default=current_mode == "delete"),
-            discord.SelectOption(label="Suppress Embed", value="suppress", description="Keep message, suppress original embed", default=current_mode == "suppress"),
-            discord.SelectOption(label="Reply Only", value="reply", description="Keep original and post fixed link", default=current_mode == "reply"),
-        ]
-        super().__init__(placeholder="Choose delivery mode...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        mode = self.values[0]
-        self.settings["delivery_mode"] = mode
-        # Keep backward compatibility with legacy boolean setting.
-        self.settings["delete_original"] = mode == "delete"
-        await update_setting(
-            client.db,
-            self.interaction.guild.id,
-            self.settings["enabled_services"],
-            self.settings["mention_users"],
-            self.settings["delete_original"],
-            self.settings.get("language", "en"),
-            self.settings.get("embed_color"),
-            self.settings["delivery_mode"],
-            self.settings.get("media_quality", "balanced"),
+class DebugSettingsView(StaticSettingsView):
+    def __init__(self, interaction, settings):
+        permissions = interaction.channel.permissions_for(interaction.guild.me)
+        checks = (
+            ("Read messages", permissions.read_messages),
+            ("Send messages", permissions.send_messages),
+            ("Embed links", permissions.embed_links),
+            ("Manage messages", permissions.manage_messages),
         )
-        mode_text = {
-            "delete": "Delete original message and post fixed link",
-            "suppress": "Keep message, suppress original embed, and post fixed link",
-            "reply": "Keep original message and post fixed link"
-        }[mode]
-        embed = discord.Embed(
-            title="Delivery Method",
-            description=f"✅ Delivery mode set to **{mode}**\n{mode_text}",
-            color=get_guild_color(self.interaction.guild.id))
-        self.parent_view.clear_items()
-        self.parent_view.add_item(DeliveryMethodDropdown(self.interaction, self.parent_view, self.settings, mode))
-        self.parent_view.add_item(SettingsDropdown(self.interaction, self.settings))
-        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+        status = "\n".join(f"{'\u2705' if allowed else '\u274c'} {name}" for name, allowed in checks)
+        status += f"\n\n**Shard:** {interaction.guild.shard_id + 1}  ·  **Version:** {VERSION}\n**Uptime:** {str(discord.utils.utcnow() - client.launch_time).split('.')[0]}"
+        super().__init__(interaction, settings, title="Debug Information", description="Permission and runtime diagnostics for this server.", status=status, footer="Diagnostics")
 
 
-class DeliveryMethodSettingsView(ui.View):
-    def __init__(self, delivery_mode, interaction, settings, timeout=180):
-        super().__init__(timeout=timeout)
-        self.interaction = interaction
-        self.settings = settings
-        self.add_item(DeliveryMethodDropdown(interaction, self, settings, delivery_mode))
-        self.add_item(SettingsDropdown(interaction, settings))
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        lang = self.settings.get("language", "en")
-        embed = discord.Embed(
-            title=get_text(lang, "delivery_method_title"),
-            description=get_text(lang, "view_timed_out"),
-            color=discord.Color.red())
-        
-        try:
-            await self.interaction.edit_original_response(embed=embed, view=self)
-        except discord.errors.NotFound:
-            logging.error("Failed to edit original response on timeout: Unknown Webhook")
+class PremiumSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
+        controls = ()
+        if PREMIUM_SKU_ID:
+            controls = ((discord.ui.Button(style=discord.ButtonStyle.premium, sku_id=int(PREMIUM_SKU_ID)),),)
+        self.render_page(
+            title=get_text(self.lang, "embed_color_title"),
+            description=get_text(self.lang, "premium_required"),
+            controls=controls,
+            accent_color=discord.Color.gold(),
+            footer="Premium",
+        )
 
 
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
@@ -1313,12 +1075,7 @@ async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     guild_settings = bot_settings.get(guild_id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
     
-    lang = get_guild_lang(interaction.guild.id)
-    embed = discord.Embed(title=get_text(lang, "settings_title"),
-                          description=get_text(lang, "settings_description"),
-                          color=get_guild_color(interaction.guild.id))
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed, view=SettingsView(interaction, guild_settings), ephemeral=True)
+    await interaction.response.send_message(view=SettingsView(interaction, guild_settings), ephemeral=True)
 
 @client.tree.command(name='delivery', description="Power-user alias for delivery mode (also in /settings)")
 @app_commands.describe(mode="delete, suppress, or reply")
@@ -1338,12 +1095,19 @@ async def delivery(interaction: discord.Interaction, mode: app_commands.Choice[s
         "media_quality": "balanced",
     })
     settings_obj["delivery_mode"] = mode.value
+    settings_obj["delete_original"] = mode.value == "delete"
     await update_setting(
         client.db, guild_id, settings_obj["enabled_services"], settings_obj["mention_users"],
         settings_obj.get("delete_original", True), settings_obj.get("language", "en"),
         settings_obj.get("embed_color"), settings_obj["delivery_mode"], settings_obj.get("media_quality", "balanced")
     )
-    await interaction.response.send_message(f"✅ Delivery mode set to `{mode.value}`.", ephemeral=True)
+    view = SettingsNoticeView(
+        title="Delivery Method",
+        description=f"✅ Delivery mode set to **{mode.value}**.\n{DeliverySelect.MODES[mode.value]}",
+        accent_color=get_guild_color(guild_id),
+        footer="Delivery",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(name='quality', description="Power-user alias for quality profile (also in /settings)")
 @app_commands.describe(profile="fastest, balanced, or highest")
@@ -1368,7 +1132,13 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
         settings_obj.get("delete_original", True), settings_obj.get("language", "en"),
         settings_obj.get("embed_color"), settings_obj.get("delivery_mode", "suppress"), settings_obj["media_quality"]
     )
-    await interaction.response.send_message(f"✅ Media quality profile set to `{profile.value}`.", ephemeral=True)
+    view = SettingsNoticeView(
+        title="Media Quality",
+        description=f"✅ Media quality profile set to **{profile.value}**.",
+        accent_color=get_guild_color(guild_id),
+        footer="Media quality",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(name='rule', description="Power-user alias for channel rules (also in /settings)")
 @app_commands.describe(channel="Target channel", service="Service name", action="on, off, or default")
@@ -1393,7 +1163,13 @@ async def rule(interaction: discord.Interaction, channel: discord.TextChannel, s
         channel_service_rules.pop((guild_id, channel.id, service.value), None)
     else:
         await set_channel_service_rule(client.db, guild_id, channel.id, service.value, action.value)
-    await interaction.response.send_message(f"✅ Rule updated: {channel.mention} • {service.value} → `{action.value}`", ephemeral=True)
+    view = SettingsNoticeView(
+        title="Channel Rule Updated",
+        description=f"✅ {channel.mention}  ·  **{service.value}**  →  **{action.value}**",
+        accent_color=get_guild_color(guild_id),
+        footer="Channel rules",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(name='status', description="Power-user alias for reliability status (also in /settings)")
 async def status(interaction: discord.Interaction):
@@ -1401,12 +1177,18 @@ async def status(interaction: discord.Interaction):
     service_lines = []
     for service in DEFAULT_ENABLED_SERVICES:
         data = by_service.get(service, {"ok": 0, "fail": 0})
-        service_lines.append(f"- {get_service_display_icon(interaction.guild, service)} {service}: ✅ {data['ok']} | ❌ {data['fail']}")
-    embed = discord.Embed(title="FixEmbed Status", color=discord.Color.blurple())
-    embed.add_field(name="Queue", value=f"Pending sends: {SEND_QUEUE.qsize()}", inline=False)
-    embed.add_field(name="Totals", value=f"Fixed: {processing_stats['total_fixed']}\nFailed: {processing_stats['total_failed']}", inline=False)
-    embed.add_field(name="Per Service", value="\n".join(service_lines), inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        service_lines.append(f"{get_service_display_icon(interaction.guild, service)} **{service}:** ✅ {data['ok']}  ·  ❌ {data['fail']}")
+    view = SettingsNoticeView(
+        title="FixEmbed Status",
+        description=(
+            f"**Pending sends:** {SEND_QUEUE.qsize()}\n"
+            f"**Fixed:** {processing_stats['total_fixed']}  ·  **Failed:** {processing_stats['total_failed']}\n\n"
+            + "\n".join(service_lines)
+        ),
+        accent_color=discord.Color.blurple(),
+        footer="Reliability",
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.event
 async def on_message(message):
@@ -1558,37 +1340,22 @@ async def premium_command(interaction: discord.Interaction):
     if interaction.guild:
         premium = await is_guild_premium(interaction.guild.id)
     
-    embed = discord.Embed(
-        title=get_text(lang, "premium_title"),
-        description=get_text(lang, "premium_description"),
-        color=discord.Color.gold())
-    
-    if premium:
-        embed.add_field(
-            name="Status",
-            value=get_text(lang, "premium_active"),
-            inline=False)
-    else:
-        embed.add_field(
-            name="Status",
-            value=get_text(lang, "premium_not_active"),
-            inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "premium_perks_title"),
-        value=get_text(lang, "premium_perks"),
-        inline=False)
-    
-    create_footer(embed, client)
-    
-    view = discord.ui.View()
+    controls = ()
     if PREMIUM_SKU_ID and not premium:
         subscribe_button = discord.ui.Button(
             style=discord.ButtonStyle.premium,
             sku_id=int(PREMIUM_SKU_ID))
-        view.add_item(subscribe_button)
+        controls = ((subscribe_button,),)
+    status = get_text(lang, "premium_active") if premium else get_text(lang, "premium_not_active")
+    view = SettingsNoticeView(
+        title=get_text(lang, "premium_title"),
+        description=f"{get_text(lang, 'premium_description')}\n\n**Status**\n{status}\n\n**{get_text(lang, 'premium_perks_title')}**\n{get_text(lang, 'premium_perks')}",
+        accent_color=discord.Color.gold(),
+        footer="Premium",
+        controls=controls,
+    )
     
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 # --- Embed Color Modal ---
 class EmbedColorModal(ui.Modal, title="Set Embed Color"):
@@ -1619,11 +1386,13 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                 None,
                 self.settings.get("delivery_mode", "suppress"),
                 self.settings.get("media_quality", "balanced"))
-            embed = discord.Embed(
+            view = SettingsNoticeView(
                 title=get_text(lang, "embed_color_title"),
                 description=get_text(lang, "embed_color_reset"),
-                color=discord.Color.green())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+                accent_color=discord.Color.green(),
+                footer="Embed color",
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
         else:
             # Validate hex color
             hex_color = value.lstrip('#')
@@ -1641,19 +1410,23 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                         color_str,
                         self.settings.get("delivery_mode", "suppress"),
                         self.settings.get("media_quality", "balanced"))
-                    embed = discord.Embed(
+                    view = SettingsNoticeView(
                         title=get_text(lang, "embed_color_title"),
                         description=get_text(lang, "embed_color_set", color=color_str),
-                        color=discord.Color(int(hex_color, 16)))
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                        accent_color=discord.Color(int(hex_color, 16)),
+                        footer="Embed color",
+                    )
+                    await interaction.response.send_message(view=view, ephemeral=True)
                     return
                 except ValueError:
                     pass
-            embed = discord.Embed(
+            view = SettingsNoticeView(
                 title=get_text(lang, "embed_color_title"),
                 description=get_text(lang, "embed_color_invalid"),
-                color=discord.Color.red())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+                accent_color=discord.Color.red(),
+                footer="Embed color",
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 # --- Entitlement Events ---
 @client.event
