@@ -583,6 +583,9 @@ const tests: TestCase[] = [
                 }
                 if (url.startsWith('https://embed.reddit.com/')) {
                     return new Response(`
+                        <a href="https://www.reddit.com/r/codex/">
+                            <img alt="subreddit icon" src="https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_fp81a2t5s9ch1.png?width=64&amp;height=64&amp;frame=1">
+                        </a>
                         <a href="https://www.reddit.com/user/Distinct_Ingenuity21/">author</a>
                         <shreddit-embed-title>usage limits reset for the 5th time today</shreddit-embed-title>
                         <img src="https://preview.redd.it/example.png?width=591&amp;format=png">
@@ -603,6 +606,7 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'r/codex • usage limits reset for the 5th time today');
                 assert.equal(response.data?.authorName, 'u/Distinct_Ingenuity21');
+                assert.equal(response.data?.authorAvatar, 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_fp81a2t5s9ch1.png?width=64&height=64&frame=1');
                 assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
                 assert.match(response.data?.stats || '', /218/);
                 assert.match(response.data?.stats || '', /75/);

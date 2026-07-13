@@ -125,6 +125,7 @@ async function recoverFromRedditEmbed(
     if (!title) return null;
 
     const author = html.match(/reddit\.com\/user\/([^/"?]+)/i)?.[1];
+    const subredditIcon = html.match(/<img\b[^>]*\bsrc="(https:\/\/styles\.redditmedia\.com\/[^"]+)"[^>]*>/i)?.[1];
     const image = html.match(/<img\s+src="(https:\/\/preview\.redd\.it\/[^"]+)"/i)?.[1];
     const score = Number(html.match(/data-testid="upvote"[\s\S]{0,1000}?<faceplate-number\s+number="(\d+)"/i)?.[1]) || undefined;
     const comments = Number(html.match(/View\s+([\d,]+)\s+comments?/i)?.[1].replace(/,/g, '')) || undefined;
@@ -141,6 +142,7 @@ async function recoverFromRedditEmbed(
             siteName: getBrandedSiteName('reddit'),
             authorName: displayAuthor ? `u/${displayAuthor}` : undefined,
             authorUrl: displayAuthor ? `https://www.reddit.com/user/${encodeURIComponent(displayAuthor)}/` : undefined,
+            authorAvatar: subredditIcon ? decodeRedditHtml(subredditIcon) : undefined,
             image: image ? decodeRedditHtml(image) : undefined,
             color: platformColors.reddit,
             platform: 'reddit',
