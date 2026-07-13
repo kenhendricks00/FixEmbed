@@ -42,6 +42,27 @@ function proxyPixivImage(sourceUrl: string, env: Env): string {
     return `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceUrl)}`;
 }
 
+function cleanPixivDescription(value: string | undefined): string {
+    let description = (value || '').replace(/<[^>]+>/g, '');
+    const decodeCodePoint = (match: string, code: string, radix: number): string => {
+        const parsed = Number.parseInt(code, radix);
+        return Number.isInteger(parsed) && parsed >= 0 && parsed <= 0x10FFFF
+            ? String.fromCodePoint(parsed)
+            : match;
+    };
+    for (let pass = 0; pass < 2; pass += 1) {
+        description = description
+            .replace(/&#x([0-9a-f]+);/gi, (match, code: string) => decodeCodePoint(match, code, 16))
+            .replace(/&#(\d+);/g, (match, code: string) => decodeCodePoint(match, code, 10))
+            .replace(/&quot;/gi, '"')
+            .replace(/&apos;|&#39;/gi, "'")
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&amp;/gi, '&');
+    }
+    return description.trim();
+}
+
 async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerResponse | null> {
     try {
         const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
@@ -94,7 +115,7 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
             source: 'first-party',
             data: {
                 title: artwork.title,
-                description: artwork.description?.replace(/<[^>]+>/g, '') || '',
+                description: cleanPixivDescription(artwork.description),
                 url: `https://www.pixiv.net/artworks/${illustId}`,
                 siteName: getBrandedSiteName('pixiv'),
                 authorName: artwork.userName,
@@ -203,7 +224,7 @@ export const pixivHandler: PlatformHandler = {
                     source: 'fallback',
                     data: {
                         title: scrapeResult.title || 'Pixiv Artwork',
-                        description: scrapeResult.description || '',
+                        description: cleanPixivDescription(scrapeResult.description),
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('pixiv'),
                         authorName: scrapeResult.author,

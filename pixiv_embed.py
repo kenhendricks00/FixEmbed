@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import html
+import re
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -32,15 +34,22 @@ def _artwork_timestamp(value: Any) -> int:
     return int(datetime.now(timezone.utc).timestamp())
 
 
+def _clean_description(value: Any) -> str:
+    description = re.sub(r"<[^>]+>", "", str(value or ""))
+    for _ in range(2):
+        description = html.unescape(description)
+    return description.strip()
+
+
 def build_pixiv_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
 ) -> discord.ui.LayoutView:
     """Build a Pixiv Components V2 card using proxied remote artwork URLs."""
     title = str(payload.get("title") or "Pixiv Artwork").strip()
-    description = str(payload.get("description") or "").strip()
-    if len(description) > 3000:
-        description = f"{description[:2997].rstrip()}…"
+    description = _clean_description(payload.get("description"))
+    if len(description) > 1200:
+        description = f"{description[:1197].rstrip()}…"
 
     author_name = str(payload.get("authorName") or "Pixiv creator").strip().lstrip("@")
     author_handle = _clean_handle(payload.get("authorHandle"))

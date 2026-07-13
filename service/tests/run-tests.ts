@@ -278,7 +278,7 @@ const tests: TestCase[] = [
                     ] }), { status: 200 });
                 }
                 return new Response(JSON.stringify({ error: false, body: {
-                    title: 'Artwork', description: 'Description', userName: 'Artist', userId: '42',
+                    title: 'Artwork', description: 'Uses &amp;#44; commas', userName: 'Artist', userId: '42',
                     userAccount: 'artist_account', bookmarkCount: 40, likeCount: 30,
                     viewCount: 500, commentCount: 2, createDate: '2026-07-13T19:00:00.000Z',
                     urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
@@ -291,6 +291,7 @@ const tests: TestCase[] = [
                 assert.match(requested[1], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123\/pages/);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Artwork');
+                assert.equal(response.data?.description, 'Uses , commas');
                 assert.equal(response.data?.authorHandle, '@artist_account');
                 assert.deepEqual(response.data?.images, [
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-1.jpg',

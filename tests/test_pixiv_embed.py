@@ -46,6 +46,20 @@ class PixivEmbedTests(unittest.TestCase):
         self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
         self.assertIn("<t:1783969200:R>", footer["content"])
 
+    def test_components_v2_layout_decodes_and_compacts_long_pixiv_captions(self):
+        payload = {
+            "title": "Artwork",
+            "description": ("Prompt value&amp;#44; with details. " * 100).strip(),
+        }
+
+        container = build_pixiv_layout(payload).to_components()[0]
+        header_text = container["components"][0]["content"]
+
+        self.assertIn("Prompt value, with details.", header_text)
+        self.assertNotIn("&amp;#44;", header_text)
+        self.assertLessEqual(len(header_text), 1300)
+        self.assertTrue(header_text.endswith("…"))
+
 
 if __name__ == "__main__":
     unittest.main()
