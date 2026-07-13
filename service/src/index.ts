@@ -556,7 +556,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         },
         media_attachments: mediaAttachments,
         account: {
-            id: handle,
+            id: isInstagram ? status.slice(0, 19) : handle,
             display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
                 // Discord appends the Activity account URL's host to Mastodon

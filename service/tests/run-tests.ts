@@ -1170,6 +1170,7 @@ const tests: TestCase[] = [
                 const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
+                assert.equal(activity.account.id, encoded.slice(0, 19));
                 assert.equal(activity.url, `https://x.com/creator/status/${encoded}`);
                 assert.equal(activity.uri, `https://x.com/creator/status/${encoded}`);
                 assert.equal(activity.account.display_name, 'creator');
