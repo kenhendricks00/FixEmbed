@@ -111,6 +111,7 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["video"]["url"])
         self.assertIn("FixEmbed", footer["content"])
         self.assertIn("Instagram", footer["content"])
+        self.assertIn("<:instagram:1526267158793949435>", footer["content"])
         self.assertTrue(stats["content"].startswith("-# "))
         self.assertTrue(footer["content"].startswith("-# "))
         self.assertIn("[View original]", footer["content"])
