@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any, Mapping, Optional
 from urllib.parse import urlencode
 
@@ -20,6 +21,19 @@ TWITTER_EMOJI_ID = 1526268173589155921
 
 def _clean_handle(value: Any) -> str:
     return str(value or "").strip().lstrip("@")
+
+
+def _high_resolution_avatar(value: Any) -> str:
+    avatar_url = str(value or "").strip()
+    if not avatar_url.lower().startswith("https://pbs.twimg.com/profile_images/"):
+        return avatar_url
+    return re.sub(
+        r"_(?:normal|bigger|mini|200x200|400x400)(?=\.[^/?#]+(?:[?#]|$))",
+        "",
+        avatar_url,
+        count=1,
+        flags=re.IGNORECASE,
+    )
 
 
 def _post_timestamp(value: Any) -> int:
@@ -53,7 +67,7 @@ def build_twitter_layout(
     name = str(payload.get("authorName") or "X").strip().lstrip("@")
     handle = _clean_handle(payload.get("authorHandle"))
     author_url = str(payload.get("authorUrl") or "").strip()
-    author_avatar = str(payload.get("authorAvatar") or "").strip()
+    author_avatar = _high_resolution_avatar(payload.get("authorAvatar"))
     source_url = str(payload.get("url") or "").strip()
 
     if handle and author_url:

@@ -826,7 +826,7 @@ const tests: TestCase[] = [
                 user: {
                     name: 'OpenAI',
                     screen_name: 'openai',
-                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/openai.jpg',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/openai_normal.jpg',
                 },
                 created_at: '2026-07-11T00:00:00.000Z',
                 favorite_count: 42,
@@ -842,6 +842,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.title, '@openai');
                 assert.equal(response.data?.description, 'A complete first-party FixEmbed tweet');
                 assert.equal(response.data?.platform, 'twitter');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://pbs.twimg.com/profile_images/openai.jpg',
+                );
                 assert.equal(response.redirect, undefined);
             } finally {
                 globalThis.fetch = originalFetch;
@@ -1566,7 +1570,7 @@ const tests: TestCase[] = [
                             author: {
                                 name: 'Kuriimu',
                                 screen_name: 'kuriimu0203',
-                                avatar_url: 'https://pbs.twimg.com/profile_images/avatar.jpg',
+                                avatar_url: 'https://pbs.twimg.com/profile_images/avatar_normal.jpg',
                             },
                             replies: 12,
                             retweets: 34,
@@ -1604,6 +1608,10 @@ const tests: TestCase[] = [
                 assert.equal(response.status, 200);
                 assert.equal(body.success, true);
                 assert.equal(body.data.authorHandle, '@kuriimu0203');
+                assert.equal(
+                    body.data.authorAvatar,
+                    'https://pbs.twimg.com/profile_images/avatar.jpg',
+                );
                 assert.equal(body.data.description, 'Fallback post text');
                 assert.equal(body.data.image, 'https://pbs.twimg.com/media/photo.jpg?name=orig');
                 assert.equal(body.data.video.url, 'https://video.twimg.com/video.mp4');

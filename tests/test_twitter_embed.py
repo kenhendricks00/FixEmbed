@@ -11,7 +11,7 @@ class TwitterEmbedTests(unittest.TestCase):
             "authorName": "Bernt Bornich",
             "authorHandle": "@BerntBornich",
             "authorUrl": "https://x.com/BerntBornich",
-            "authorAvatar": "https://cdn.example/avatar.jpg",
+            "authorAvatar": "https://pbs.twimg.com/profile_images/123/avatar_normal.jpg",
             "stats": "💬 1.2K  🔁 2.9K  ❤️ 23.8K  👁️ 8.39M",
             "timestamp": "2026-07-09T16:20:00.000Z",
             "video": {
@@ -33,7 +33,10 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertIn("Bernt Bornich", header["components"][0]["content"])
         self.assertIn("[@BerntBornich]", header["components"][0]["content"])
         self.assertIn(payload["description"], header["components"][0]["content"])
-        self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
+        self.assertEqual(
+            header["accessory"]["media"]["url"],
+            "https://pbs.twimg.com/profile_images/123/avatar.jpg",
+        )
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["video"]["url"])
         self.assertIn("<:comment:1526254715250282506> 1.2K", stats["content"])
         self.assertIn("<:repost:1526255036072591450> 2.9K", stats["content"])

@@ -49,6 +49,20 @@ interface FxTwitterTweet {
     };
 }
 
+function highResolutionTwitterAvatar(avatarUrl: string): string {
+    try {
+        const url = new URL(avatarUrl);
+        if (url.hostname.toLowerCase() !== 'pbs.twimg.com') return avatarUrl;
+        url.pathname = url.pathname.replace(
+            /_(?:normal|bigger|mini|200x200|400x400)(?=\.[^/.]+$)/i,
+            '',
+        );
+        return url.toString();
+    } catch {
+        return avatarUrl;
+    }
+}
+
 async function fetchFxTwitterFallback(
     username: string,
     tweetId: string,
@@ -93,7 +107,7 @@ async function fetchFxTwitterFallback(
                 authorName: author.name,
                 authorHandle: `@${author.screen_name}`,
                 authorUrl: `https://x.com/${author.screen_name}`,
-                authorAvatar: author.avatar_url,
+                authorAvatar: highResolutionTwitterAvatar(author.avatar_url),
                 image: image || firstVideo?.thumbnail_url,
                 images,
                 video: firstVideo?.url
@@ -303,7 +317,7 @@ export const twitterHandler: PlatformHandler = {
                     authorName: tweet.user.name,
                     authorHandle: `@${handle}`,
                     authorUrl: `https://x.com/${handle}`,
-                    authorAvatar: tweet.user.profile_image_url_https,
+                    authorAvatar: highResolutionTwitterAvatar(tweet.user.profile_image_url_https),
                     image,
                     images,
                     video,
