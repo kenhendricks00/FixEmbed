@@ -765,6 +765,7 @@ const tests: TestCase[] = [
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/proxy\/bilibili\?/);
                 assert.equal(response.data?.stats, '👁️ 53.7萬 ❤️ 2.3萬 🪙 927 🔖 6931 🔁 1843');
                 assert.equal(requested.some((url) => url.includes('/oembed/video')), true);
+                assert.equal(requested.some((url) => url.includes('lang=zh-cn')), true);
             } finally {
                 globalThis.fetch = originalFetch;
             }

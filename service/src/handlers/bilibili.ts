@@ -154,7 +154,7 @@ async function scrapeVxBilibili(bvid: string): Promise<{
         let oembed: BiliFixOEmbedResponse | undefined;
         try {
             const oembedResponse = await fetch(
-                `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-tw`,
+                `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-cn`,
                 { headers: { 'Accept': 'application/json' } },
             );
             if (oembedResponse.ok) {
