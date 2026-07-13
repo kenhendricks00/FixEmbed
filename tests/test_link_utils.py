@@ -1,6 +1,6 @@
 import unittest
 
-from link_utils import build_fixembed_url, chunk_lines, extract_supported_links, social_service
+from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links, social_service
 
 
 class SocialServiceTests(unittest.TestCase):
@@ -121,6 +121,26 @@ class SocialServiceTests(unittest.TestCase):
         self.assertEqual(
             build_fixembed_url(mosaic),
             "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=150&lang=es&mode=mosaic",
+        )
+
+    def test_automatic_twitter_provider_can_use_fxtwitter_without_changing_manual_links(self):
+        link = extract_supported_links("https://x.com/openai/status/123/fr/gallery")[0]
+
+        self.assertEqual(
+            build_automatic_url(link, quality="high", twitter_provider="fxtwitter"),
+            "https://fxtwitter.com/openai/status/123/fr/gallery",
+        )
+        self.assertEqual(
+            build_fixembed_url(link, quality="high"),
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=150&quality=high&lang=fr&mode=gallery",
+        )
+
+    def test_automatic_provider_switch_does_not_change_other_services(self):
+        link = extract_supported_links("https://www.reddit.com/r/test/comments/abc123/title/")[0]
+
+        self.assertEqual(
+            build_automatic_url(link, quality="high", twitter_provider="fxtwitter"),
+            build_fixembed_url(link, quality="high"),
         )
 
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):

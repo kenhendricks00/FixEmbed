@@ -159,6 +159,25 @@ def build_fixembed_url(link: SupportedLink, quality: Optional[str] = None) -> st
     return url
 
 
+def build_automatic_url(
+    link: SupportedLink,
+    quality: Optional[str] = None,
+    twitter_provider: Optional[str] = None,
+) -> str:
+    """Build an automatic-conversion URL, honoring the temporary X provider switch."""
+    provider = (twitter_provider or "fixembed").strip().lower()
+    if link.service != "Twitter" or provider not in {"fxtwitter", "fixupx"}:
+        return build_fixembed_url(link, quality)
+
+    parsed = urlparse(link.canonical_url)
+    path = parsed.path.rstrip("/")
+    if link.language:
+        path = f"{path}/{link.language}"
+    if link.mode:
+        path = f"{path}/{link.mode}"
+    return urlunparse(("https", f"{provider}.com", path, "", "", ""))
+
+
 def chunk_lines(lines: List[str], max_length: int = 1900) -> List[str]:
     """Group complete lines into Discord-safe message chunks."""
     chunks: List[str] = []

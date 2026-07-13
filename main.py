@@ -14,7 +14,7 @@ import time
 import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
-from link_utils import build_fixembed_url, chunk_lines, extract_supported_links
+from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from message_context import format_tagged_users
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
@@ -1424,7 +1424,12 @@ async def on_message(message):
                 recently_processed = (time.time() - cache_time) < DEDUP_WINDOW_SECONDS
 
                 if service_enabled and not recently_processed:
-                    formatted_links.append(f"[{item.display_text}]({build_fixembed_url(item, media_quality)})")
+                    automatic_url = build_automatic_url(
+                        item,
+                        media_quality,
+                        os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
+                    )
+                    formatted_links.append(f"[{item.display_text}]({automatic_url})")
                     processed_link_cache[dedup_key] = time.time()
                     service_stats = processing_stats["by_service"].setdefault(item.service, {"ok": 0, "fail": 0})
                     service_stats["ok"] += 1
