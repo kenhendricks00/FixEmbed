@@ -976,11 +976,10 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord uses the branded creator-first activity card for every platform',
+        name: 'Discord uses the branded creator-first activity card where Activity media is reliable',
         run: () => {
             const samples = [
                 ['twitter', 'https://x.com/creator/status/123'],
-                ['instagram', 'https://www.instagram.com/p/example/'],
                 ['reddit', 'https://www.reddit.com/r/example/comments/abc123/example/'],
                 ['threads', 'https://www.threads.net/@creator/post/example'],
                 ['pixiv', 'https://www.pixiv.net/artworks/123'],
@@ -1019,6 +1018,32 @@ const tests: TestCase[] = [
                     assert.doesNotMatch(html, /property="og:video"/, platform);
                 }
             }
+        },
+    },
+    {
+        name: 'Discord Instagram reels keep the native Open Graph video card',
+        run: () => {
+            const html = generateEmbedHTML({
+                title: 'A reel caption',
+                description: 'Creator caption',
+                url: 'https://www.instagram.com/reel/DaneAqzR3eV/',
+                siteName: 'FixEmbed • Instagram',
+                authorName: 'Creator',
+                authorHandle: '@creator',
+                stats: '💬 133',
+                video: {
+                    url: 'https://fixembed.app/video/instagram?url=https%3A%2F%2Fexample.com%2Freel.mp4',
+                    thumbnail: 'https://example.com/reel.jpg',
+                    width: 720,
+                    height: 1280,
+                },
+                platform: 'instagram',
+            }, 'Discordbot/2.0');
+
+            assert.match(html, /property="og:type" content="video\.other"/);
+            assert.match(html, /property="og:video"/);
+            assert.match(html, /property="og:image" content="https:\/\/example\.com\/reel\.jpg"/);
+            assert.doesNotMatch(html, /application\/activity\+json/);
         },
     },
     {

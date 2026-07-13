@@ -129,7 +129,11 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     embed = normalizeEmbedLayout(embed);
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
-    const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter';
+    // Discord currently drops Instagram media from ActivityPub notes even when
+    // the attachment is valid. Keep Instagram on its native Open Graph path,
+    // which preserves playable reels and image posts.
+    const supportsDiscordActivityCard = embed.platform !== 'instagram';
+    const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter' && supportsDiscordActivityCard;
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
     const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
     const displayTitle = embed.platform === 'twitter' && embed.authorName && embed.authorHandle
@@ -232,12 +236,14 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.description) oembedUrl.searchParams.set('desc', embed.description.slice(0, 1000)); // Limit length for URL
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
-    const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
-    const encodedActivity = embed.platform === 'twitter' && twitterStatusId
-        ? encodeSnowcode({ i: twitterStatusId })
-        : encodeActivitySource(embed.url);
-    const activityUrl = `https://fixembed.app/users/${encodeURIComponent(activityActorSlug(embed))}/statuses/${encodedActivity}`;
-    html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";
+    if (supportsDiscordActivityCard) {
+        const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
+        const encodedActivity = embed.platform === 'twitter' && twitterStatusId
+            ? encodeSnowcode({ i: twitterStatusId })
+            : encodeActivitySource(embed.url);
+        const activityUrl = `https://fixembed.app/users/${encodeURIComponent(activityActorSlug(embed))}/statuses/${encodedActivity}`;
+        html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";
+    }
 
 
     // Close head and add redirect body
