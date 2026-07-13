@@ -1099,6 +1099,46 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'Mastodon activity API uses branded identity when a creator is unavailable',
+        run: async () => {
+            const html = generateEmbedHTML({
+                title: 'Bilibili Video',
+                description: '',
+                url: 'https://www.bilibili.com/video/BV1example',
+                siteName: 'FixEmbed • 📺 Bilibili',
+                image: 'https://i.example.com/cover.jpg',
+                platform: 'bilibili',
+            }, 'Discordbot/2.0');
+            const encoded = html.match(/\/users\/bilibili\/statuses\/(\d+)/)?.[1];
+            assert.ok(encoded);
+
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                code: 0,
+                data: {
+                    title: 'Bilibili Video',
+                    desc: '',
+                    pic: '//i.example.com/cover.jpg',
+                },
+            }), { status: 200 });
+
+            try {
+                const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
+                assert.equal(response.status, 200);
+                const activity = await response.json() as any;
+                assert.equal(activity.account.display_name, 'FixEmbed • 📺 Bilibili');
+                assert.equal(activity.account.username, 'bilibili');
+                assert.equal(
+                    activity.account.avatar,
+                    'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png',
+                );
+                assert.equal(activity.media_attachments[0].url, 'https://i.example.com/cover.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;

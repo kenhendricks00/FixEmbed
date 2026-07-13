@@ -466,14 +466,14 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             vw: source.video?.width,
             vh: source.video?.height,
             p: source.platform,
-            a: source.authorName,
-            h: source.authorHandle,
-            ic: source.authorAvatar,
+            a: source.authorName || source.siteName,
+            h: source.authorHandle || source.platform,
+            ic: source.authorAvatar || FIXEMBED_LOGO,
             s: source.stats,
             u: source.url,
             m: source.mode,
             ts: parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime()) ? parsedTimestamp.toISOString() : undefined,
-            au: source.authorUrl,
+            au: source.authorUrl || source.url,
             sn: source.siteName,
         };
     }
