@@ -553,12 +553,15 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         account: {
             id: handle,
             display_name: isInstagram ? `@${handle}` : (embedData.a || handle),
-            // Discord otherwise expands Instagram's local handle into a
-            // federated-looking @handle@www.instagram.com label.
-            username: isInstagram ? '' : handle,
-            acct: isInstagram ? '' : handle,
-            url: embedData.au || embedData.u || `https://x.com/${handle}`,
-            uri: embedData.au || embedData.u || `https://x.com/${handle}`,
+            // Discord expands Mastodon username fields into a federated-looking
+            // @handle@host label. Omitting them leaves Instagram's display
+            // handle intact without inventing an Instagram server identity.
+            ...(isInstagram ? {} : {
+                username: handle,
+                acct: handle,
+                url: embedData.au || embedData.u || `https://x.com/${handle}`,
+                uri: embedData.au || embedData.u || `https://x.com/${handle}`,
+            }),
             created_at: createdAt,
             locked: false,
             bot: false,

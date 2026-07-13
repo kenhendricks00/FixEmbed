@@ -1141,8 +1141,9 @@ const tests: TestCase[] = [
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
                 assert.equal(activity.account.display_name, '@creator');
-                assert.equal(activity.account.username, '');
-                assert.equal(activity.account.acct, '');
+                assert.equal(activity.account.username, undefined);
+                assert.equal(activity.account.acct, undefined);
+                assert.equal(activity.account.url, undefined);
                 assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
             } finally {
                 globalThis.fetch = originalFetch;
