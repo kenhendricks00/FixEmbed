@@ -54,6 +54,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn('title=f"{client.user.name} Activated"', main_source)
         self.assertIn('title=f"{client.user.name} Deactivated"', main_source)
 
+    def test_about_and_help_commands_use_components_v2(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        info_commands = main_source.split("@client.tree.command(\n    name='about'", 1)[1].split(
+            "@client.tree.command(\n    name='fix'", 1
+        )[0]
+
+        self.assertNotIn("discord.Embed(", info_commands)
+        self.assertGreaterEqual(info_commands.count("CommandInfoView("), 2)
+        self.assertGreaterEqual(info_commands.count("interaction.response.send_message(view=view)"), 2)
+
     def test_instagram_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 

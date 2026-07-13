@@ -2,7 +2,7 @@ import unittest
 
 import discord
 
-from settings_components import render_settings_layout
+from command_components import render_settings_layout
 
 
 class SettingsComponentsTests(unittest.TestCase):

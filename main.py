@@ -24,7 +24,7 @@ from pixiv_embed import fetch_pixiv_layout
 from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
 from message_context import format_tagged_users
-from settings_components import render_settings_layout
+from command_components import render_command_layout, render_settings_layout
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
     reconcile_supporter_roles,
@@ -227,9 +227,6 @@ async def send_worker():
         finally:
             SEND_QUEUE.task_done()
 
-def create_footer(embed, client):
-    embed.set_footer(text=f"{client.user.name} | v{VERSION}", icon_url=client.user.avatar.url)
-
 # Premium SKU ID (loaded from .env at bottom of file)
 PREMIUM_SKU_ID = None
 SUPPORT_GUILD_ID = 1195810157112852540
@@ -277,6 +274,22 @@ def get_guild_color(guild_id, default=None):
     """Get the guild's custom color if premium, otherwise return default."""
     custom = get_premium_color(guild_id)
     return custom if custom else (default or discord.Color.blurple())
+
+
+class CommandInfoView(ui.LayoutView):
+    """Static Components V2 card for public informational commands."""
+
+    def __init__(self, *, title, description, sections, accent_color, footer):
+        super().__init__(timeout=180)
+        render_command_layout(
+            self,
+            title=title,
+            description=description,
+            sections=sections,
+            accent_color=accent_color,
+            footer=footer,
+        )
+
 
 async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
@@ -511,37 +524,34 @@ async def deactivate(interaction: discord.Interaction,
 async def about(interaction: discord.Interaction):
     guild_id = interaction.guild.id if interaction.guild else None
     lang = get_guild_lang(guild_id)
-    embed = discord.Embed(
+    view = CommandInfoView(
         title=get_text(lang, "about_title"),
         description=get_text(lang, "about_description"),
-        color=get_guild_color(guild_id, discord.Color(0x7289DA)))
-    embed.add_field(
-        name=get_text(lang, "quick_links"),
-        value=(
-            "- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
-            "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
-            "- [Source Code (AGPL-3.0-or-later)](https://github.com/kenhendricks00/FixEmbed)\n"
-            "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)"
+        sections=(
+            (
+                get_text(lang, "quick_links"),
+                "- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
+                "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
+                "- [Source Code (AGPL-3.0-or-later)](https://github.com/kenhendricks00/FixEmbed)\n"
+                "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)",
+            ),
+            (
+                get_text(lang, "credits"),
+                "- [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram), created by Lainmode\n"
+                "- [Snapsave](https://snapsave.app)\n"
+                "- [Phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
+                "- [VxBilibili](https://github.com/niconi21/vxBilibili), created by niconi21",
+            ),
+            (
+                "License & Attribution",
+                "FixEmbed was created by Kenneth Hendricks and is licensed under "
+                "[AGPL-3.0-or-later](https://github.com/kenhendricks00/FixEmbed/blob/main/LICENSE).",
+            ),
         ),
-        inline=False)
-    embed.add_field(
-        name=get_text(lang, "credits"),
-        value=(
-            "- [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram), created by Lainmode\n"
-            "- [Snapsave](https://snapsave.app)\n"
-            "- [Phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
-            "- [VxBilibili](https://github.com/niconi21/vxBilibili), created by niconi21\n"
-        ),
-        inline=False)
-    embed.add_field(
-        name="License & Attribution",
-        value=(
-            "FixEmbed was created by Kenneth Hendricks and is licensed under "
-            "[AGPL-3.0-or-later](https://github.com/kenhendricks00/FixEmbed/blob/main/LICENSE)."
-        ),
-        inline=False)
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed)
+        accent_color=get_guild_color(guild_id, discord.Color(0x7289DA)),
+        footer=f"About  ·  v{VERSION}",
+    )
+    await interaction.response.send_message(view=view)
 
 @client.tree.command(
     name='help',
@@ -551,48 +561,22 @@ async def about(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
     guild_id = interaction.guild.id if interaction.guild else None
     lang = get_guild_lang(guild_id)
-    embed = discord.Embed(
+    view = CommandInfoView(
         title=get_text(lang, "help_title"),
         description=get_text(lang, "help_description"),
-        color=get_guild_color(guild_id, discord.Color(0x7289DA)))
-    
-    embed.add_field(
-        name=get_text(lang, "fix_links"),
-        value=get_text(lang, "fix_links_value"),
-        inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "server_settings"),
-        value=get_text(lang, "server_settings_value"),
-        inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "info"),
-        value=get_text(lang, "info_value"),
-        inline=False)
-    
-    embed.add_field(
-        name="💎 " + get_text(lang, "premium_title"),
-        value=get_text(lang, "premium_help_value"),
-        inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "supported_services"),
-        value=get_text(lang, "supported_services_value"),
-        inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "tip"),
-        value=get_text(lang, "tip_value"),
-        inline=False)
-    
-    embed.add_field(
-        name=get_text(lang, "languages_supported"),
-        value=get_text(lang, "languages_supported_value"),
-        inline=False)
-    
-    create_footer(embed, client)
-    await interaction.response.send_message(embed=embed)
+        sections=(
+            (get_text(lang, "fix_links"), get_text(lang, "fix_links_value")),
+            (get_text(lang, "server_settings"), get_text(lang, "server_settings_value")),
+            (get_text(lang, "info"), get_text(lang, "info_value")),
+            ("💎 " + get_text(lang, "premium_title"), get_text(lang, "premium_help_value")),
+            (get_text(lang, "supported_services"), get_text(lang, "supported_services_value")),
+            (get_text(lang, "tip"), get_text(lang, "tip_value")),
+            (get_text(lang, "languages_supported"), get_text(lang, "languages_supported_value")),
+        ),
+        accent_color=get_guild_color(guild_id, discord.Color(0x7289DA)),
+        footer=f"Help  ·  v{VERSION}",
+    )
+    await interaction.response.send_message(view=view)
 
 @client.tree.command(
     name='fix',

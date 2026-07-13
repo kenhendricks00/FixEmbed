@@ -5,6 +5,9 @@
 - Added visible author attribution and source links to the hosted service and Discord `/about` surface.
 
 #### **🚀 New Features**
+- **`Components V2 Command Cards`**
+  - Migrate `/about` and `/help` to the same branded Components V2 system as `/settings` and the remaining configuration commands.
+  - Keep every localized help surface aligned with the complete supported-service list, including YouTube community posts.
 - **`Richer First-Party X Embeds`**
   - Preserve every photo in X/Twitter carousel posts.
   - Support opt-in translated posts by appending a two-letter language code to the status URL.
