@@ -1,6 +1,8 @@
 import asyncio
 import unittest
 
+import aiohttp
+
 from instagram_embed import (
     _upgrade_instagram_avatar,
     build_instagram_card,
@@ -41,6 +43,24 @@ class _ProfileSession:
         return _ProfileResponse()
 
 
+class _FallbackProfileResponse(_ProfileResponse):
+    def __init__(self, should_fail=False):
+        self.should_fail = should_fail
+
+    def raise_for_status(self):
+        if self.should_fail:
+            raise aiohttp.ClientError("profile host unavailable")
+
+
+class _FallbackProfileSession:
+    def __init__(self):
+        self.requested_urls = []
+
+    def get(self, url, **kwargs):
+        self.requested_urls.append(url)
+        return _FallbackProfileResponse(should_fail=len(self.requested_urls) == 1)
+
+
 class InstagramEmbedTests(unittest.TestCase):
     def test_low_resolution_avatar_is_upgraded_from_instagram_profile_metadata(self):
         payload = {
@@ -57,6 +77,23 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertIn("username=brooke_annm", session.requested_url)
         self.assertIn("s320x320", enriched["authorAvatar"])
         self.assertIn("s100x100", payload["authorAvatar"])
+
+    def test_avatar_upgrade_tries_both_instagram_profile_hosts(self):
+        payload = {
+            "authorHandle": "@brooke_annm",
+            "authorAvatar": (
+                "https://scontent.example.cdninstagram.com/avatar.jpg"
+                "?stp=dst-jpg_s100x100_tt6"
+            ),
+        }
+        session = _FallbackProfileSession()
+
+        enriched = asyncio.run(_upgrade_instagram_avatar(payload, session))
+
+        self.assertEqual(len(session.requested_urls), 2)
+        self.assertIn("www.instagram.com/api/", session.requested_urls[0])
+        self.assertIn("i.instagram.com/api/", session.requested_urls[1])
+        self.assertIn("s320x320", enriched["authorAvatar"])
 
     def test_author_uses_name_and_handle_without_fixembed_domain(self):
         payload = {

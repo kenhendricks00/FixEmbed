@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
@@ -19,6 +20,7 @@ FIXEMBED_COLOR = 0x5865F2
 FIXEMBED_EMOJI_ID = 1525580543503106148
 INSTAGRAM_EMOJI_ID = 1526267158793949435
 INSTAGRAM_WEB_APP_ID = "936619743392459"
+INSTAGRAM_PROFILE_API_HOSTS = ("www.instagram.com", "i.instagram.com")
 
 
 @dataclass(frozen=True)
@@ -66,30 +68,50 @@ async def _upgrade_instagram_avatar(
     if not handle or not avatar or not any(size in avatar for size in ("s100x100", "s150x150")):
         return payload
 
-    try:
+    failures = []
+    for host in INSTAGRAM_PROFILE_API_HOSTS:
         profile_url = (
-            "https://i.instagram.com/api/v1/users/web_profile_info/"
+            f"https://{host}/api/v1/users/web_profile_info/"
             f"?username={quote(handle, safe='')}"
         )
-        async with session.get(
-            profile_url,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "X-IG-App-ID": INSTAGRAM_WEB_APP_ID,
-            },
-            timeout=aiohttp.ClientTimeout(total=3),
-        ) as response:
-            response.raise_for_status()
-            body = await response.json(content_type=None)
-        candidate = str(body.get("data", {}).get("user", {}).get("profile_pic_url_hd") or "")
-        if not _is_instagram_avatar_url(candidate):
-            return payload
-        enriched = dict(payload)
-        enriched["authorAvatar"] = candidate
-        return enriched
-    except (aiohttp.ClientError, TimeoutError, ValueError, TypeError, AttributeError):
-        return payload
+        try:
+            async with session.get(
+                profile_url,
+                headers={
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://www.instagram.com/",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/136.0.0.0 Safari/537.36"
+                    ),
+                    "X-ASBD-ID": "129477",
+                    "X-IG-App-ID": INSTAGRAM_WEB_APP_ID,
+                    "X-IG-WWW-Claim": "0",
+                },
+                timeout=aiohttp.ClientTimeout(total=8),
+            ) as response:
+                response.raise_for_status()
+                body = await response.json(content_type=None)
+            candidate = str(
+                body.get("data", {}).get("user", {}).get("profile_pic_url_hd") or ""
+            )
+            if not _is_instagram_avatar_url(candidate):
+                failures.append(f"{host}: missing valid profile_pic_url_hd")
+                continue
+            enriched = dict(payload)
+            enriched["authorAvatar"] = candidate
+            return enriched
+        except (aiohttp.ClientError, TimeoutError, ValueError, TypeError, AttributeError) as error:
+            failures.append(f"{host}: {type(error).__name__}: {error}")
+
+    logging.warning(
+        "Instagram HD avatar lookup failed for @%s; using metadata avatar: %s",
+        handle,
+        "; ".join(failures),
+    )
+    return payload
 
 
 def build_instagram_card(
