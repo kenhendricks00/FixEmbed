@@ -215,7 +215,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const activityUrl = embed.platform === 'twitter'
         ? `https://fixembed.app/users/${encodeURIComponent((embed.authorHandle || 'fixembed').replace(/^@/, ''))}/statuses/${encodedActivity}`
         : `https://fixembed.app/activity/${encodedActivity}`;
-    html += `  <link rel="alternate" type="application/activity+json" href="${activityUrl}">\n`;
+    html += `  <link href="${activityUrl}" rel="alternate" type="application/activity+json">\n`;
 
 
     // Close head and add redirect body

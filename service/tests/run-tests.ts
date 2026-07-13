@@ -845,7 +845,7 @@ const tests: TestCase[] = [
                 mode: 'mosaic',
             }, 'Discordbot/2.0');
 
-            assert.match(html, /rel="alternate" type="application\/activity\+json"/);
+            assert.match(html, /href="https:\/\/fixembed\.app\/users\/gallery\/statuses\/[^"]+" rel="alternate" type="application\/activity\+json"/);
             const encoded = html.match(/\/users\/gallery\/statuses\/([^"?]+)/)?.[1];
             assert.ok(encoded);
             let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
@@ -898,6 +898,7 @@ const tests: TestCase[] = [
             assert.doesNotMatch(html, /property="og:video/);
             assert.match(html, /<meta property="og:title" content="Author Name \(@author\)">/);
             assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/pbs\.twimg\.com\/profile_images\/author\.jpg">/);
+            assert.match(html, /href="https:\/\/fixembed\.app\/users\/author\/statuses\/[^"]+" rel="alternate" type="application\/activity\+json"/);
 
             const encoded = html.match(/\/users\/author\/statuses\/([^"?]+)/)?.[1];
             assert.ok(encoded);
