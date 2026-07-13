@@ -8,10 +8,22 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertNotIn("trigger_typing", main_source)
 
-    def test_youtube_application_emoji_is_configured(self):
+    def test_platform_application_emojis_are_configured(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
-        self.assertIn('"YouTube": 1525579761479450686', main_source)
+        expected_ids = {
+            "YouTube": 1526267390592290926,
+            "Pixiv": 1526268469920792577,
+            "Threads": 1526267848924725399,
+            "Reddit": 1526267589808881684,
+            "Instagram": 1486919548732051586,
+            "Twitter": 1526268173589155921,
+            "Bluesky": 1526269663334502544,
+            "Bilibili": 1526271150739423304,
+        }
+        for service, emoji_id in expected_ids.items():
+            with self.subTest(service=service):
+                self.assertIn(f'"{service}": {emoji_id}', main_source)
 
     def test_automatic_queue_sends_are_silent(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
