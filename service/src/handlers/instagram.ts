@@ -776,6 +776,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         // Extract media URL - check multiple patterns
         let mediaUrl = '';
         let isVideo = false;
+        let previewUrl = '';
 
         // Pattern 1: Video from CDN (most reliable for actual videos)
         const cdnVideoMatch = html.match(/https:\/\/scontent[^"'\s]+\.mp4[^"'\s]*/);
@@ -797,6 +798,26 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 if (match) {
                     mediaUrl = decodeInstagramMediaUrl(match[1]);
                     isVideo = true;
+                    break;
+                }
+            }
+        }
+
+        // A video and its poster are separate values in Instagram's embed data.
+        // Keep looking for the poster even after the MP4 has been found so the
+        // Discord Activity attachment can provide a usable preview_url.
+        if (isVideo) {
+            const previewPatterns = [
+                /<video[^>]*poster="([^"]+)"/i,
+                /"thumbnail_src"\s*:\s*"([^"]+)"/,
+                /"display_url"\s*:\s*"([^"]+)"/,
+                /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+                /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+            ];
+            for (const pattern of previewPatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    previewUrl = decodeInstagramMediaUrl(match[1]);
                     break;
                 }
             }
@@ -875,7 +896,13 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
 
         if (mediaUrl) {
             if (isVideo) {
-                result.data!.video = { url: mediaUrl, width: 1080, height: 1920 };
+                result.data!.video = {
+                    url: mediaUrl,
+                    width: 1080,
+                    height: 1920,
+                    thumbnail: previewUrl || undefined,
+                };
+                result.data!.image = previewUrl || undefined;
             } else {
                 result.data!.image = mediaUrl;
             }

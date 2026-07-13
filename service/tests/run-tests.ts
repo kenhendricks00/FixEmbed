@@ -528,6 +528,37 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler keeps the native reel poster with its video',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
+                    return new Response([
+                        '<script>',
+                        'window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
+                        '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
+                        '</script>',
+                    ].join(''), { status: 200 });
+                }
+                return new Response('', { status: 404 });
+            };
+
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/reel/PreviewReel/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.video?.url, 'https://scontent.example/reel.mp4');
+                assert.equal(response.data?.video?.thumbnail, 'https://scontent.example/reel.jpg');
+                assert.equal(response.data?.image, 'https://scontent.example/reel.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'redditHandler recovers post data from Reddit embed HTML when JSON is forbidden',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -1021,7 +1052,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord Instagram reels keep the native Open Graph video card',
+        name: 'Discord Instagram reels without a poster keep the native Open Graph video card',
         run: () => {
             const html = generateEmbedHTML({
                 title: 'A reel caption',
@@ -1033,7 +1064,6 @@ const tests: TestCase[] = [
                 stats: '💬 133',
                 video: {
                     url: 'https://fixembed.app/video/instagram?url=https%3A%2F%2Fexample.com%2Freel.mp4',
-                    thumbnail: 'https://example.com/reel.jpg',
                     width: 720,
                     height: 1280,
                 },
@@ -1042,8 +1072,32 @@ const tests: TestCase[] = [
 
             assert.match(html, /property="og:type" content="video\.other"/);
             assert.match(html, /property="og:video"/);
-            assert.match(html, /property="og:image" content="https:\/\/example\.com\/reel\.jpg"/);
             assert.doesNotMatch(html, /application\/activity\+json/);
+        },
+    },
+    {
+        name: 'Discord Instagram reels with a poster use the branded Activity card',
+        run: () => {
+            const html = generateEmbedHTML({
+                title: 'A reel caption',
+                description: '',
+                url: 'https://www.instagram.com/reel/PreviewReel/',
+                siteName: 'FixEmbed • Instagram',
+                authorName: 'Creator',
+                authorHandle: '@creator',
+                stats: '💬 12 ❤️ 34',
+                video: {
+                    url: 'https://fixembed.app/video/instagram?url=https%3A%2F%2Fexample.com%2Freel.mp4',
+                    thumbnail: 'https://example.com/reel.jpg',
+                    width: 720,
+                    height: 1280,
+                },
+                platform: 'instagram',
+            }, 'Discordbot/2.0');
+
+            assert.match(html, /application\/activity\+json/);
+            assert.doesNotMatch(html, /property="og:video"/);
+            assert.doesNotMatch(html, /property="og:image"/);
         },
     },
     {

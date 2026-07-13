@@ -129,10 +129,13 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     embed = normalizeEmbedLayout(embed);
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
-    // Discord currently drops Instagram media from ActivityPub notes even when
-    // the attachment is valid. Keep Instagram on its native Open Graph path,
-    // which preserves playable reels and image posts.
-    const supportsDiscordActivityCard = embed.platform !== 'instagram';
+    // Discord drops Instagram Activity videos that do not include a poster.
+    // Use the polished Activity card when media has a preview, and retain the
+    // native Open Graph path as a safe fallback for posterless reels.
+    const hasInstagramActivityMedia = embed.video
+        ? Boolean(embed.video.thumbnail || embed.image)
+        : Boolean(embed.images?.length || embed.image);
+    const supportsDiscordActivityCard = embed.platform !== 'instagram' || hasInstagramActivityMedia;
     const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter' && supportsDiscordActivityCard;
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
     const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
