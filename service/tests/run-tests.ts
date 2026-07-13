@@ -909,10 +909,9 @@ const tests: TestCase[] = [
             assert.equal(activityData.ts, '2026-07-09T16:20:00.000Z');
             assert.equal(activityData.au, 'https://x.com/author');
 
-            const activityResponse = await app.request(`/users/author/statuses/${encoded}`, {
-                headers: { Accept: 'application/activity+json' },
-            });
+            const activityResponse = await app.request(`/users/author/statuses/${encoded}`);
             assert.equal(activityResponse.status, 200);
+            assert.match(activityResponse.headers.get('content-type') || '', /^application\/json/);
             const activity = await activityResponse.json() as any;
             assert.equal(activity.summary, undefined);
             assert.equal(

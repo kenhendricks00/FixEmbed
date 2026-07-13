@@ -392,111 +392,104 @@ app.get('/activity/:encodedData/actor', (c) => {
 app.get('/users/:author/statuses/:status', (c) => {
     const author = c.req.param('author');
     const status = c.req.param('status');
-    const accept = c.req.header('Accept') || '';
 
-    if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
-        const embedData = decodeActivityData(status);
-        const handle = (embedData.h || `@${author}`).replace(/^@/, '');
-        const createdAt = embedData.ts || new Date().toISOString();
-        const mediaAttachments: MastodonMediaAttachment[] = [];
+    const embedData = decodeActivityData(status);
+    const handle = (embedData.h || `@${author}`).replace(/^@/, '');
+    const createdAt = embedData.ts || new Date().toISOString();
+    const mediaAttachments: MastodonMediaAttachment[] = [];
 
-        if (embedData.v) {
-            const width = embedData.vw || 0;
-            const height = embedData.vh || 0;
+    if (embedData.v) {
+        const width = embedData.vw || 0;
+        const height = embedData.vh || 0;
+        mediaAttachments.push({
+            id: '1',
+            type: 'video',
+            url: embedData.v,
+            preview_url: embedData.vt || embedData.i || null,
+            remote_url: null,
+            preview_remote_url: null,
+            text_url: null,
+            description: null,
+            meta: {
+                original: {
+                    width,
+                    height,
+                    size: `${width}x${height}`,
+                    aspect: height ? width / height : 0,
+                },
+            },
+        });
+    }
+
+    const imageUrls = embedData.is?.length ? embedData.is : embedData.i ? [embedData.i] : [];
+    if (!embedData.v) {
+        imageUrls.forEach((url, index) => {
             mediaAttachments.push({
-                id: '1',
-                type: 'video',
-                url: embedData.v,
-                preview_url: embedData.vt || embedData.i || null,
+                id: String(index + 1),
+                type: 'image',
+                url,
+                preview_url: null,
                 remote_url: null,
                 preview_remote_url: null,
                 text_url: null,
                 description: null,
-                meta: {
-                    original: {
-                        width,
-                        height,
-                        size: `${width}x${height}`,
-                        aspect: height ? width / height : 0,
-                    },
-                },
+                meta: { original: { width: 0, height: 0 } },
             });
-        }
-
-        const imageUrls = embedData.is?.length ? embedData.is : embedData.i ? [embedData.i] : [];
-        if (!embedData.v) {
-            imageUrls.forEach((url, index) => {
-                mediaAttachments.push({
-                    id: String(index + 1),
-                    type: 'image',
-                    url,
-                    preview_url: null,
-                    remote_url: null,
-                    preview_remote_url: null,
-                    text_url: null,
-                    description: null,
-                    meta: { original: { width: 0, height: 0 } },
-                });
-            });
-        }
-
-        const activityStatus = {
-            id: status,
-            url: embedData.u || `https://x.com/${handle}`,
-            uri: embedData.u || `https://x.com/${handle}`,
-            created_at: createdAt,
-            edited_at: null,
-            reblog: null,
-            in_reply_to_id: null,
-            in_reply_to_account_id: null,
-            language: null,
-            content: formatActivityContent(embedData.d || '', embedData.s),
-            spoiler_text: '',
-            visibility: 'public',
-            application: {
-                name: embedData.sn || 'FixEmbed',
-                website: 'https://fixembed.app',
-            },
-            media_attachments: mediaAttachments,
-            account: {
-                id: handle,
-                display_name: embedData.a || handle,
-                username: handle,
-                acct: handle,
-                url: embedData.au || embedData.u || `https://x.com/${handle}`,
-                uri: embedData.au || embedData.u || `https://x.com/${handle}`,
-                created_at: createdAt,
-                locked: false,
-                bot: false,
-                discoverable: true,
-                indexable: false,
-                group: false,
-                avatar: embedData.ic || FIXEMBED_LOGO,
-                avatar_static: embedData.ic || FIXEMBED_LOGO,
-                header: '',
-                header_static: '',
-                followers_count: 0,
-                following_count: 0,
-                statuses_count: 0,
-                hide_collections: false,
-                noindex: false,
-                emojis: [],
-                roles: [],
-                fields: [],
-            },
-            mentions: [],
-            tags: [],
-            emojis: [],
-            card: null,
-            poll: null,
-        };
-
-        return c.json(activityStatus, 200, {
-            'Content-Type': 'application/activity+json; charset=utf-8',
         });
     }
 
-    return c.redirect('https://fixembed.app/', 302);
+    const activityStatus = {
+        id: status,
+        url: embedData.u || `https://x.com/${handle}`,
+        uri: embedData.u || `https://x.com/${handle}`,
+        created_at: createdAt,
+        edited_at: null,
+        reblog: null,
+        in_reply_to_id: null,
+        in_reply_to_account_id: null,
+        language: null,
+        content: formatActivityContent(embedData.d || '', embedData.s),
+        spoiler_text: '',
+        visibility: 'public',
+        application: {
+            name: embedData.sn || 'FixEmbed',
+            website: 'https://fixembed.app',
+        },
+        media_attachments: mediaAttachments,
+        account: {
+            id: handle,
+            display_name: embedData.a || handle,
+            username: handle,
+            acct: handle,
+            url: embedData.au || embedData.u || `https://x.com/${handle}`,
+            uri: embedData.au || embedData.u || `https://x.com/${handle}`,
+            created_at: createdAt,
+            locked: false,
+            bot: false,
+            discoverable: true,
+            indexable: false,
+            group: false,
+            avatar: embedData.ic || FIXEMBED_LOGO,
+            avatar_static: embedData.ic || FIXEMBED_LOGO,
+            header: '',
+            header_static: '',
+            followers_count: 0,
+            following_count: 0,
+            statuses_count: 0,
+            hide_collections: false,
+            noindex: false,
+            emojis: [],
+            roles: [],
+            fields: [],
+        },
+        mentions: [],
+        tags: [],
+        emojis: [],
+        card: null,
+        poll: null,
+    };
+
+    return c.json(activityStatus);
 });
 
 // ActivityPub actor endpoint for Discord to fetch branding info
