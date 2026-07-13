@@ -558,12 +558,12 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             id: handle,
             display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
-                // A host-bearing identity URL makes Discord federate this as
-                // @handle@host. A hostless URI preserves the compact @handle.
+                // Keep profile clicks on Instagram while using the X identity
+                // namespace Discord already renders as a compact @handle.
                 username: handle,
                 acct: handle,
-                url: 'about:blank',
-                uri: 'about:blank',
+                url: embedData.au || `https://www.instagram.com/${encodeURIComponent(handle)}/`,
+                uri: `https://x.com/${encodeURIComponent(handle)}`,
             } : {
                 username: handle,
                 acct: handle,

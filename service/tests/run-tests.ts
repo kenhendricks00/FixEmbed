@@ -1090,7 +1090,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord Instagram reels with a poster avoid federated Activity identity',
+        name: 'Discord Instagram reels with a poster use the creator-first Activity card',
         run: () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
@@ -1111,13 +1111,73 @@ const tests: TestCase[] = [
                 platform: 'instagram',
             }, 'Discordbot/2.0');
 
-            assert.doesNotMatch(html, /application\/activity\+json/);
+            assert.match(
+                html,
+                /href='https:\/\/fixembed\.app\/users\/creator\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/,
+            );
             assert.match(
                 html,
                 /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
             );
-            assert.match(html, /property="og:video"/);
-            assert.match(html, /property="og:image"/);
+            assert.doesNotMatch(html, /property="og:video"/);
+            assert.doesNotMatch(html, /property="og:image"/);
+        },
+    },
+    {
+        name: 'Instagram Activity cards keep a compact creator identity and real profile link',
+        run: async () => {
+            const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
+            const html = generateEmbedHTML({
+                title: 'Actual reel caption @cota',
+                description: '',
+                url: sourceUrl,
+                siteName: 'FixEmbed • Instagram',
+                authorName: 'creator',
+                authorHandle: '@creator',
+                authorUrl: 'https://www.instagram.com/creator/',
+                authorAvatar: 'https://scontent.example/avatar.jpg',
+                stats: '💬 12',
+                image: 'https://scontent.example/reel.jpg',
+                video: {
+                    url: 'https://scontent.example/reel.mp4',
+                    thumbnail: 'https://scontent.example/reel.jpg',
+                    width: 720,
+                    height: 1280,
+                },
+                platform: 'instagram',
+            }, 'Discordbot/2.0');
+            const encoded = html.match(/\/users\/creator\/statuses\/(\d+)/)?.[1];
+            assert.ok(encoded);
+
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
+                    return new Response([
+                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg" alt="creator" /></a>',
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />Actual reel caption &#064;cota</div>',
+                        '<script>window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
+                        '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};</script>',
+                    ].join(''), { status: 200 });
+                }
+                return new Response('', { status: 404 });
+            };
+
+            try {
+                const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
+                assert.equal(response.status, 200);
+                const activity = await response.json() as any;
+                assert.equal(activity.account.display_name, 'creator');
+                assert.equal(activity.account.username, 'creator');
+                assert.equal(activity.account.acct, 'creator');
+                assert.equal(activity.account.url, 'https://www.instagram.com/creator/');
+                assert.equal(activity.account.uri, 'https://x.com/creator');
+                assert.equal(activity.media_attachments[0].type, 'video');
+                assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {
