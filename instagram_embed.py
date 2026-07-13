@@ -156,11 +156,7 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
     return view
 
 
-async def fetch_instagram_card(
-    source_url: str,
-    footer_icon_url: Optional[str] = None,
-) -> InstagramCard:
-    """Fetch first-party metadata and return an exact Instagram card."""
+async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
     api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -170,7 +166,20 @@ async def fetch_instagram_card(
 
     if not body.get("success") or body.get("platform") != "instagram":
         raise ValueError("FixEmbed did not return Instagram metadata")
-    return build_instagram_card(body.get("data") or {}, footer_icon_url)
+    return body.get("data") or {}
+
+
+async def fetch_instagram_card(
+    source_url: str,
+    footer_icon_url: Optional[str] = None,
+) -> InstagramCard:
+    """Fetch first-party metadata and return an exact Instagram card."""
+    return build_instagram_card(await _fetch_instagram_payload(source_url), footer_icon_url)
+
+
+async def fetch_instagram_layout(source_url: str) -> discord.ui.LayoutView:
+    """Fetch first-party metadata and return a playable Components V2 card."""
+    return build_instagram_layout(await _fetch_instagram_payload(source_url))
 
 
 async def fetch_instagram_embed(

@@ -15,6 +15,7 @@ import ast
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
+from instagram_embed import fetch_instagram_layout
 from message_context import format_tagged_users
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
@@ -168,12 +169,20 @@ processing_stats = {
     "by_service": {}
 }
 
-async def rate_limited_send(channel, content=None, embed=None, file=None, allowed_mentions=None):
-    await SEND_QUEUE.put((channel, content, embed, file, allowed_mentions))
+async def rate_limited_send(
+    channel,
+    content=None,
+    embed=None,
+    file=None,
+    allowed_mentions=None,
+    view=None,
+    fallback_content=None,
+):
+    await SEND_QUEUE.put((channel, content, embed, file, allowed_mentions, view, fallback_content))
 
 async def send_worker():
     while True:
-        channel, content, embed, file, allowed_mentions = await SEND_QUEUE.get()
+        channel, content, embed, file, allowed_mentions, view, fallback_content = await SEND_QUEUE.get()
         try:
             current_time = time.time()
             while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
@@ -191,9 +200,17 @@ async def send_worker():
                 embed=embed,
                 file=file,
                 allowed_mentions=allowed_mentions,
+                view=view,
             )
         except Exception as e:
-            logging.error(f"Queue send failed: {e}")
+            if fallback_content:
+                logging.warning(f"Component send failed; using link fallback: {e}")
+                try:
+                    await channel.send(content=fallback_content, allowed_mentions=allowed_mentions)
+                except Exception as fallback_error:
+                    logging.error(f"Queue fallback send failed: {fallback_error}")
+            else:
+                logging.error(f"Queue send failed: {e}")
         finally:
             SEND_QUEUE.task_done()
 
@@ -1421,6 +1438,7 @@ async def on_message(message):
                 include_fixembed=False,
             )
             formatted_links = []
+            instagram_layouts = []
             for item in links:
                 default_enabled = item.service in enabled_services
                 service_enabled = get_service_rule(guild_id, message.channel.id, item.service, default_enabled)
@@ -1435,7 +1453,12 @@ async def on_message(message):
                         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
                     )
                     if item.service == "Instagram":
-                        formatted_links.append(automatic_url)
+                        try:
+                            layout = await fetch_instagram_layout(item.canonical_url)
+                            instagram_layouts.append((layout, automatic_url))
+                        except Exception as error:
+                            logging.warning(f"Instagram component build failed; using link fallback: {error}")
+                            formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")
                     processed_link_cache[dedup_key] = time.time()
@@ -1443,7 +1466,7 @@ async def on_message(message):
                     service_stats["ok"] += 1
                     processing_stats["total_fixed"] += 1
 
-            if formatted_links:
+            if formatted_links or instagram_layouts:
                 if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
@@ -1463,14 +1486,33 @@ async def on_message(message):
                             content=chunk,
                             allowed_mentions=allowed_mentions,
                         )
+                    for layout, automatic_url in instagram_layouts:
+                        await rate_limited_send(
+                            message.channel,
+                            view=layout,
+                            fallback_content=automatic_url,
+                            allowed_mentions=allowed_mentions,
+                        )
                     await message.delete()
                 elif delivery_mode == "suppress":
                     await message.edit(suppress=True)
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
+                    for layout, automatic_url in instagram_layouts:
+                        await rate_limited_send(
+                            message.channel,
+                            view=layout,
+                            fallback_content=automatic_url,
+                        )
                 else:
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
+                    for layout, automatic_url in instagram_layouts:
+                        await rate_limited_send(
+                            message.channel,
+                            view=layout,
+                            fallback_content=automatic_url,
+                        )
 
         except discord.Forbidden:
             logging.warning(f"Missing permissions in channel {message.channel.id}")
