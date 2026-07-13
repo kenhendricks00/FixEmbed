@@ -1143,7 +1143,7 @@ const tests: TestCase[] = [
                 assert.equal(activity.account.display_name, 'creator');
                 assert.equal(activity.account.username, 'creator');
                 assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, undefined);
+                assert.equal(activity.account.url, 'about:blank');
                 assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
             } finally {
                 globalThis.fetch = originalFetch;

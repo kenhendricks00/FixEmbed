@@ -556,6 +556,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             ...(isInstagram ? {
                 username: handle,
                 acct: handle,
+                url: 'about:blank',
+                uri: 'about:blank',
             } : {
                 username: handle,
                 acct: handle,
