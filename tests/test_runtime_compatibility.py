@@ -16,7 +16,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
             "Pixiv": 1526268469920792577,
             "Threads": 1526267848924725399,
             "Reddit": 1526267589808881684,
-            "Instagram": 1486919548732051586,
+            "Instagram": 1526267158793949435,
             "Twitter": 1526268173589155921,
             "Bluesky": 1526269663334502544,
             "Bilibili": 1526271150739423304,
