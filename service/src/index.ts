@@ -488,6 +488,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         };
     }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
+    const isInstagram = embedData.p === 'instagram';
     const createdAt = embedData.ts || new Date().toISOString();
     const mediaAttachments: MastodonMediaAttachment[] = [];
 
@@ -551,9 +552,11 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         media_attachments: mediaAttachments,
         account: {
             id: handle,
-            display_name: embedData.a || handle,
-            username: handle,
-            acct: handle,
+            display_name: isInstagram ? `@${handle}` : (embedData.a || handle),
+            // Discord otherwise expands Instagram's local handle into a
+            // federated-looking @handle@www.instagram.com label.
+            username: isInstagram ? '' : handle,
+            acct: isInstagram ? '' : handle,
             url: embedData.au || embedData.u || `https://x.com/${handle}`,
             uri: embedData.au || embedData.u || `https://x.com/${handle}`,
             created_at: createdAt,

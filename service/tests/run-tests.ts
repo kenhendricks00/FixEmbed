@@ -935,7 +935,10 @@ const tests: TestCase[] = [
             assert.match(html, /<meta name="twitter:card" content="player">/);
             assert.doesNotMatch(html, /property="og:video/);
             assert.match(html, /<meta property="og:title" content="Author Name \(@author\)">/);
-            assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/pbs\.twimg\.com\/profile_images\/author\.jpg">/);
+            assert.match(
+                html,
+                /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
+            );
             assert.match(html, /href='https:\/\/fixembed\.app\/users\/author\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/);
 
             const encoded = html.match(/\/users\/author\/statuses\/(\d+)/)?.[1];
@@ -1052,7 +1055,7 @@ const tests: TestCase[] = [
                 );
                 assert.match(
                     html,
-                    /<link rel="apple-touch-icon" href="https:\/\/example\.com\/avatar\.jpg">/,
+                    /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
                     platform,
                 );
                 if (platform !== 'twitter') {
@@ -1088,7 +1091,7 @@ const tests: TestCase[] = [
     },
     {
         name: 'Discord Instagram reels with a poster use the branded Activity card',
-        run: () => {
+        run: async () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
                 title: 'A reel caption',
@@ -1097,6 +1100,7 @@ const tests: TestCase[] = [
                 siteName: 'FixEmbed • Instagram',
                 authorName: 'Creator',
                 authorHandle: '@creator',
+                authorAvatar: 'https://scontent.example/avatar.jpg',
                 stats: '💬 12 ❤️ 34',
                 video: {
                     url: 'https://fixembed.app/video/instagram?url=https%3A%2F%2Fexample.com%2Freel.mp4',
@@ -1108,11 +1112,41 @@ const tests: TestCase[] = [
             }, 'Discordbot/2.0');
 
             assert.match(html, /application\/activity\+json/);
+            assert.match(
+                html,
+                /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
+            );
             assert.doesNotMatch(html, /property="og:video"/);
             assert.doesNotMatch(html, /property="og:image"/);
             const statusToken = html.match(/\/statuses\/(\d+)/)?.[1];
             assert.ok(statusToken);
             assert.notEqual(statusToken, encodeActivitySource(sourceUrl));
+
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                if (String(input).includes('instagram.com/p/PreviewReel/embed/captioned')) {
+                    return new Response([
+                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg" alt="creator" /></a>',
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">Creator caption</div>',
+                        '<script>window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
+                        '"thumbnail_src":"https://scontent.example/reel.jpg"};</script>',
+                    ].join(''), { status: 200 });
+                }
+                return new Response('', { status: 404 });
+            };
+
+            try {
+                const response = await app.request('/api/v1/statuses/' + statusToken, {}, env);
+                assert.equal(response.status, 200);
+                const activity = await response.json() as any;
+                assert.equal(activity.account.display_name, '@creator');
+                assert.equal(activity.account.username, '');
+                assert.equal(activity.account.acct, '');
+                assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {

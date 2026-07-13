@@ -17,7 +17,7 @@ function escapeHtml(str: string): string {
 }
 
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
-const INSTAGRAM_ACTIVITY_REVISION = '3';
+const INSTAGRAM_ACTIVITY_REVISION = '4';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
@@ -226,8 +226,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // 1. Single high-quality icon for branding
     html += `  <link href="${FIXEMBED_LOGO}" rel="icon" type="image/png">\n`;
 
-    // 2. Apple touch icon for mobile
-    html += `  <link rel="apple-touch-icon" href="${escape(embed.authorAvatar || FIXEMBED_LOGO)}">\n`;
+    // 2. Keep provider branding in Discord's footer. The creator avatar is
+    // supplied separately by the Activity account used for the card header.
+    html += `  <link rel="apple-touch-icon" href="${FIXEMBED_LOGO}">\n`;
 
     // 3. oEmbed link for Discord to fetch provider and engagement info
     // Note: Previously excluded Instagram to force large images, but testing if it still works with oEmbed
