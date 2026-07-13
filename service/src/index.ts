@@ -489,7 +489,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
     }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
     const isInstagram = embedData.p === 'instagram';
-    const compactInstagramIdentity = `https://x.com/${encodeURIComponent(handle)}/status/${status}`;
+    const instagramProfileUrl = embedData.au || `https://www.instagram.com/${encodeURIComponent(handle)}/`;
     const createdAt = embedData.ts || new Date().toISOString();
     const mediaAttachments: MastodonMediaAttachment[] = [];
 
@@ -535,8 +535,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
 
     const activityStatus = {
         id: status,
-        url: isInstagram ? compactInstagramIdentity : (embedData.u || `https://x.com/${handle}`),
-        uri: isInstagram ? compactInstagramIdentity : (embedData.u || `https://x.com/${handle}`),
+        url: embedData.u || `https://x.com/${handle}`,
+        uri: embedData.u || `https://x.com/${handle}`,
         created_at: createdAt,
         edited_at: null,
         reblog: null,
@@ -556,16 +556,14 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         },
         media_attachments: mediaAttachments,
         account: {
-            id: isInstagram ? status.slice(0, 19) : handle,
-            display_name: isInstagram ? handle : (embedData.a || handle),
+            id: handle,
+            display_name: isInstagram ? `${handle} (@${handle})` : (embedData.a || handle),
             ...(isInstagram ? {
-                // Discord appends the Activity account URL's host to Mastodon
-                // creator labels. Its compact X identity omits that redundant
-                // host, matching the author-first card used by X embeds.
-                username: handle,
-                acct: handle,
-                url: compactInstagramIdentity,
-                uri: compactInstagramIdentity,
+                // The complete Instagram creator label is the display name.
+                // Omitting the federated username prevents Discord from
+                // appending an unrelated Activity host to it.
+                url: instagramProfileUrl,
+                uri: instagramProfileUrl,
             } : {
                 username: handle,
                 acct: handle,

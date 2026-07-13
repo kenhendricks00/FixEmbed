@@ -17,7 +17,7 @@ function escapeHtml(str: string): string {
 }
 
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
-const INSTAGRAM_ACTIVITY_REVISION = '20';
+const INSTAGRAM_ACTIVITY_REVISION = '21';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
@@ -221,11 +221,6 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     // Twitter-specific tags
     html += `  <meta name="twitter:title" content="${escape(displayTitle)}">\n`;
     html += `  <meta name="twitter:description" content="${escape(renderedDescription)}">\n`;
-    if (embed.platform === 'instagram' && embed.authorHandle) {
-        const compactHandle = embed.authorHandle.startsWith('@') ? embed.authorHandle : `@${embed.authorHandle}`;
-        html += `  <meta property="twitter:site" content="${escape(compactHandle)}">\n`;
-        html += `  <meta property="twitter:creator" content="${escape(compactHandle)}">\n`;
-    }
 
     // FixEmbed branding - multiple approaches for Discord enhanced embeds
     // 1. Single high-quality icon for branding

@@ -1119,8 +1119,6 @@ const tests: TestCase[] = [
                 html,
                 /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
             );
-            assert.match(html, /<meta property="twitter:site" content="@creator">/);
-            assert.match(html, /<meta property="twitter:creator" content="@creator">/);
             assert.doesNotMatch(html, /property="og:video"/);
             assert.doesNotMatch(html, /property="og:image"/);
         },
@@ -1170,14 +1168,14 @@ const tests: TestCase[] = [
                 const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
-                assert.equal(activity.account.id, encoded.slice(0, 19));
-                assert.equal(activity.url, `https://x.com/creator/status/${encoded}`);
-                assert.equal(activity.uri, `https://x.com/creator/status/${encoded}`);
-                assert.equal(activity.account.display_name, 'creator');
-                assert.equal(activity.account.username, 'creator');
-                assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, `https://x.com/creator/status/${encoded}`);
-                assert.equal(activity.account.uri, `https://x.com/creator/status/${encoded}`);
+                assert.equal(activity.account.id, 'creator');
+                assert.equal(activity.url, sourceUrl);
+                assert.equal(activity.uri, sourceUrl);
+                assert.equal(activity.account.display_name, 'creator (@creator)');
+                assert.equal(activity.account.username, undefined);
+                assert.equal(activity.account.acct, undefined);
+                assert.equal(activity.account.url, 'https://www.instagram.com/creator/');
+                assert.equal(activity.account.uri, 'https://www.instagram.com/creator/');
                 assert.equal(activity.media_attachments[0].type, 'video');
                 assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');
             } finally {
