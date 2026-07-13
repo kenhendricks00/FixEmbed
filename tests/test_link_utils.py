@@ -80,6 +80,20 @@ class SocialServiceTests(unittest.TestCase):
             ],
         )
 
+    def test_extract_supported_links_can_ignore_preconverted_proxy_domains(self):
+        links = extract_supported_links(
+            "https://fixupx.com/openai/status/123 "
+            "https://fxtwitter.com/openai/status/456 "
+            "https://vxtwitter.com/openai/status/789 "
+            "https://bskyx.app/profile/example.bsky.social/post/abc "
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F111 "
+            "https://x.com/openai/status/999",
+            include_preconverted=False,
+        )
+
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].canonical_url, "https://x.com/openai/status/999")
+
     def test_build_fixembed_url_encodes_the_canonical_url_and_quality(self):
         link = extract_supported_links("https://x.com/openai/status/123")[0]
 

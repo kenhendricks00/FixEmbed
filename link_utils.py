@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, quote, urlparse, urlunparse
 URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
+PRECONVERTED_HOSTS = {"fixembed.app", "fixupx.com", "fxtwitter.com", "vxtwitter.com", "bskyx.app"}
 EMBED_REVISION = "148"
 
 
@@ -112,14 +113,20 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     return None
 
 
-def extract_supported_links(text: str, include_suppressed: bool = False) -> List[SupportedLink]:
-    """Extract supported URLs in input order and normalize known proxy URLs."""
+def extract_supported_links(
+    text: str,
+    include_suppressed: bool = False,
+    include_preconverted: bool = True,
+) -> List[SupportedLink]:
+    """Extract supported URLs, optionally leaving pre-converted proxy links alone."""
     links: List[SupportedLink] = []
     for match in URL_PATTERN.finditer(text):
         raw_url = match.group(0).rstrip(TRAILING_PUNCTUATION)
         end = match.start() + len(raw_url)
         suppressed = match.start() > 0 and end < len(text) and text[match.start() - 1] == "<" and text[end] == ">"
         if suppressed and not include_suppressed:
+            continue
+        if not include_preconverted and _hostname(raw_url) in PRECONVERTED_HOSTS:
             continue
 
         canonical = _canonicalize(raw_url)

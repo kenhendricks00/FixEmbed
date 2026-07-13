@@ -1414,7 +1414,7 @@ async def on_message(message):
     
     if channel_states.get(message.channel.id, True):
         try:
-            links = extract_supported_links(message.content)
+            links = extract_supported_links(message.content, include_preconverted=False)
             formatted_links = []
             for item in links:
                 default_enabled = item.service in enabled_services
