@@ -489,7 +489,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
     }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
     const isInstagram = embedData.p === 'instagram';
-    const compactInstagramIdentity = `https://x.com/${encodeURIComponent(handle)}/status/1`;
+    const compactInstagramIdentity = `https://x.com/${encodeURIComponent(handle)}/status/${status}`;
     const createdAt = embedData.ts || new Date().toISOString();
     const mediaAttachments: MastodonMediaAttachment[] = [];
 

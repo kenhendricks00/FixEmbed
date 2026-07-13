@@ -1168,13 +1168,13 @@ const tests: TestCase[] = [
                 const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
-                assert.equal(activity.url, 'https://x.com/creator/status/1');
-                assert.equal(activity.uri, 'https://x.com/creator/status/1');
+                assert.equal(activity.url, `https://x.com/creator/status/${encoded}`);
+                assert.equal(activity.uri, `https://x.com/creator/status/${encoded}`);
                 assert.equal(activity.account.display_name, 'creator');
                 assert.equal(activity.account.username, 'creator');
                 assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, 'https://x.com/creator/status/1');
-                assert.equal(activity.account.uri, 'https://x.com/creator/status/1');
+                assert.equal(activity.account.url, `https://x.com/creator/status/${encoded}`);
+                assert.equal(activity.account.uri, `https://x.com/creator/status/${encoded}`);
                 assert.equal(activity.media_attachments[0].type, 'video');
                 assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');
             } finally {
