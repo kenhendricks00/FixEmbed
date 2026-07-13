@@ -12,7 +12,7 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 interface BilibiliVideoResponse {
     code?: number;
@@ -20,7 +20,15 @@ interface BilibiliVideoResponse {
         title?: string;
         desc?: string;
         pic?: string;
-        owner?: { name?: string; mid?: number };
+        owner?: { name?: string; mid?: number; face?: string };
+        stat?: {
+            view?: number;
+            reply?: number;
+            favorite?: number;
+            share?: number;
+            like?: number;
+        };
+        pubdate?: number;
     };
 }
 
@@ -38,6 +46,16 @@ async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null>
         const video = payload?.data;
         if (payload?.code !== 0 || !video?.title) return null;
         const image = typeof video.pic === 'string' && video.pic.startsWith('//') ? `https:${video.pic}` : video.pic;
+        const authorAvatar = typeof video.owner?.face === 'string' && video.owner.face.startsWith('//')
+            ? `https:${video.owner.face}`
+            : video.owner?.face;
+        const stats = [
+            video.stat?.reply !== undefined ? `💬 ${formatNumber(video.stat.reply)}` : '',
+            video.stat?.like !== undefined ? `❤️ ${formatNumber(video.stat.like)}` : '',
+            video.stat?.view !== undefined ? `👁️ ${formatNumber(video.stat.view)}` : '',
+            video.stat?.favorite !== undefined ? `🔖 ${formatNumber(video.stat.favorite)}` : '',
+            video.stat?.share !== undefined ? `🔁 ${formatNumber(video.stat.share)}` : '',
+        ].filter(Boolean).join(' ');
         return {
             success: true,
             source: 'first-party',
@@ -48,9 +66,12 @@ async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null>
                 siteName: getBrandedSiteName('bilibili'),
                 authorName: video.owner?.name,
                 authorUrl: video.owner?.mid ? `https://space.bilibili.com/${video.owner.mid}` : undefined,
+                authorAvatar,
                 image,
                 color: platformColors.bilibili,
                 platform: 'bilibili',
+                stats: stats || undefined,
+                timestamp: video.pubdate ? new Date(video.pubdate * 1000).toISOString() : undefined,
             },
         };
     } catch (error) {

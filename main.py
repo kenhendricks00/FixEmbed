@@ -21,6 +21,7 @@ from reddit_embed import fetch_reddit_layout
 from threads_embed import fetch_threads_layout
 from bluesky_embed import fetch_bluesky_layout
 from pixiv_embed import fetch_pixiv_layout
+from bilibili_embed import fetch_bilibili_layout
 from message_context import format_tagged_users
 from settings_components import render_settings_layout
 from settings_migrations import migrate_youtube_service_default
@@ -1293,6 +1294,13 @@ async def on_message(message):
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Bluesky component build failed; using link fallback: {error}")
+                            formatted_links.append(automatic_url)
+                    elif item.service == "Bilibili":
+                        try:
+                            layout = await fetch_bilibili_layout(item.canonical_url, automatic_url)
+                            component_layouts.append((layout, automatic_url))
+                        except Exception as error:
+                            logging.warning(f"Bilibili component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")

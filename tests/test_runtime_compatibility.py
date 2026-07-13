@@ -119,6 +119,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_pixiv", main_source)
 
+    def test_bilibili_uses_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from bilibili_embed import fetch_bilibili_layout", main_source)
+        self.assertIn('elif item.service == "Bilibili":', main_source)
+        self.assertIn("fetch_bilibili_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
+        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertNotIn("download_bilibili", main_source)
+
 
 if __name__ == "__main__":
     unittest.main()
