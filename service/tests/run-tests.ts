@@ -1171,8 +1171,8 @@ const tests: TestCase[] = [
                 assert.equal(activity.account.display_name, 'creator');
                 assert.equal(activity.account.username, 'creator');
                 assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, 'https://twitter.com/creator');
-                assert.equal(activity.account.uri, 'https://twitter.com/creator');
+                assert.equal(activity.account.url, 'https://x.com/creator/status/1');
+                assert.equal(activity.account.uri, 'https://x.com/creator/status/1');
                 assert.equal(activity.media_attachments[0].type, 'video');
                 assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');
             } finally {

@@ -563,8 +563,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
                 // host, matching the author-first card used by X embeds.
                 username: handle,
                 acct: handle,
-                url: `https://twitter.com/${encodeURIComponent(handle)}`,
-                uri: `https://twitter.com/${encodeURIComponent(handle)}`,
+                url: `https://x.com/${encodeURIComponent(handle)}/status/1`,
+                uri: `https://x.com/${encodeURIComponent(handle)}/status/1`,
             } : {
                 username: handle,
                 acct: handle,
