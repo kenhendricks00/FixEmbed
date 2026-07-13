@@ -12,10 +12,11 @@ import aiosqlite
 import sqlite3
 import time
 import ast
+import io
 from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
-from instagram_embed import fetch_instagram_card
+from instagram_embed import download_instagram_video, fetch_instagram_card
 from message_context import format_tagged_users
 from settings_migrations import migrate_youtube_service_default
 from premium_roles import (
@@ -1447,7 +1448,25 @@ async def on_message(message):
                                 item.canonical_url,
                                 footer_icon_url,
                             )
-                            instagram_cards.append(card.embed)
+                            video_file = None
+                            if card.video_url:
+                                max_upload_bytes = getattr(message.guild, "filesize_limit", 10 * 1024 * 1024)
+                                video_bytes = await download_instagram_video(
+                                    card.video_url,
+                                    max_upload_bytes,
+                                )
+                                if video_bytes:
+                                    card.embed.set_image(url=None)
+                                    video_file = discord.File(
+                                        io.BytesIO(video_bytes),
+                                        filename="instagram-video.mp4",
+                                    )
+                                else:
+                                    logging.warning(
+                                        "Instagram video exceeds the upload limit for guild %s",
+                                        guild_id,
+                                    )
+                            instagram_cards.append((card.embed, video_file))
                         except Exception as error:
                             logging.warning(
                                 "Instagram metadata fetch failed for %s: %s",
@@ -1482,10 +1501,11 @@ async def on_message(message):
                             content=chunk,
                             allowed_mentions=allowed_mentions,
                         )
-                    for embed in instagram_cards:
+                    for embed, video_file in instagram_cards:
                         await rate_limited_send(
                             message.channel,
                             embed=embed,
+                            file=video_file,
                             allowed_mentions=allowed_mentions,
                         )
                     await message.delete()
@@ -1493,13 +1513,13 @@ async def on_message(message):
                     await message.edit(suppress=True)
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for embed in instagram_cards:
-                        await rate_limited_send(message.channel, embed=embed)
+                    for embed, video_file in instagram_cards:
+                        await rate_limited_send(message.channel, embed=embed, file=video_file)
                 else:
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for embed in instagram_cards:
-                        await rate_limited_send(message.channel, embed=embed)
+                    for embed, video_file in instagram_cards:
+                        await rate_limited_send(message.channel, embed=embed, file=video_file)
 
         except discord.Forbidden:
             logging.warning(f"Missing permissions in channel {message.channel.id}")

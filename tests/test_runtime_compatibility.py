@@ -13,12 +13,13 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn('"YouTube": 1525579761479450686', main_source)
 
-    def test_instagram_video_preview_is_not_uploaded_as_an_attachment(self):
+    def test_instagram_video_preview_is_uploaded_for_inline_playback(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
-        self.assertNotIn("video_file = discord.File(", main_source)
-        self.assertNotIn("card.embed.set_image(url=None)", main_source)
-        self.assertIn("instagram_cards.append(card.embed)", main_source)
+        self.assertIn("download_instagram_video", main_source)
+        self.assertIn("video_file = discord.File(", main_source)
+        self.assertIn("instagram_cards.append((card.embed, video_file))", main_source)
+        self.assertIn("file=video_file", main_source)
 
 
 if __name__ == "__main__":
