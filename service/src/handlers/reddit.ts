@@ -95,21 +95,58 @@ function redditGalleryImages(post: RedditPost): string[] {
         .map(decodeRedditHtml);
 }
 
-async function fetchSubredditIcon(subreddit: string, fallback = ''): Promise<string | undefined> {
+function redditCookieHeader(response: Response): string {
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+    const values = headers.getSetCookie?.() || [headers.get('set-cookie') || ''];
+    return values
+        .flatMap((value) => value.split(/,(?=\s*[^=;,\s]+\s*=)/))
+        .map((value) => value.split(';', 1)[0]?.trim())
+        .filter((value): value is string => Boolean(value?.includes('=')))
+        .join('; ');
+}
+
+async function fetchSubredditIcon(
+    subreddit: string,
+    fallback = '',
+    initialCookie = '',
+): Promise<string | undefined> {
     const fallbackIcon = decodeRedditHtml(fallback) || undefined;
-    try {
-        const encodedSubreddit = encodeURIComponent(safeDecodeURIComponent(subreddit));
+    const encodedSubreddit = encodeURIComponent(safeDecodeURIComponent(subreddit));
+    const fetchCommunityIcon = async (cookie = ''): Promise<string | undefined> => {
+        const headers: Record<string, string> = {
+            'Accept': 'application/json',
+            'User-Agent': 'FixEmbed/1.0 (embed service)',
+        };
+        if (cookie) headers.Cookie = cookie;
         const community = await fetchJSON<RedditCommunityResponse>(
             `https://www.reddit.com/r/${encodedSubreddit}/about.json?raw_json=1`,
-            {
-                headers: {
-                    'User-Agent': 'FixEmbed/1.0 (embed service)',
-                },
-            },
+            { headers },
         );
         return decodeRedditHtml(
             community?.data?.community_icon || community?.data?.icon_img || '',
-        ) || fallbackIcon;
+        ) || undefined;
+    };
+
+    try {
+        return await fetchCommunityIcon(initialCookie) || fallbackIcon;
+    } catch {
+        if (initialCookie) return fallbackIcon;
+    }
+
+    try {
+        const bootstrap = await fetchWithTimeout(
+            `https://embed.reddit.com/r/${encodedSubreddit}/`,
+            {
+                headers: {
+                    'Accept': 'text/html',
+                    'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                },
+            },
+        );
+        if (!bootstrap.ok) return fallbackIcon;
+        const cookie = redditCookieHeader(bootstrap);
+        if (!cookie) return fallbackIcon;
+        return await fetchCommunityIcon(cookie) || fallbackIcon;
     } catch {
         return fallbackIcon;
     }
@@ -161,6 +198,7 @@ async function recoverFromRedditEmbed(
     const authorAvatar = await fetchSubredditIcon(
         displaySubreddit,
         subredditIcon ? decodeRedditHtml(subredditIcon) : '',
+        redditCookieHeader(response),
     );
 
     return {

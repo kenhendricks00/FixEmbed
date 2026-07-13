@@ -650,10 +650,21 @@ const tests: TestCase[] = [
         name: 'redditHandler recovers post data from Reddit embed HTML when JSON is forbidden',
         run: async () => {
             const originalFetch = globalThis.fetch;
-            globalThis.fetch = async (input) => {
+            globalThis.fetch = async (input, init) => {
                 const url = String(input);
-                if (url.includes('.json')) {
+                if (url.includes('/comments/') && url.includes('.json')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                if (url.includes('/about.json')) {
+                    const cookie = new Headers(init?.headers).get('Cookie') || '';
+                    if (!cookie.includes('loid=anonymous-session')) {
+                        return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                    }
+                    return new Response(JSON.stringify({
+                        data: {
+                            community_icon: 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_fp81a2t5s9ch1.png?width=256&amp;s=signed',
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
                 }
                 if (url.startsWith('https://embed.reddit.com/')) {
                     return new Response(`
@@ -665,7 +676,13 @@ const tests: TestCase[] = [
                         <img src="https://preview.redd.it/example.png?width=591&amp;format=png">
                         <div data-testid="upvote"><faceplate-number number="218" pretty></faceplate-number></div>
                         <span>View 75 comments</span>
-                    `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                    `, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'text/html',
+                            'Set-Cookie': 'loid=anonymous-session; Domain=.reddit.com; Path=/; Secure',
+                        },
+                    });
                 }
                 throw new Error(`Unexpected request: ${url}`);
             };
@@ -680,7 +697,7 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'r/codex • usage limits reset for the 5th time today');
                 assert.equal(response.data?.authorName, 'u/Distinct_Ingenuity21');
-                assert.equal(response.data?.authorAvatar, 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_fp81a2t5s9ch1.png?width=64&height=64&frame=1');
+                assert.equal(response.data?.authorAvatar, 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_fp81a2t5s9ch1.png?width=256&s=signed');
                 assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
                 assert.match(response.data?.stats || '', /218/);
                 assert.match(response.data?.stats || '', /75/);
