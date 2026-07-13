@@ -794,6 +794,40 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler recovers from blocked JSON API with Reddit oEmbed',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const canonicalUrl = 'https://www.reddit.com/r/capybara/comments/abc123/capybara_post/';
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/comments/abc123.json')) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.includes('/oembed?')) {
+                    return new Response(JSON.stringify({
+                        title: 'Capybara post',
+                        author_name: 'capybara_friend',
+                    }));
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await redditHandler.handle(canonicalUrl, env);
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.title, 'r/capybara â€¢ Capybara post');
+                assert.equal(response.data?.authorName, 'u/capybara_friend');
+                assert.match(response.data?.authorAvatar || '', /redditstatic\.com/);
+                assert.equal(requested.some((url) => url.includes('/oembed?')), true);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'YouTube community posts preserve long text for Components V2',
         run: () => {
             const longText = 'Community update '.repeat(90).trim();

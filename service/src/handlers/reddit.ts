@@ -67,6 +67,13 @@ interface RedditCommunityResponse {
     };
 }
 
+interface RedditOEmbedResponse {
+    author_name?: string;
+    title?: string;
+}
+
+const REDDIT_FALLBACK_ICON = 'https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png';
+
 function decodeRedditHtml(value: string): string {
     return value
         .replace(/&amp;/g, '&')
@@ -176,6 +183,41 @@ async function recoverFromRedditEmbed(
     const encodedSubreddit = encodeURIComponent(displaySubreddit);
     const encodedPostId = encodeURIComponent(safeDecodeURIComponent(postId));
     const canonicalUrl = `https://www.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`;
+    try {
+        const oembed = await fetchJSON<RedditOEmbedResponse>(
+            `https://www.reddit.com/oembed?url=${encodeURIComponent(canonicalUrl)}`,
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'FixEmbed/1.0 (embed service)',
+                },
+            },
+        );
+        const title = decodeRedditHtml(oembed?.title || '');
+        if (title) {
+            const displayAuthor = oembed?.author_name
+                ? safeDecodeURIComponent(oembed.author_name)
+                : undefined;
+            return {
+                success: true,
+                source: 'first-party',
+                data: {
+                    title: `r/${displaySubreddit} â€¢ ${truncateText(title, 100)}`,
+                    description: '',
+                    url: canonicalUrl,
+                    siteName: getBrandedSiteName('reddit'),
+                    authorName: displayAuthor ? `u/${displayAuthor}` : undefined,
+                    authorUrl: displayAuthor ? `https://www.reddit.com/user/${encodeURIComponent(displayAuthor)}/` : undefined,
+                    authorAvatar: REDDIT_FALLBACK_ICON,
+                    color: platformColors.reddit,
+                    platform: 'reddit',
+                },
+            };
+        }
+    } catch {
+        // Reddit frequently blocks JSON traffic from data-center networks.
+    }
+
     const response = await fetchWithTimeout(`https://embed.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`, {
         headers: {
             'Accept': 'text/html',
