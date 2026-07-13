@@ -759,39 +759,6 @@ function decodeInstagramText(value: string): string {
         .replace(/&gt;/g, '>');
 }
 
-async function upgradeInstagramAvatar(username: string, avatarUrl: string): Promise<string> {
-    // Instagram's post embed normally exposes only a 100x100 or 150x150 avatar.
-    // Avoid an extra request when the supplied image is already larger or when
-    // a fixture/CDN does not use Instagram's low-resolution size marker.
-    if (!/s(?:100|150)x(?:100|150)(?:_|&|$)/i.test(avatarUrl)) {
-        return avatarUrl;
-    }
-
-    try {
-        const response = await fetch(
-            `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
-            {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json',
-                    'X-IG-App-ID': '936619743392459',
-                },
-                signal: AbortSignal.timeout(3000),
-            },
-        );
-        if (!response.ok) return avatarUrl;
-
-        const body = await response.json() as {
-            data?: { user?: { profile_pic_url_hd?: string; profile_pic_url?: string } };
-        };
-        return body.data?.user?.profile_pic_url_hd
-            || body.data?.user?.profile_pic_url
-            || avatarUrl;
-    } catch {
-        return avatarUrl;
-    }
-}
-
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
@@ -845,12 +812,9 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         const avatarMatch = html.match(
             /<a[^>]+class=["'][^"']*\bAvatar\b[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+)["']/i,
         );
-        let authorAvatar = avatarMatch
+        const authorAvatar = avatarMatch
             ? decodeInstagramMediaUrl(avatarMatch[1])
             : undefined;
-        if (username && authorAvatar) {
-            authorAvatar = await upgradeInstagramAvatar(username, authorAvatar);
-        }
 
         // Extract media URL - check multiple patterns
         let mediaUrl = '';

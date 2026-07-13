@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import aiohttp
 import discord
@@ -18,6 +18,7 @@ INSTAGRAM_COLOR = 0xE4405F
 FIXEMBED_COLOR = 0x5865F2
 FIXEMBED_EMOJI_ID = 1525580543503106148
 INSTAGRAM_EMOJI_ID = 1526267158793949435
+INSTAGRAM_WEB_APP_ID = "936619743392459"
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,53 @@ def _remove_redundant_identity(caption: str, name: str, handle: str) -> str:
         while lines and not lines[0].strip():
             lines.pop(0)
     return "\n".join(lines).strip()
+
+
+def _is_instagram_avatar_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return False
+    hostname = (parsed.hostname or "").lower()
+    return parsed.scheme == "https" and (
+        hostname.endswith(".cdninstagram.com")
+        or hostname.endswith(".fbcdn.net")
+    )
+
+
+async def _upgrade_instagram_avatar(
+    payload: Mapping[str, Any],
+    session: aiohttp.ClientSession,
+) -> Mapping[str, Any]:
+    avatar = str(payload.get("authorAvatar") or "").strip()
+    handle = _clean_handle(payload.get("authorHandle"))
+    if not handle or not avatar or not any(size in avatar for size in ("s100x100", "s150x150")):
+        return payload
+
+    try:
+        profile_url = (
+            "https://i.instagram.com/api/v1/users/web_profile_info/"
+            f"?username={quote(handle, safe='')}"
+        )
+        async with session.get(
+            profile_url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "X-IG-App-ID": INSTAGRAM_WEB_APP_ID,
+            },
+            timeout=aiohttp.ClientTimeout(total=3),
+        ) as response:
+            response.raise_for_status()
+            body = await response.json(content_type=None)
+        candidate = str(body.get("data", {}).get("user", {}).get("profile_pic_url_hd") or "")
+        if not _is_instagram_avatar_url(candidate):
+            return payload
+        enriched = dict(payload)
+        enriched["authorAvatar"] = candidate
+        return enriched
+    except (aiohttp.ClientError, TimeoutError, ValueError, TypeError, AttributeError):
+        return payload
 
 
 def build_instagram_card(
@@ -182,9 +230,10 @@ async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
             response.raise_for_status()
             body = await response.json()
 
-    if not body.get("success") or body.get("platform") != "instagram":
-        raise ValueError("FixEmbed did not return Instagram metadata")
-    return body.get("data") or {}
+        if not body.get("success") or body.get("platform") != "instagram":
+            raise ValueError("FixEmbed did not return Instagram metadata")
+        return await _upgrade_instagram_avatar(body.get("data") or {}, session)
+
 
 
 async def fetch_instagram_card(

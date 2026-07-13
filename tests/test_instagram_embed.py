@@ -1,9 +1,63 @@
+import asyncio
 import unittest
 
-from instagram_embed import build_instagram_card, build_instagram_embed, build_instagram_layout
+from instagram_embed import (
+    _upgrade_instagram_avatar,
+    build_instagram_card,
+    build_instagram_embed,
+    build_instagram_layout,
+)
+
+
+class _ProfileResponse:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+    def raise_for_status(self):
+        return None
+
+    async def json(self, content_type=None):
+        return {
+            "data": {
+                "user": {
+                    "profile_pic_url_hd": (
+                        "https://scontent.example.cdninstagram.com/avatar.jpg"
+                        "?stp=dst-jpg_s320x320_tt6"
+                    )
+                }
+            }
+        }
+
+
+class _ProfileSession:
+    def __init__(self):
+        self.requested_url = None
+
+    def get(self, url, **kwargs):
+        self.requested_url = url
+        return _ProfileResponse()
 
 
 class InstagramEmbedTests(unittest.TestCase):
+    def test_low_resolution_avatar_is_upgraded_from_instagram_profile_metadata(self):
+        payload = {
+            "authorHandle": "@brooke_annm",
+            "authorAvatar": (
+                "https://scontent.example.cdninstagram.com/avatar.jpg"
+                "?stp=dst-jpg_s100x100_tt6"
+            ),
+        }
+        session = _ProfileSession()
+
+        enriched = asyncio.run(_upgrade_instagram_avatar(payload, session))
+
+        self.assertIn("username=brooke_annm", session.requested_url)
+        self.assertIn("s320x320", enriched["authorAvatar"])
+        self.assertIn("s100x100", payload["authorAvatar"])
+
     def test_author_uses_name_and_handle_without_fixembed_domain(self):
         payload = {
             "title": "A caption",
