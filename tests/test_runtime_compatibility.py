@@ -13,6 +13,12 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn('"YouTube": 1525579761479450686', main_source)
 
+    def test_instagram_video_preview_uses_supported_embed_api(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("card.embed.remove_image()", main_source)
+        self.assertIn("card.embed.set_image(url=None)", main_source)
+
 
 if __name__ == "__main__":
     unittest.main()

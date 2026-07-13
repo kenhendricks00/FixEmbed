@@ -1456,7 +1456,7 @@ async def on_message(message):
                                     max_upload_bytes,
                                 )
                                 if video_bytes:
-                                    card.embed.remove_image()
+                                    card.embed.set_image(url=None)
                                     video_file = discord.File(
                                         io.BytesIO(video_bytes),
                                         filename="instagram-video.mp4",

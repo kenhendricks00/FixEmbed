@@ -1090,8 +1090,8 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord Instagram reels with a poster use the branded Activity card',
-        run: async () => {
+        name: 'Discord Instagram reels with a poster avoid federated Activity identity',
+        run: () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
                 title: 'A reel caption',
@@ -1111,44 +1111,13 @@ const tests: TestCase[] = [
                 platform: 'instagram',
             }, 'Discordbot/2.0');
 
-            assert.match(html, /application\/activity\+json/);
+            assert.doesNotMatch(html, /application\/activity\+json/);
             assert.match(
                 html,
                 /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
             );
-            assert.doesNotMatch(html, /property="og:video"/);
-            assert.doesNotMatch(html, /property="og:image"/);
-            const statusToken = html.match(/\/statuses\/(\d+)/)?.[1];
-            assert.ok(statusToken);
-            assert.notEqual(statusToken, encodeActivitySource(sourceUrl));
-
-            const originalFetch = globalThis.fetch;
-            globalThis.fetch = async (input) => {
-                if (String(input).includes('instagram.com/p/PreviewReel/embed/captioned')) {
-                    return new Response([
-                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg" alt="creator" /></a>',
-                        '<span class="UsernameText">creator</span>',
-                        '<div class="Caption">Creator caption</div>',
-                        '<script>window.__data={"username":"creator","comment_count":12,"video_url":"https://scontent.example/reel.mp4",',
-                        '"thumbnail_src":"https://scontent.example/reel.jpg"};</script>',
-                    ].join(''), { status: 200 });
-                }
-                return new Response('', { status: 404 });
-            };
-
-            try {
-                const response = await app.request('/api/v1/statuses/' + statusToken, {}, env);
-                assert.equal(response.status, 200);
-                const activity = await response.json() as any;
-                assert.equal(activity.account.display_name, 'creator');
-                assert.equal(activity.account.username, 'creator');
-                assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, 'about:blank');
-                assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
-                assert.equal(activity.content, '<p>caption<br><br><strong>💬 12</strong></p>');
-            } finally {
-                globalThis.fetch = originalFetch;
-            }
+            assert.match(html, /property="og:video"/);
+            assert.match(html, /property="og:image"/);
         },
     },
     {
