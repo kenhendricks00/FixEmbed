@@ -367,6 +367,7 @@ export const instagramHandler: PlatformHandler = {
             if (vxResult.success && vxResult.isVideo && vxResult.video) {
                 const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
                 const metadata = nativeResult.data;
+                const preview = vxResult.image || metadata?.video?.thumbnail || metadata?.image;
                 return {
                     success: true,
                     source: 'fallback',
@@ -381,9 +382,9 @@ export const instagramHandler: PlatformHandler = {
                             url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
                             width: 720,
                             height: 1280,
-                            thumbnail: vxResult.image,
+                            thumbnail: preview,
                         },
-                        image: vxResult.image,
+                        image: preview,
                         color: platformColors.instagram,
                         platform: 'instagram',
                     },

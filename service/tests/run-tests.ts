@@ -524,6 +524,8 @@ const tests: TestCase[] = [
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'fallback');
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/video\/instagram\?url=/);
+                assert.equal(response.data?.video?.thumbnail, 'https://scontent.example.com/poster.jpg');
+                assert.equal(response.data?.image, 'https://scontent.example.com/poster.jpg');
             } finally { globalThis.fetch = originalFetch; }
         },
     },
