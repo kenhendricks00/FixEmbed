@@ -15,6 +15,7 @@ from component_emojis import format_component_stats
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
+PIXIV_ARTWORK_API = "https://www.pixiv.net/ajax/illust"
 PIXIV_COLOR = 0x0096FA
 FIXEMBED_EMOJI_ID = 1525580543503106148
 PIXIV_EMOJI_ID = 1526268469920792577
@@ -41,6 +42,29 @@ def _clean_description(value: Any) -> str:
     return description.strip()
 
 
+def _proxy_pixiv_image(source_url: str) -> str:
+    return f"https://fixembed.app/proxy/pixiv?url={quote(source_url, safe='')}"
+
+
+def _artwork_id(source_url: str) -> str:
+    match = re.search(r"(?:artworks/|illust_id=)(\d+)", source_url)
+    return match.group(1) if match else ""
+
+
+def _profile_image(payload: Mapping[str, Any], artwork_id: str) -> str:
+    artwork = payload.get("body") if isinstance(payload.get("body"), Mapping) else {}
+    direct = str(artwork.get("profileImageUrl") or "").strip()
+    if direct:
+        return direct
+    user_illusts = artwork.get("userIllusts")
+    if not isinstance(user_illusts, Mapping):
+        return ""
+    current = user_illusts.get(artwork_id)
+    if not isinstance(current, Mapping):
+        return ""
+    return str(current.get("profileImageUrl") or "").strip()
+
+
 def build_pixiv_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -54,6 +78,7 @@ def build_pixiv_layout(
     author_name = str(payload.get("authorName") or "Pixiv creator").strip().lstrip("@")
     author_handle = _clean_handle(payload.get("authorHandle"))
     author_url = str(payload.get("authorUrl") or "").strip()
+    author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
 
     creator_label = author_name
@@ -65,7 +90,19 @@ def build_pixiv_layout(
     title_line = f"**[{title}]({source_url})**" if source_url else f"**{title}**"
     header_text = "\n".join(part for part in (creator_line, title_line, description) if part)
 
-    children: list[discord.ui.Item[Any]] = [discord.ui.TextDisplay(header_text)]
+    children: list[discord.ui.Item[Any]] = []
+    if author_avatar:
+        children.append(
+            discord.ui.Section(
+                header_text,
+                accessory=discord.ui.Thumbnail(
+                    author_avatar,
+                    description=f"{author_name} profile photo",
+                ),
+            )
+        )
+    else:
+        children.append(discord.ui.TextDisplay(header_text))
 
     image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
     media_urls = [str(url) for url in image_urls if url]
@@ -116,9 +153,29 @@ async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
             response.raise_for_status()
             body = await response.json()
 
-    if not body.get("success") or body.get("platform") != "pixiv":
-        raise ValueError("FixEmbed did not return Pixiv metadata")
-    return body.get("data") or {}
+        if not body.get("success") or body.get("platform") != "pixiv":
+            raise ValueError("FixEmbed did not return Pixiv metadata")
+
+        data = dict(body.get("data") or {})
+        artwork_id = _artwork_id(source_url)
+        if artwork_id and not data.get("authorAvatar"):
+            headers = {
+                "Accept": "application/json",
+                "Referer": f"https://www.pixiv.net/artworks/{artwork_id}",
+                "User-Agent": "Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)",
+            }
+            try:
+                async with session.get(
+                    f"{PIXIV_ARTWORK_API}/{artwork_id}", headers=headers
+                ) as response:
+                    if response.ok:
+                        avatar = _profile_image(await response.json(), artwork_id)
+                        if avatar:
+                            data["authorAvatar"] = _proxy_pixiv_image(avatar)
+            except (aiohttp.ClientError, TimeoutError, ValueError):
+                pass
+
+    return data
 
 
 async def fetch_pixiv_layout(

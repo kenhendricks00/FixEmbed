@@ -27,6 +27,8 @@ interface PixivArtworkResponse {
         commentCount?: number;
         createDate?: string;
         urls?: { regular?: string; original?: string };
+        profileImageUrl?: string;
+        userIllusts?: Record<string, { profileImageUrl?: string }>;
     };
 }
 
@@ -77,6 +79,8 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
         const artwork = payload?.body;
         if (payload?.error || !artwork?.title) return null;
         const sourceImage = artwork.urls?.regular || artwork.urls?.original;
+        const profileImage = artwork.profileImageUrl
+            || artwork.userIllusts?.[illustId]?.profileImageUrl;
         let image = sourceImage ? proxyPixivImage(sourceImage, env) : undefined;
         let images: string[] | undefined;
         try {
@@ -121,6 +125,7 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
                 authorName: artwork.userName,
                 authorHandle: artwork.userAccount ? `@${artwork.userAccount}` : undefined,
                 authorUrl: artwork.userId ? `https://www.pixiv.net/users/${artwork.userId}` : undefined,
+                authorAvatar: profileImage ? proxyPixivImage(profileImage, env) : undefined,
                 image,
                 images,
                 color: platformColors.pixiv,

@@ -282,6 +282,7 @@ const tests: TestCase[] = [
                     userAccount: 'artist_account', bookmarkCount: 40, likeCount: 30,
                     viewCount: 500, commentCount: 2, createDate: '2026-07-13T19:00:00.000Z',
                     urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
+                    userIllusts: { '123': { profileImageUrl: 'https://i.pximg.net/user-profile/avatar.jpg' } },
                 } }), { status: 200 });
             };
             try {
@@ -293,6 +294,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.title, 'Artwork');
                 assert.equal(response.data?.description, 'Uses , commas');
                 assert.equal(response.data?.authorHandle, '@artist_account');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fuser-profile%2Favatar.jpg',
+                );
                 assert.deepEqual(response.data?.images, [
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-1.jpg',
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-2.jpg',

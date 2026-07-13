@@ -12,6 +12,7 @@ class PixivEmbedTests(unittest.TestCase):
             "authorName": "Artist Name",
             "authorHandle": "@artist_account",
             "authorUrl": "https://www.pixiv.net/users/42",
+            "authorAvatar": "https://fixembed.app/proxy/pixiv?url=avatar",
             "stats": "💬 12  ❤️ 1.4K  👁️ 28K  🔖 300",
             "timestamp": "2026-07-13T19:00:00.000Z",
             "images": [
@@ -30,9 +31,10 @@ class PixivEmbedTests(unittest.TestCase):
 
         self.assertEqual(container["type"], 17)
         self.assertEqual(container["accent_color"], 0x0096FA)
-        self.assertIn("A finished illustration", header["content"])
-        self.assertIn("[Artist Name (@artist_account)]", header["content"])
-        self.assertIn(payload["description"], header["content"])
+        self.assertIn("A finished illustration", header["components"][0]["content"])
+        self.assertIn("[Artist Name (@artist_account)]", header["components"][0]["content"])
+        self.assertIn(payload["description"], header["components"][0]["content"])
+        self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
         self.assertEqual(
             [item["media"]["url"] for item in gallery["items"]],
             payload["images"],
