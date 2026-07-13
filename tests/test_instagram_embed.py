@@ -56,6 +56,12 @@ class InstagramEmbedTests(unittest.TestCase):
 
         self.assertEqual(embed.description, "Actual caption")
 
+    def test_footer_includes_a_discord_timestamp(self):
+        embed = build_instagram_embed({"authorName": "brooke_annm"})
+
+        self.assertIsNotNone(embed.timestamp)
+        self.assertEqual(embed.timestamp.utcoffset().total_seconds(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

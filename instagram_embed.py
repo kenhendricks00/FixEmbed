@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -51,6 +52,7 @@ def build_instagram_embed(
         description=description or None,
         url=str(payload.get("url") or "") or None,
         color=INSTAGRAM_COLOR,
+        timestamp=datetime.now(timezone.utc),
     )
     embed.set_author(
         name=author_text,
