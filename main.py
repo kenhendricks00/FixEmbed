@@ -18,6 +18,7 @@ from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, ext
 from instagram_embed import fetch_instagram_layout
 from twitter_embed import fetch_twitter_layout
 from reddit_embed import fetch_reddit_layout
+from threads_embed import fetch_threads_layout
 from message_context import format_tagged_users
 from settings_components import render_settings_layout
 from settings_migrations import migrate_youtube_service_default
@@ -1261,6 +1262,13 @@ async def on_message(message):
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Reddit component build failed; using link fallback: {error}")
+                            formatted_links.append(automatic_url)
+                    elif item.service == "Threads":
+                        try:
+                            layout = await fetch_threads_layout(item.canonical_url, automatic_url)
+                            component_layouts.append((layout, automatic_url))
+                        except Exception as error:
+                            logging.warning(f"Threads component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")

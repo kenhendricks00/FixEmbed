@@ -10,6 +10,7 @@ import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/y
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
 import { buildBlueskyContent } from '../src/handlers/bluesky.ts';
+import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
@@ -54,6 +55,39 @@ async function topGgSignature(body: string, secret: string, timestamp: number): 
 }
 
 const tests: TestCase[] = [
+    {
+        name: 'threadsHandler preserves full post text and creator identity metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                data: { data: { edges: [{ node: { thread_items: [{ post: {
+                    code: 'ABC123',
+                    user: {
+                        username: 'creator',
+                        profile_pic_url: 'https://cdn.example/avatar.jpg',
+                    },
+                    caption: { text: 'A full Threads post that should remain intact.' },
+                    like_count: 1200,
+                    text_post_app_info: { direct_reply_count: 34 },
+                    image_versions2: { candidates: [{ url: 'https://cdn.example/post.jpg' }] },
+                } }] } }] } },
+            }), { status: 200 });
+
+            try {
+                const response = await threadsHandler.handle(
+                    'https://www.threads.net/@creator/post/ABC123',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.caption, 'A full Threads post that should remain intact.');
+                assert.equal(response.data?.authorName, 'creator');
+                assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.authorAvatar, 'https://cdn.example/avatar.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
     {
         name: 'normalizeTwitterWebsiteCard preserves link preview metadata',
         run: () => {

@@ -232,9 +232,7 @@ export const threadsHandler: PlatformHandler = {
 
             if (graphqlResult.success) {
                 const displayUsername = graphqlResult.username || username;
-                const description = graphqlResult.caption
-                    ? truncateText(graphqlResult.caption, 280)
-                    : '';
+                const description = graphqlResult.caption || '';
 
                 // Build stats for oEmbed row
                 const statsStr = formatStats({
@@ -246,12 +244,15 @@ export const threadsHandler: PlatformHandler = {
                     success: true,
                     source: 'first-party',
                     data: {
-                        title: description || 'Thread',
-                        description: '', // Stats go via oEmbed, not in description
+                        title: description ? truncateText(description, 100) : 'Thread',
+                        description: '', // The complete creator text is carried in caption.
+                        caption: description,
                         url: normalizedUrl,
                         siteName: getBrandedSiteName('threads'),
-                        authorName: `@${displayUsername}`,
+                        authorName: displayUsername,
+                        authorHandle: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
+                        authorAvatar: graphqlResult.profilePic,
                         color: platformColors.threads,
                         platform: 'threads',
                         stats: statsStr, // Stats shown via oEmbed author_name
@@ -277,9 +278,6 @@ export const threadsHandler: PlatformHandler = {
                     // Multiple images (carousel) - use images array
                     result.data!.images = graphqlResult.images;
                     result.data!.image = graphqlResult.images[0]; // Also set single image as fallback
-                } else if (graphqlResult.profilePic) {
-                    // Fallback to profile pic
-                    result.data!.image = graphqlResult.profilePic;
                 }
 
                 return result;
