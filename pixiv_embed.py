@@ -60,9 +60,16 @@ def _profile_image(payload: Mapping[str, Any], artwork_id: str) -> str:
     if not isinstance(user_illusts, Mapping):
         return ""
     current = user_illusts.get(artwork_id)
-    if not isinstance(current, Mapping):
-        return ""
-    return str(current.get("profileImageUrl") or "").strip()
+    if isinstance(current, Mapping):
+        current_image = str(current.get("profileImageUrl") or "").strip()
+        if current_image:
+            return current_image
+    for work in user_illusts.values():
+        if isinstance(work, Mapping):
+            profile_image = str(work.get("profileImageUrl") or "").strip()
+            if profile_image:
+                return profile_image
+    return ""
 
 
 def build_pixiv_layout(

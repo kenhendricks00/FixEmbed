@@ -282,7 +282,10 @@ const tests: TestCase[] = [
                     userAccount: 'artist_account', bookmarkCount: 40, likeCount: 30,
                     viewCount: 500, commentCount: 2, createDate: '2026-07-13T19:00:00.000Z',
                     urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
-                    userIllusts: { '123': { profileImageUrl: 'https://i.pximg.net/user-profile/avatar.jpg' } },
+                    userIllusts: {
+                        '123': {},
+                        '122': { profileImageUrl: 'https://i.pximg.net/user-profile/avatar.jpg' },
+                    },
                 } }), { status: 200 });
             };
             try {

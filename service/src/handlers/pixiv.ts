@@ -65,6 +65,15 @@ function cleanPixivDescription(value: string | undefined): string {
     return description.trim();
 }
 
+function findPixivProfileImage(
+    artwork: NonNullable<PixivArtworkResponse['body']>,
+    illustId: string,
+): string | undefined {
+    return artwork.profileImageUrl
+        || artwork.userIllusts?.[illustId]?.profileImageUrl
+        || Object.values(artwork.userIllusts || {}).find(work => work.profileImageUrl)?.profileImageUrl;
+}
+
 async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerResponse | null> {
     try {
         const response = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}`, {
@@ -79,8 +88,7 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
         const artwork = payload?.body;
         if (payload?.error || !artwork?.title) return null;
         const sourceImage = artwork.urls?.regular || artwork.urls?.original;
-        const profileImage = artwork.profileImageUrl
-            || artwork.userIllusts?.[illustId]?.profileImageUrl;
+        const profileImage = findPixivProfileImage(artwork, illustId);
         let image = sourceImage ? proxyPixivImage(sourceImage, env) : undefined;
         let images: string[] | undefined;
         try {

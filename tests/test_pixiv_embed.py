@@ -1,9 +1,24 @@
 import unittest
 
-from pixiv_embed import build_pixiv_layout
+from pixiv_embed import _profile_image, build_pixiv_layout
 
 
 class PixivEmbedTests(unittest.TestCase):
+    def test_profile_image_uses_another_creator_work_when_current_artwork_omits_it(self):
+        payload = {
+            "body": {
+                "userIllusts": {
+                    "123": {"title": "Current work"},
+                    "122": {"profileImageUrl": "https://i.pximg.net/avatar.jpg"},
+                }
+            }
+        }
+
+        self.assertEqual(
+            _profile_image(payload, "123"),
+            "https://i.pximg.net/avatar.jpg",
+        )
+
     def test_components_v2_layout_preserves_artwork_identity_gallery_stats_and_links(self):
         payload = {
             "title": "A finished illustration",
