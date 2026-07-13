@@ -23,6 +23,21 @@ interface RedditPost {
             };
         }>;
     };
+    gallery_data?: {
+        items: Array<{ media_id: string }>;
+    };
+    media_metadata?: Record<string, {
+        status?: string;
+        e?: string;
+        s?: {
+            u?: string;
+            gif?: string;
+        };
+    }>;
+    sr_detail?: {
+        icon_img?: string;
+        community_icon?: string;
+    };
     is_video: boolean;
     media?: {
         reddit_video?: {
@@ -60,6 +75,32 @@ function safeDecodeURIComponent(value: string): string {
         return decodeURIComponent(value);
     } catch {
         return value;
+    }
+}
+
+function redditGalleryImages(post: RedditPost): string[] {
+    return (post.gallery_data?.items || [])
+        .map(({ media_id }) => {
+            const source = post.media_metadata?.[media_id]?.s;
+            return source?.u || source?.gif || '';
+        })
+        .filter(Boolean)
+        .map(decodeRedditHtml);
+}
+
+function linkedArticleSection(post: RedditPost, hasMedia: boolean) {
+    if (hasMedia || !/^https?:\/\//i.test(post.url)) return undefined;
+    try {
+        const destination = new URL(post.url);
+        if (/(^|\.)reddit\.com$|(^|\.)redd\.it$/i.test(destination.hostname)) return undefined;
+        return [{
+            kind: 'link-card' as const,
+            title: 'Open linked article',
+            body: destination.hostname.replace(/^www\./i, ''),
+            url: post.url,
+        }];
+    } catch {
+        return undefined;
     }
 }
 
@@ -133,7 +174,7 @@ export const redditHandler: PlatformHandler = {
 
         try {
             // Fetch post data using Reddit's JSON API
-            const apiUrl = `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json`;
+            const apiUrl = `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json?raw_json=1&sr_detail=1`;
 
             const response = await fetchJSON<Array<{ data: { children: Array<{ data: RedditPost }> } }>>(apiUrl, {
                 headers: {
@@ -148,9 +189,7 @@ export const redditHandler: PlatformHandler = {
             const post = response[0].data.children[0].data;
 
             // Build description (no stats here - moved to oEmbed row)
-            const description = post.selftext
-                ? truncateText(post.selftext, 280)
-                : post.title;
+            const description = post.selftext ? truncateText(post.selftext, 1200) : '';
 
             // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
             const stats = formatStats({
@@ -160,6 +199,7 @@ export const redditHandler: PlatformHandler = {
 
             // Check for media
             let image: string | undefined;
+            const images = redditGalleryImages(post);
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
             // Video content
@@ -173,15 +213,23 @@ export const redditHandler: PlatformHandler = {
                 };
             }
             // Image content
-            else if (post.preview?.images?.[0]) {
+            else if (!images.length && post.preview?.images?.[0]) {
                 const imageSource = post.preview.images[0].source;
                 // Reddit HTML-encodes URLs in the API response
                 image = imageSource.url.replace(/&amp;/g, '&');
             }
             // External image link
-            else if (post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            else if (!images.length && post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                 image = post.url;
             }
+
+            const subredditIcon = decodeRedditHtml(
+                post.sr_detail?.icon_img || post.sr_detail?.community_icon || '',
+            ) || undefined;
+            const timestamp = Number.isFinite(post.created_utc) && post.created_utc > 0
+                ? new Date(post.created_utc * 1000).toISOString()
+                : undefined;
+            const sections = linkedArticleSection(post, Boolean(video || image || images.length));
 
             return {
                 success: true,
@@ -193,11 +241,15 @@ export const redditHandler: PlatformHandler = {
                     siteName: getBrandedSiteName('reddit'),
                     authorName: `u/${post.author}`,
                     authorUrl: `https://reddit.com/u/${post.author}`,
+                    authorAvatar: subredditIcon,
                     image,
+                    images: images.length ? images : undefined,
                     video,
+                    timestamp,
                     color: platformColors.reddit,
                     platform: 'reddit',
                     stats, // Consistent stats via oEmbed like other platforms
+                    sections,
                 },
             };
         } catch (error) {

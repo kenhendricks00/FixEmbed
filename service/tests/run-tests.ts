@@ -578,7 +578,7 @@ const tests: TestCase[] = [
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async (input) => {
                 const url = String(input);
-                if (url.endsWith('.json')) {
+                if (url.includes('.json')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
                 }
                 if (url.startsWith('https://embed.reddit.com/')) {
@@ -606,6 +606,55 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
                 assert.match(response.data?.stats || '', /218/);
                 assert.match(response.data?.stats || '', /75/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler preserves subreddit identity gallery order and timestamp',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify([{
+                data: { children: [{ data: {
+                    title: 'A two-image gallery',
+                    selftext: '',
+                    author: 'gallery_author',
+                    subreddit: 'pics',
+                    url: 'https://www.reddit.com/gallery/abc123',
+                    permalink: '/r/pics/comments/abc123/a_twoimage_gallery/',
+                    thumbnail: 'https://preview.redd.it/thumb.jpg',
+                    is_video: false,
+                    created_utc: 1783900800,
+                    score: 50,
+                    num_comments: 8,
+                    sr_detail: {
+                        icon_img: 'https://styles.redditmedia.com/subreddit-icon.png?width=256&amp;height=256',
+                    },
+                    gallery_data: {
+                        items: [{ media_id: 'second' }, { media_id: 'first' }],
+                    },
+                    media_metadata: {
+                        first: { status: 'valid', e: 'Image', s: { u: 'https://preview.redd.it/first.png?x=1&amp;y=2' } },
+                        second: { status: 'valid', e: 'Image', s: { u: 'https://preview.redd.it/second.png?x=1&amp;y=2' } },
+                    },
+                } }] },
+            }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/pics/comments/abc123/a_twoimage_gallery/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.description, '');
+                assert.equal(response.data?.authorAvatar, 'https://styles.redditmedia.com/subreddit-icon.png?width=256&height=256');
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.deepEqual(response.data?.images, [
+                    'https://preview.redd.it/second.png?x=1&y=2',
+                    'https://preview.redd.it/first.png?x=1&y=2',
+                ]);
             } finally {
                 globalThis.fetch = originalFetch;
             }
