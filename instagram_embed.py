@@ -10,6 +10,8 @@ from urllib.parse import quote
 import aiohttp
 import discord
 
+from component_emojis import format_component_stats
+
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 INSTAGRAM_COLOR = 0xE4405F
@@ -148,7 +150,7 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
             )
         )
 
-    stats = str(payload.get("stats") or "").strip()
+    stats = format_component_stats(str(payload.get("stats") or "").strip())
     if stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
