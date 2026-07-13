@@ -78,6 +78,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
 
+    def test_reddit_uses_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
+        self.assertIn('elif item.service == "Reddit":', main_source)
+        self.assertIn("fetch_reddit_layout(item.canonical_url)", main_source)
+        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
+        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertNotIn("download_reddit", main_source)
+
 
 if __name__ == "__main__":
     unittest.main()
