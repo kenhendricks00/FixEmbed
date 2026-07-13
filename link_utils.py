@@ -119,6 +119,7 @@ def extract_supported_links(
     text: str,
     include_suppressed: bool = False,
     include_preconverted: bool = True,
+    include_fixembed: bool = False,
 ) -> List[SupportedLink]:
     """Extract supported URLs, optionally leaving pre-converted proxy links alone."""
     links: List[SupportedLink] = []
@@ -128,7 +129,9 @@ def extract_supported_links(
         suppressed = match.start() > 0 and end < len(text) and text[match.start() - 1] == "<" and text[end] == ">"
         if suppressed and not include_suppressed:
             continue
-        if not include_preconverted and _hostname(raw_url) in PRECONVERTED_HOSTS:
+        hostname = _hostname(raw_url)
+        allow_first_party = include_fixembed and hostname == "fixembed.app"
+        if not include_preconverted and hostname in PRECONVERTED_HOSTS and not allow_first_party:
             continue
 
         canonical = _canonicalize(raw_url)

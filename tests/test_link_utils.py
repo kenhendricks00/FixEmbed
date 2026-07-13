@@ -94,6 +94,21 @@ class SocialServiceTests(unittest.TestCase):
         self.assertEqual(len(links), 1)
         self.assertEqual(links[0].canonical_url, "https://x.com/openai/status/999")
 
+    def test_bot_can_reprocess_first_party_fixembed_links_only(self):
+        links = extract_supported_links(
+            "https://fixembed.app/embed?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDaneAqzR3eV%2F "
+            "https://fxtwitter.com/openai/status/456",
+            include_preconverted=False,
+            include_fixembed=True,
+        )
+
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].service, "Instagram")
+        self.assertEqual(
+            links[0].canonical_url,
+            "https://www.instagram.com/reel/DaneAqzR3eV/",
+        )
+
     def test_build_fixembed_url_encodes_the_canonical_url_and_quality(self):
         link = extract_supported_links("https://x.com/openai/status/123")[0]
 

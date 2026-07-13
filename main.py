@@ -1415,7 +1415,11 @@ async def on_message(message):
     
     if channel_states.get(message.channel.id, True):
         try:
-            links = extract_supported_links(message.content, include_preconverted=False)
+            links = extract_supported_links(
+                message.content,
+                include_preconverted=False,
+                include_fixembed=True,
+            )
             formatted_links = []
             instagram_embeds = []
             for item in links:
