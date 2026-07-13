@@ -72,6 +72,28 @@ def _profile_image(payload: Mapping[str, Any], artwork_id: str) -> str:
     return ""
 
 
+def _merge_creator_identity(
+    fallback_data: Mapping[str, Any],
+    pixiv_payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    data = dict(fallback_data)
+    artwork = (
+        pixiv_payload.get("body")
+        if isinstance(pixiv_payload.get("body"), Mapping)
+        else {}
+    )
+    author_name = str(artwork.get("userName") or "").strip()
+    author_handle = str(artwork.get("userAccount") or "").strip().lstrip("@")
+    author_id = str(artwork.get("userId") or "").strip()
+    if author_name:
+        data["authorName"] = author_name
+    if author_handle:
+        data["authorHandle"] = f"@{author_handle}"
+    if author_id.isdigit():
+        data["authorUrl"] = f"https://www.pixiv.net/en/users/{author_id}"
+    return data
+
+
 def build_pixiv_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -176,7 +198,9 @@ async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
                     f"{PIXIV_ARTWORK_API}/{artwork_id}", headers=headers
                 ) as response:
                     if response.ok:
-                        avatar = _profile_image(await response.json(), artwork_id)
+                        pixiv_payload = await response.json()
+                        data = _merge_creator_identity(data, pixiv_payload)
+                        avatar = _profile_image(pixiv_payload, artwork_id)
                         if avatar:
                             data["authorAvatar"] = _proxy_pixiv_image(avatar)
             except (aiohttp.ClientError, TimeoutError, ValueError):

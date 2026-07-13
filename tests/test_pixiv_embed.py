@@ -1,9 +1,32 @@
 import unittest
 
+import pixiv_embed
 from pixiv_embed import _profile_image, build_pixiv_layout
 
 
 class PixivEmbedTests(unittest.TestCase):
+    def test_creator_identity_uses_numeric_pixiv_user_id_for_profile_url(self):
+        fallback_data = {
+            "authorName": "aion21",
+            "authorUrl": "https://www.pixiv.net/users/aion21",
+        }
+        pixiv_payload = {
+            "body": {
+                "userId": "3565666",
+                "userName": "aion21",
+                "userAccount": "aion21",
+            }
+        }
+
+        identity = pixiv_embed._merge_creator_identity(fallback_data, pixiv_payload)
+
+        self.assertEqual(identity["authorName"], "aion21")
+        self.assertEqual(identity["authorHandle"], "@aion21")
+        self.assertEqual(
+            identity["authorUrl"],
+            "https://www.pixiv.net/en/users/3565666",
+        )
+
     def test_profile_image_uses_another_creator_work_when_current_artwork_omits_it(self):
         payload = {
             "body": {

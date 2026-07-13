@@ -297,6 +297,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.title, 'Artwork');
                 assert.equal(response.data?.description, 'Uses , commas');
                 assert.equal(response.data?.authorHandle, '@artist_account');
+                assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
                 assert.equal(
                     response.data?.authorAvatar,
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fuser-profile%2Favatar.jpg',
@@ -692,6 +693,7 @@ const tests: TestCase[] = [
             try {
                 const response = await pixivHandler.handle('https://www.pixiv.net/artworks/456', env);
                 assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorUrl, undefined);
                 assert.equal(
                     response.data?.image,
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg',
