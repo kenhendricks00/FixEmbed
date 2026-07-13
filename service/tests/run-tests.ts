@@ -667,6 +667,32 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'pixivHandler proxies Phixiv fallback artwork for Discord media components',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requestedUrl = String(input);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                return new Response(`
+                    <meta property="og:title" content="Fallback Art by (@artist)">
+                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg">
+                    <meta property="og:description" content="Fallback &amp;#44; caption">
+                `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await pixivHandler.handle('https://www.pixiv.net/artworks/456', env);
+                assert.equal(response.source, 'fallback');
+                assert.equal(
+                    response.data?.image,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg',
+                );
+                assert.equal(response.data?.description, 'Fallback , caption');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'blueskyHandler preserves creator identity and every carousel image',
         run: async () => {
             const originalFetch = globalThis.fetch;

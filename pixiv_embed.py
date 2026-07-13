@@ -106,7 +106,10 @@ def build_pixiv_layout(
 
 
 async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
-    api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
+    api_url = (
+        f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
+        "&renderer=components-v2"
+    )
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(api_url) as response:

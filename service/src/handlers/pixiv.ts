@@ -229,7 +229,7 @@ export const pixivHandler: PlatformHandler = {
                         siteName: getBrandedSiteName('pixiv'),
                         authorName: scrapeResult.author,
                         authorUrl: scrapeResult.author ? `https://www.pixiv.net/users/${scrapeResult.author}` : undefined,
-                        image: scrapeResult.image,
+                        image: proxyPixivImage(scrapeResult.image, env),
                         color: platformColors.pixiv,
                         platform: 'pixiv',
                     },
