@@ -59,6 +59,77 @@ def _section_text(section: Mapping[str, Any]) -> str:
     return "\n".join(part for part in (heading, body) if part)
 
 
+def _media_urls(data: Mapping[str, Any]) -> list[tuple[str, Optional[str]]]:
+    """Return remote video/GIF and image URLs without duplicating thumbnails."""
+    media: list[tuple[str, Optional[str]]] = []
+    video = data.get("video")
+    if isinstance(video, Mapping):
+        video_url = str(video.get("url") or "").strip()
+        if video_url:
+            media_type = str(video.get("mediaType") or "video").lower()
+            media.append((video_url, media_type))
+
+    images = data.get("images") if isinstance(data.get("images"), list) else []
+    media.extend((str(url).strip(), "image") for url in images if str(url).strip())
+
+    fallback_image = str(data.get("image") or "").strip()
+    if fallback_image and not media:
+        media.append((fallback_image, "image"))
+    return media[:10]
+
+
+def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any]]:
+    name = str(section.get("authorName") or "Quoted author").strip().lstrip("@")
+    handle = _clean_handle(section.get("authorHandle"))
+    author_url = str(section.get("authorUrl") or "").strip()
+    avatar = _high_resolution_avatar(section.get("authorAvatar"))
+
+    if handle and author_url:
+        identity = f"**{name}** ([@{handle}]({author_url}))"
+    elif handle:
+        identity = f"**{name}** (@{handle})"
+    else:
+        identity = f"**{name}**"
+
+    heading = _section_text(section).split("\n", 1)[0]
+    body = str(section.get("body") or "").strip()
+    if len(body) > 900:
+        body = f"{body[:897].rstrip()}…"
+    text = "\n".join(part for part in (heading, identity, body) if part)
+    items: list[discord.ui.Item[Any]] = []
+    if avatar:
+        items.append(
+            discord.ui.Section(
+                text,
+                accessory=discord.ui.Thumbnail(
+                    avatar,
+                    description=f"{name} profile photo",
+                ),
+            )
+        )
+    else:
+        items.append(discord.ui.TextDisplay(text))
+
+    media = _media_urls(section)
+    if media:
+        items.append(
+            discord.ui.MediaGallery(
+                *(
+                    discord.MediaGalleryItem(
+                        url,
+                        description=(
+                            f"Animated GIF from {name}"
+                            if media_type == "gif"
+                            else f"Media from {name}"
+                        ),
+                    )
+                    for url, media_type in media
+                )
+            )
+        )
+    return items
+
+
 def build_twitter_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -96,39 +167,33 @@ def build_twitter_layout(
     else:
         children.append(discord.ui.TextDisplay(header_text))
 
-    video = payload.get("video")
-    video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
-    image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
-    fallback_image = str(payload.get("image") or "").strip()
-    if video_url:
-        media_urls = [video_url]
-    elif image_urls:
-        media_urls = [str(url) for url in image_urls if url]
-    elif fallback_image:
-        media_urls = [fallback_image]
-    else:
-        media_urls = []
+    media = _media_urls(payload)
 
-    if media_urls:
+    if media:
         media_description = description[:1024] or None
         children.append(
             discord.ui.MediaGallery(
                 *(
                     discord.MediaGalleryItem(url, description=media_description)
-                    for url in media_urls[:10]
+                    for url, _media_type in media
                 )
             )
         )
 
     sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
-    rendered_sections = [
-        _section_text(section)
-        for section in sections[:6]
-        if isinstance(section, Mapping)
-    ]
+    rendered_sections: list[discord.ui.Item[Any]] = []
+    for section in sections[:6]:
+        if not isinstance(section, Mapping):
+            continue
+        if section.get("kind") == "quote":
+            rendered_sections.extend(_quote_section_items(section))
+        else:
+            section_text = _section_text(section)
+            if section_text:
+                rendered_sections.append(discord.ui.TextDisplay(section_text))
     if rendered_sections:
         children.append(discord.ui.Separator())
-        children.extend(discord.ui.TextDisplay(section) for section in rendered_sections if section)
+        children.extend(rendered_sections)
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
     if stats:

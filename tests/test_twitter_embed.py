@@ -81,6 +81,83 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertIn("[Community Note]", text)
         self.assertIn("Additional context.", text)
 
+    def test_components_v2_layout_keeps_video_and_photos_in_mixed_media_order(self):
+        payload = {
+            "description": "A post with mixed media.",
+            "authorName": "Creator",
+            "authorHandle": "@creator",
+            "video": {
+                "url": "https://video.twimg.com/post.mp4",
+                "thumbnail": "https://pbs.twimg.com/post-thumbnail.jpg",
+                "mediaType": "video",
+            },
+            "images": [
+                "https://pbs.twimg.com/one.jpg",
+                "https://pbs.twimg.com/two.jpg",
+            ],
+        }
+
+        container = build_twitter_layout(payload).to_components()[0]
+        gallery = container["components"][1]
+
+        self.assertEqual(
+            [item["media"]["url"] for item in gallery["items"]],
+            [
+                payload["video"]["url"],
+                *payload["images"],
+            ],
+        )
+
+    def test_components_v2_layout_renders_quoted_identity_avatar_text_and_media(self):
+        payload = {
+            "description": "Main post context.",
+            "authorName": "Primary Author",
+            "authorHandle": "@primary",
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Quoted post",
+                    "body": "The quoted post body.",
+                    "url": "https://x.com/quoted/status/456",
+                    "authorName": "Quoted Author",
+                    "authorHandle": "@quoted",
+                    "authorUrl": "https://x.com/quoted",
+                    "authorAvatar": "https://pbs.twimg.com/profile_images/456/avatar_normal.jpg",
+                    "images": ["https://pbs.twimg.com/quoted-one.jpg"],
+                    "video": {
+                        "url": "https://video.twimg.com/quoted-gif.mp4",
+                        "thumbnail": "https://pbs.twimg.com/quoted-gif.jpg",
+                        "mediaType": "gif",
+                    },
+                },
+            ],
+        }
+
+        container = build_twitter_layout(payload).to_components()[0]
+        quote_header = container["components"][2]
+        quote_gallery = container["components"][3]
+        quote_text = quote_header["components"][0]["content"]
+
+        self.assertIn("[Quoted post](https://x.com/quoted/status/456)", quote_text)
+        self.assertIn("**Quoted Author**", quote_text)
+        self.assertIn("[@quoted](https://x.com/quoted)", quote_text)
+        self.assertIn("The quoted post body.", quote_text)
+        self.assertEqual(
+            quote_header["accessory"]["media"]["url"],
+            "https://pbs.twimg.com/profile_images/456/avatar.jpg",
+        )
+        self.assertEqual(
+            [item["media"]["url"] for item in quote_gallery["items"]],
+            [
+                "https://video.twimg.com/quoted-gif.mp4",
+                "https://pbs.twimg.com/quoted-one.jpg",
+            ],
+        )
+        self.assertEqual(
+            quote_gallery["items"][0]["description"],
+            "Animated GIF from Quoted Author",
+        )
+
     def test_components_v2_footer_accepts_native_x_timestamp_format(self):
         payload = {
             "description": "A post with a native X timestamp.",
