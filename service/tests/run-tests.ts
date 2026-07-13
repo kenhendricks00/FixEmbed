@@ -533,13 +533,14 @@ const tests: TestCase[] = [
         name: 'instagramHandler keeps the native reel poster with its video',
         run: async () => {
             const originalFetch = globalThis.fetch;
+            const fullCaption = 'Actual reel caption @cota_official with the complete event details, context, and creator notes that must survive beyond the compact title. #f1 #formula1 #motorsports #usgp';
             globalThis.fetch = async (input) => {
                 const url = String(input);
                 if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
                     return new Response([
                         '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
                         '<span class="UsernameText">creator</span>',
-                        '<div class="Caption">creator<br /><br />Actual reel caption &#064;cota</div>',
+                        `<div class="Caption">creator<br /><br />${fullCaption}</div>`,
                         '<script>',
                         'window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
                         '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
@@ -562,7 +563,9 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorHandle, '@creator');
                 assert.equal(response.data?.authorUrl, 'https://www.instagram.com/creator/');
                 assert.equal(response.data?.authorAvatar, 'https://scontent.example/avatar.jpg?x=1&y=2');
-                assert.equal(response.data?.title, 'Actual reel caption @cota');
+                assert.notEqual(response.data?.title, fullCaption);
+                assert.match(response.data?.title || '', /\.\.\.$/);
+                assert.equal(response.data?.caption, fullCaption);
                 assert.doesNotMatch(response.data?.title || '', /^creator\b/i);
             } finally {
                 globalThis.fetch = originalFetch;

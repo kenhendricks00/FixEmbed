@@ -51,7 +51,12 @@ def build_instagram_card(
     handle = _clean_handle(payload.get("authorHandle")) or name
     author_text = f"{name} (@{handle})" if handle else name
 
-    caption = str(payload.get("description") or payload.get("title") or "")
+    caption = str(
+        payload.get("caption")
+        or payload.get("description")
+        or payload.get("title")
+        or ""
+    )
     caption = _remove_redundant_identity(caption, name, handle)
     stats = str(payload.get("stats") or "").strip()
     description = "\n\n".join(part for part in (caption, stats) if part)
@@ -100,7 +105,12 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
 
-    caption = str(payload.get("description") or payload.get("title") or "")
+    caption = str(
+        payload.get("caption")
+        or payload.get("description")
+        or payload.get("title")
+        or ""
+    )
     caption = _remove_redundant_identity(caption, name, handle)
     if len(caption) > 3500:
         caption = f"{caption[:3497].rstrip()}…"

@@ -374,6 +374,7 @@ export const instagramHandler: PlatformHandler = {
                     data: {
                         title: metadata?.title || 'Reel',
                         description: metadata?.description || vxResult.description || '',
+                        caption: metadata?.caption || vxResult.description || undefined,
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         authorName: metadata?.authorName,
@@ -469,6 +470,7 @@ export const instagramHandler: PlatformHandler = {
                     data: {
                         title: desc ? truncateText(desc, 100) : 'Post',
                         description: '',
+                        caption: desc || undefined,
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         authorName: authorName || undefined,
@@ -588,6 +590,7 @@ export const instagramHandler: PlatformHandler = {
                     description: description
                         ? truncateText(description, 280)
                         : '',
+                    caption: description || undefined,
                     url: canonicalUrl,
                     siteName: getBrandedSiteName('instagram'),
                     color: platformColors.instagram,
@@ -932,6 +935,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 // The caption is already the linked title. Repeating it in the
                 // description makes Discord render the same text twice.
                 description: '',
+                caption: caption || undefined,
                 url: canonicalUrl,
                 siteName: getBrandedSiteName('instagram'),
                 authorName: username || undefined,

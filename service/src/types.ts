@@ -34,6 +34,8 @@ export interface EmbedData {
     // Basic info
     title: string;
     description: string;
+    /** Complete creator-authored text when title is intentionally shortened. */
+    caption?: string;
     url: string;
     siteName: string;
 

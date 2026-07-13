@@ -78,7 +78,8 @@ class InstagramEmbedTests(unittest.TestCase):
 
     def test_components_v2_layout_uses_plain_username_and_remote_video(self):
         payload = {
-            "title": "A reel caption",
+            "title": "A reel caption that was truncated",
+            "caption": "The complete reel caption with @cota_official and #f1",
             "url": "https://www.instagram.com/reel/example/",
             "authorName": "Brooke",
             "authorHandle": "@brooke_annm",
@@ -103,6 +104,8 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertIn("[brooke_annm]", header["components"][0]["content"])
         self.assertNotIn("@brooke_annm", header["components"][0]["content"])
         self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
+        self.assertIn(payload["caption"], header["components"][0]["content"])
+        self.assertNotIn(payload["title"], header["components"][0]["content"])
         self.assertTrue(stats["content"].endswith(payload["stats"]))
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["video"]["url"])
         self.assertIn("FixEmbed", footer["content"])
