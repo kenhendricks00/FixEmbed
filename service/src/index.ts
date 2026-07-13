@@ -489,6 +489,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
     }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
     const isInstagram = embedData.p === 'instagram';
+    const compactInstagramIdentity = `https://x.com/${encodeURIComponent(handle)}/status/1`;
     const createdAt = embedData.ts || new Date().toISOString();
     const mediaAttachments: MastodonMediaAttachment[] = [];
 
@@ -534,8 +535,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
 
     const activityStatus = {
         id: status,
-        url: embedData.u || `https://x.com/${handle}`,
-        uri: embedData.u || `https://x.com/${handle}`,
+        url: isInstagram ? compactInstagramIdentity : (embedData.u || `https://x.com/${handle}`),
+        uri: isInstagram ? compactInstagramIdentity : (embedData.u || `https://x.com/${handle}`),
         created_at: createdAt,
         edited_at: null,
         reblog: null,
@@ -563,8 +564,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
                 // host, matching the author-first card used by X embeds.
                 username: handle,
                 acct: handle,
-                url: `https://x.com/${encodeURIComponent(handle)}/status/1`,
-                uri: `https://x.com/${encodeURIComponent(handle)}/status/1`,
+                url: compactInstagramIdentity,
+                uri: compactInstagramIdentity,
             } : {
                 username: handle,
                 acct: handle,
