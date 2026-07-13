@@ -236,7 +236,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; is?: string[]; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string; m?: string } = {};
+    let embedData: { t?: string; d?: string; i?: string; is?: string[]; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string; m?: string; ts?: string; au?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -286,10 +286,10 @@ app.get('/activity/:encodedData', (c) => {
             ],
             'id': `https://fixembed.app/activity/${encodedData}`,
             'type': 'Note',
-            'summary': embedData.s || null, // Stats row
-            'content': formatActivityContent(embedData.d || ''),
+            'summary': embedData.p === 'twitter' ? null : embedData.s || null,
+            'content': formatActivityContent(embedData.d || '', embedData.p === 'twitter' ? embedData.s : undefined),
             'attributedTo': `https://fixembed.app/activity/${encodedData}/actor`,
-            'published': new Date().toISOString(),
+            'published': embedData.ts || new Date().toISOString(),
             'url': embedData.u || 'https://fixembed.app',
             ...(attachment.length > 0 ? { 'attachment': attachment } : {}),
         };
@@ -311,7 +311,7 @@ app.get('/activity/:encodedData/actor', (c) => {
     const encodedData = c.req.param('encodedData');
 
     // Decode data
-    let embedData: { a?: string; h?: string; ic?: string } = {};
+    let embedData: { a?: string; h?: string; ic?: string; au?: string } = {};
     try {
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4) base64 += '=';
@@ -341,7 +341,7 @@ app.get('/activity/:encodedData/actor', (c) => {
         'name': authorName,
         'preferredUsername': authorHandle.replace('@', ''),
         'summary': 'FixEmbed Service',
-        'url': `https://fixembed.app/users/${encodeURIComponent(authorName)}`,
+        'url': embedData.au || `https://fixembed.app/users/${encodeURIComponent(authorName)}`,
         'icon': {
             'type': 'Image',
             'mediaType': 'image/jpeg',

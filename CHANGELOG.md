@@ -11,6 +11,7 @@
 - **`Discord X Text Rendering`**
   - Preserve paragraphs and numbered lists in ActivityPub-backed X embeds.
   - Carry the complete Discord-sized post description instead of truncating it at 1,000 characters.
+  - Use an author-first ActivityPub layout for X videos, with post text before engagement and the original post timestamp in the footer.
 - **`Automatic X Provider Switch`**
   - Allow automatic server conversions to use FxTwitter temporarily while `/fix` and direct FixEmbed links continue exercising the first-party renderer.
 - **`Workers AI Translation`**

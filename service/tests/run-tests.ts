@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import app from '../src/index.ts';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import { normalizeTwitterWebsiteCard } from '../src/handlers/twitter_graphql.ts';
@@ -864,6 +865,69 @@ const tests: TestCase[] = [
                 formatActivityContent('Opening paragraph\n\n1. First item\n2. Second & <unsafe>'),
                 '<p>Opening paragraph<br><br>1. First item<br>2. Second &amp; &lt;unsafe&gt;</p>',
             );
+            assert.equal(
+                formatActivityContent('Post body', '💬 12 & counting'),
+                '<p>Post body<br><br><strong>💬 12 &amp; counting</strong></p>',
+            );
+        },
+    },
+    {
+        name: 'Discord X videos use the author-first ActivityPub card hierarchy',
+        run: async () => {
+            const html = generateEmbedHTML({
+                title: '@author',
+                description: 'Opening paragraph\n\nClosing paragraph',
+                url: 'https://x.com/author/status/123',
+                siteName: 'FixEmbed • 𝕏 Twitter',
+                authorName: 'Author Name',
+                authorHandle: '@author',
+                authorUrl: 'https://x.com/author',
+                authorAvatar: 'https://pbs.twimg.com/profile_images/author.jpg',
+                timestamp: 'Thu Jul 09 16:20:00 +0000 2026',
+                stats: '💬 12 🔁 34 ❤️ 56 👁 789',
+                video: {
+                    url: 'https://video.twimg.com/post.mp4',
+                    thumbnail: 'https://pbs.twimg.com/post.jpg',
+                    width: 1280,
+                    height: 720,
+                },
+                platform: 'twitter',
+            }, 'Discordbot/2.0');
+
+            assert.match(html, /<meta name="twitter:card" content="player">/);
+            assert.doesNotMatch(html, /property="og:video/);
+            assert.match(html, /<meta property="og:title" content="Author Name \(@author\)">/);
+            assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/pbs\.twimg\.com\/profile_images\/author\.jpg">/);
+
+            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            assert.ok(encoded);
+            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
+
+            assert.equal(activityData.p, 'twitter');
+            assert.equal(activityData.ts, '2026-07-09T16:20:00.000Z');
+            assert.equal(activityData.au, 'https://x.com/author');
+
+            const activityResponse = await app.request(`/activity/${encoded}`, {
+                headers: { Accept: 'application/activity+json' },
+            });
+            assert.equal(activityResponse.status, 200);
+            const activity = await activityResponse.json() as any;
+            assert.equal(activity.summary, null);
+            assert.equal(
+                activity.content,
+                '<p>Opening paragraph<br><br>Closing paragraph<br><br><strong>💬 12 🔁 34 ❤️ 56 👁 789</strong></p>',
+            );
+            assert.equal(activity.published, '2026-07-09T16:20:00.000Z');
+
+            const actorResponse = await app.request(`/activity/${encoded}/actor`, {
+                headers: { Accept: 'application/activity+json' },
+            });
+            const actor = await actorResponse.json() as any;
+            assert.equal(actor.name, 'Author Name');
+            assert.equal(actor.url, 'https://x.com/author');
+            assert.equal(actor.icon.url, 'https://pbs.twimg.com/profile_images/author.jpg');
         },
     },
     {
