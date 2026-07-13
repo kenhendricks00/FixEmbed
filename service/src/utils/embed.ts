@@ -145,7 +145,8 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const sectionText = (embed.sections || [])
         .map((section) => `**${section.title}**\n${section.body}${section.url ? `\n${section.url}` : ''}`)
         .join('\n\n');
-    const renderedDescription = [embed.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
+    const primaryDescription = embed.platform === 'instagram' ? activityBodyText(embed) : embed.description;
+    const renderedDescription = [primaryDescription, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
 
     let html = `<!DOCTYPE html>
 <html>
