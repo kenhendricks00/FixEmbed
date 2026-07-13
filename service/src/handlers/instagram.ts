@@ -739,6 +739,23 @@ function decodeInstagramMediaUrl(value: string): string {
     return decoded;
 }
 
+function decodeInstagramText(value: string): string {
+    const decodeCodePoint = (entity: string, code: string, radix: number): string => {
+        const value = Number.parseInt(code, radix);
+        return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+            ? String.fromCodePoint(value)
+            : entity;
+    };
+    return value
+        .replace(/&#x([0-9a-f]+);/gi, (entity, code) => decodeCodePoint(entity, code, 16))
+        .replace(/&#(\d+);/g, (entity, code) => decodeCodePoint(entity, code, 10))
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;|&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+}
+
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
@@ -896,6 +913,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                     .replace(/\\n/g, '\n')
                     .replace(/\\u0026/g, '&')
                     .trim();
+                caption = decodeInstagramText(caption);
                 if (caption.length > 0 && caption.length < 500) break;
             }
         }

@@ -539,7 +539,7 @@ const tests: TestCase[] = [
                     return new Response([
                         '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
                         '<span class="UsernameText">creator</span>',
-                        '<div class="Caption">creator<br /><br />Actual reel caption</div>',
+                        '<div class="Caption">creator<br /><br />Actual reel caption &#064;cota</div>',
                         '<script>',
                         'window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
                         '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
@@ -562,7 +562,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorHandle, '@creator');
                 assert.equal(response.data?.authorUrl, 'https://www.instagram.com/creator/');
                 assert.equal(response.data?.authorAvatar, 'https://scontent.example/avatar.jpg?x=1&y=2');
-                assert.equal(response.data?.title, 'Actual reel caption');
+                assert.equal(response.data?.title, 'Actual reel caption @cota');
                 assert.doesNotMatch(response.data?.title || '', /^creator\b/i);
             } finally {
                 globalThis.fetch = originalFetch;

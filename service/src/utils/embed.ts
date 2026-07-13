@@ -17,7 +17,7 @@ function escapeHtml(str: string): string {
 }
 
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
-const INSTAGRAM_ACTIVITY_REVISION = '2';
+const INSTAGRAM_ACTIVITY_REVISION = '3';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
