@@ -129,11 +129,7 @@ def build_pixiv_layout(
     escaped_author_name = _escape_markdown(author_name)
     escaped_author_handle = _escape_markdown(author_handle)
     if author_url and escaped_author_handle:
-        creator_line = (
-            f"**{escaped_author_name} (**"
-            f"[**@{escaped_author_handle}**]({author_url})"
-            "**)**"
-        )
+        creator_line = f"**{escaped_author_name}** ([@{escaped_author_handle}]({author_url}))"
     elif author_url:
         creator_line = f"**[{escaped_author_name}]({author_url})**"
     elif escaped_author_handle:

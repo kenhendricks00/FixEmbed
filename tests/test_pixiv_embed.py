@@ -84,7 +84,7 @@ class PixivEmbedTests(unittest.TestCase):
         self.assertEqual(container["accent_color"], 0x0096FA)
         self.assertIn("A finished illustration", header["components"][0]["content"])
         self.assertIn(
-            "**aion21 (**[**@master\\_nj\\_aion**](https://www.pixiv.net/users/42)**)**",
+            "**aion21** ([@master\\_nj\\_aion](https://www.pixiv.net/users/42))",
             header["components"][0]["content"],
         )
         self.assertNotIn("[aion21 (", header["components"][0]["content"])
