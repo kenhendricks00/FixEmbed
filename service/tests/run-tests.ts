@@ -271,17 +271,33 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
+                if (String(input).endsWith('/pages')) {
+                    return new Response(JSON.stringify({ error: false, body: [
+                        { urls: { regular: 'https://i.pximg.net/page-1.jpg' } },
+                        { urls: { regular: 'https://i.pximg.net/page-2.jpg' } },
+                    ] }), { status: 200 });
+                }
                 return new Response(JSON.stringify({ error: false, body: {
                     title: 'Artwork', description: 'Description', userName: 'Artist', userId: '42',
+                    userAccount: 'artist_account', bookmarkCount: 40, likeCount: 30,
+                    viewCount: 500, commentCount: 2, createDate: '2026-07-13T19:00:00.000Z',
                     urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
                 } }), { status: 200 });
             };
             try {
                 const response = await pixivHandler.handle('https://www.pixiv.net/artworks/123', env);
-                assert.equal(requested.length, 1);
+                assert.equal(requested.length, 2);
                 assert.match(requested[0], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123/);
+                assert.match(requested[1], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123\/pages/);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Artwork');
+                assert.equal(response.data?.authorHandle, '@artist_account');
+                assert.deepEqual(response.data?.images, [
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-1.jpg',
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-2.jpg',
+                ]);
+                assert.equal(response.data?.stats, '💬 2 ❤️ 30 👁️ 500 🔖 40');
+                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },

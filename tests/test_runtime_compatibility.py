@@ -109,6 +109,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_bluesky", main_source)
 
+    def test_pixiv_uses_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from pixiv_embed import fetch_pixiv_layout", main_source)
+        self.assertIn('elif item.service == "Pixiv":', main_source)
+        self.assertIn("fetch_pixiv_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
+        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertNotIn("download_pixiv", main_source)
+
 
 if __name__ == "__main__":
     unittest.main()

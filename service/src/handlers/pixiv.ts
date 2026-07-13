@@ -11,7 +11,7 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 interface PixivArtworkResponse {
     error?: boolean;
@@ -20,8 +20,26 @@ interface PixivArtworkResponse {
         description?: string;
         userName?: string;
         userId?: string;
+        userAccount?: string;
+        bookmarkCount?: number;
+        likeCount?: number;
+        viewCount?: number;
+        commentCount?: number;
+        createDate?: string;
         urls?: { regular?: string; original?: string };
     };
+}
+
+interface PixivArtworkPagesResponse {
+    error?: boolean;
+    body?: Array<{
+        urls?: { regular?: string; original?: string };
+    }>;
+}
+
+function proxyPixivImage(sourceUrl: string, env: Env): string {
+    const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+    return `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceUrl)}`;
 }
 
 async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerResponse | null> {
@@ -38,10 +56,39 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
         const artwork = payload?.body;
         if (payload?.error || !artwork?.title) return null;
         const sourceImage = artwork.urls?.regular || artwork.urls?.original;
-        const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
-        const image = sourceImage
-            ? `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceImage)}`
-            : undefined;
+        let image = sourceImage ? proxyPixivImage(sourceImage, env) : undefined;
+        let images: string[] | undefined;
+        try {
+            const pagesResponse = await fetch(`https://www.pixiv.net/ajax/illust/${illustId}/pages`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Referer': `https://www.pixiv.net/artworks/${illustId}`,
+                    'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                },
+            });
+            if (pagesResponse.ok) {
+                const pagesPayload = await pagesResponse.json() as PixivArtworkPagesResponse;
+                const pageImages = (pagesPayload.body || [])
+                    .map(page => page.urls?.regular || page.urls?.original)
+                    .filter((url): url is string => Boolean(url))
+                    .map(url => proxyPixivImage(url, env))
+                    .slice(0, 10);
+                if (pageImages.length === 1) [image] = pageImages;
+                if (pageImages.length > 1) {
+                    images = pageImages;
+                    image = undefined;
+                }
+            }
+        } catch (error) {
+            console.warn('Pixiv pages request failed:', error);
+        }
+
+        const stats = [
+            artwork.commentCount !== undefined ? `💬 ${formatNumber(artwork.commentCount)}` : '',
+            artwork.likeCount !== undefined ? `❤️ ${formatNumber(artwork.likeCount)}` : '',
+            artwork.viewCount !== undefined ? `👁️ ${formatNumber(artwork.viewCount)}` : '',
+            artwork.bookmarkCount !== undefined ? `🔖 ${formatNumber(artwork.bookmarkCount)}` : '',
+        ].filter(Boolean).join(' ');
         return {
             success: true,
             source: 'first-party',
@@ -51,10 +98,14 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
                 url: `https://www.pixiv.net/artworks/${illustId}`,
                 siteName: getBrandedSiteName('pixiv'),
                 authorName: artwork.userName,
+                authorHandle: artwork.userAccount ? `@${artwork.userAccount}` : undefined,
                 authorUrl: artwork.userId ? `https://www.pixiv.net/users/${artwork.userId}` : undefined,
                 image,
+                images,
                 color: platformColors.pixiv,
                 platform: 'pixiv',
+                timestamp: artwork.createDate,
+                stats,
             },
         };
     } catch (error) {

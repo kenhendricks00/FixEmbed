@@ -31,6 +31,7 @@ def format_component_stats(stats: str, platform: Optional[str] = None) -> str:
         ("\u2764", "like"),
         ("\U0001f441\ufe0f", "views"),
         ("\U0001f441", "views"),
+        ("\U0001f516", "bookmark"),
     )
     rendered = stats
     for portable_icon, emoji_name in replacements:
