@@ -556,15 +556,14 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         media_attachments: mediaAttachments,
         account: {
             id: handle,
-            display_name: isInstagram ? `${handle} (@${handle})` : (embedData.a || handle),
+            display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
-                // Discord appends the status host to nonempty Mastodon account
-                // fields. Keep the complete Instagram identity in display_name
-                // so it renders as @handle instead of @handle@fixembed.app.
-                username: '',
-                acct: '',
-                url: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
-                uri: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
+                // A host-bearing identity URL makes Discord federate this as
+                // @handle@host. A hostless URI preserves the compact @handle.
+                username: handle,
+                acct: handle,
+                url: 'about:blank',
+                uri: 'about:blank',
             } : {
                 username: handle,
                 acct: handle,
