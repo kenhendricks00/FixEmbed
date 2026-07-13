@@ -36,6 +36,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
+- **Richer X Posts**: First-party X embeds preserve complete photo carousels. Append a two-letter language code to a status URL (for example, `/es`) to show the original post with an on-demand translation.
 
 # 📋 Key Features
 1. **Multi-Platform Support**:
@@ -62,6 +63,9 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 7. **Multi-Language Support**:
     - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
     - Change language via `/settings` → Language.
+
+8. **X Translation**:
+    - Append `/en`, `/es`, or another two-letter language code to an X status URL to include both the original and translated post text.
 
 # 💎 Premium
 Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.

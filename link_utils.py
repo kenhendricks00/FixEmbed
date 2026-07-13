@@ -10,7 +10,7 @@ URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
 PRECONVERTED_HOSTS = {"fixembed.app", "fixupx.com", "fxtwitter.com", "vxtwitter.com", "bskyx.app"}
-EMBED_REVISION = "148"
+EMBED_REVISION = "149"
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class SupportedLink:
     display_text: str
     start: int
     end: int
+    language: Optional[str] = None
 
 
 def _hostname(url: str) -> str:
@@ -132,14 +133,23 @@ def extract_supported_links(
         canonical = _canonicalize(raw_url)
         if canonical:
             service, canonical_url, display_text = canonical
-            links.append(SupportedLink(service, canonical_url, display_text, match.start(), end))
+            language = None
+            if service == "Twitter":
+                segments = [segment for segment in urlparse(_unwrap_fixembed_url(raw_url)).path.split("/") if segment]
+                if len(segments) >= 4 and re.fullmatch(r"[A-Za-z]{2}", segments[3]):
+                    language = segments[3].lower()
+            links.append(SupportedLink(service, canonical_url, display_text, match.start(), end, language))
     return links
 
 
 def build_fixembed_url(link: SupportedLink, quality: Optional[str] = None) -> str:
     """Build the public FixEmbed URL for a canonical supported link."""
     url = f"https://fixembed.app/embed?url={quote(link.canonical_url, safe='')}&v={EMBED_REVISION}"
-    return f"{url}&quality={quote(quality, safe='')}" if quality else url
+    if quality:
+        url = f"{url}&quality={quote(quality, safe='')}"
+    if link.language:
+        url = f"{url}&lang={quote(link.language, safe='')}"
+    return url
 
 
 def chunk_lines(lines: List[str], max_length: int = 1900) -> List[str]:

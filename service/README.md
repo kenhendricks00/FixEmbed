@@ -20,7 +20,8 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 
 - **Rich Embeds**: Consistent `FixEmbed • [emoji] Platform` branding across all platforms
 - **Video Playback**: Native video support for Twitter, Instagram Reels, Threads, Reddit, and Bilibili
-- **Carousel Images**: Multi-image posts display as grids (Instagram, Threads)
+- **Carousel Images**: Multi-image posts display as grids (Twitter/X, Instagram, Threads)
+- **Opt-in X Translation**: Add `&lang=<two-letter-code>` to the embed endpoint to show original and translated post text using Workers AI
 - **Engagement Stats**: Metrics displayed via oEmbed (💬 comments, ❤️ likes, � reposts, 👁 views)
   - Zero values are automatically hidden for cleaner display
 - **Author Attribution**: Consistent `@handle` display across all social platforms
@@ -51,9 +52,13 @@ npm run deploy
 
 ### Embed Endpoint
 ```
-GET /embed?url=<social-media-url>
+GET /embed?url=<social-media-url>[&lang=<two-letter-code>]
 ```
 Returns HTML with OG meta tags for Discord/Telegram bots.
+
+The optional `lang` parameter applies to Twitter/X posts. For example,
+`/embed?url=https%3A%2F%2Fx.com%2Fuser%2Fstatus%2F123&lang=es` keeps the
+original post text and appends a Spanish translation.
 
 ### JSON API
 ```

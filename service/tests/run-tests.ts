@@ -612,6 +612,50 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler appends an explicitly requested first-party translation',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'こんにちは世界',
+                lang: 'ja',
+                user: {
+                    name: 'Example',
+                    screen_name: 'example',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
+                },
+                created_at: '2026-07-12T00:00:00.000Z',
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (model: string, input: unknown) => {
+                        assert.equal(model, '@cf/meta/m2m100-1.2b');
+                        assert.deepEqual(input, {
+                            text: 'こんにちは世界',
+                            source_lang: 'ja',
+                            target_lang: 'en',
+                        });
+                        return { translated_text: 'Hello world' };
+                    },
+                } as unknown as Ai,
+            };
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/example/status/1234567890',
+                    translationEnv,
+                    { language: 'en' },
+                );
+
+                assert.equal(response.data?.description, 'こんにちは世界\n\n🌐 Translation (EN): Hello world');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;

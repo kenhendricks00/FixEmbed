@@ -3,7 +3,7 @@
  * Uses Twitter's public Syndication API, with FxTwitter as an emergency fallback.
  */
 
-import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import type { Env, HandlerOptions, HandlerResponse, PlatformHandler } from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
 
@@ -36,6 +36,7 @@ interface SyndicationTweet {
     conversation_count?: number;
     view_count_info?: { count: string };
     video?: { viewCount: string };
+    lang?: string;
     entities?: { media?: SyndicationMedia[] };
     extended_entities?: { media?: SyndicationMedia[] };
     mediaDetails?: SyndicationMedia[];
@@ -63,7 +64,7 @@ export const twitterHandler: PlatformHandler = {
         /(?:twitter\.com|x\.com)\/([^\/]+)\/status\/(\d+)/i,
     ],
 
-    async handle(url: string, _env: Env): Promise<HandlerResponse> {
+    async handle(url: string, env: Env, options: HandlerOptions = {}): Promise<HandlerResponse> {
         const parsed = parseTwitterUrl(url);
         if (!parsed) {
             return { success: false, error: 'Invalid Twitter URL' };
@@ -88,10 +89,35 @@ export const twitterHandler: PlatformHandler = {
             }
 
             const handle = tweet.user.screen_name;
-            const description = truncateText(
+            let description = truncateText(
                 tweet.text.replace(/https?:\/\/t\.co\/\w+/g, '').trim(),
                 1000,
             );
+            const targetLanguage = options.language?.toLowerCase();
+            if (
+                env.AI
+                && tweet.lang
+                && targetLanguage
+                && /^[a-z]{2}$/.test(targetLanguage)
+                && tweet.lang.toLowerCase() !== targetLanguage
+                && description
+            ) {
+                try {
+                    const translation = await env.AI.run('@cf/meta/m2m100-1.2b', {
+                        text: description,
+                        source_lang: tweet.lang.toLowerCase(),
+                        target_lang: targetLanguage,
+                    }) as { translated_text?: string };
+                    if (translation.translated_text?.trim()) {
+                        description = truncateText(
+                            `${description}\n\n🌐 Translation (${targetLanguage.toUpperCase()}): ${translation.translated_text.trim()}`,
+                            1000,
+                        );
+                    }
+                } catch (error) {
+                    console.error('Twitter translation failed:', error);
+                }
+            }
             const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media || [];
             const photos = media
                 .filter((item) => item.type === 'photo')

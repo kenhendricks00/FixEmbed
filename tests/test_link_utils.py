@@ -99,7 +99,15 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=148&quality=high",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&quality=high",
+        )
+
+    def test_build_fixembed_url_preserves_twitter_translation_suffix(self):
+        link = extract_supported_links("https://x.com/openai/status/123/es")[0]
+
+        self.assertEqual(
+            build_fixembed_url(link),
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&lang=es",
         )
 
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):

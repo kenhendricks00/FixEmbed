@@ -418,6 +418,7 @@ app.get('/users/:author', (c) => {
 // Main embed endpoint
 app.get('/embed', async (c) => {
     const url = c.req.query('url');
+    const language = c.req.query('lang');
     const userAgent = c.req.header('User-Agent') || '';
 
     if (!url) {
@@ -433,7 +434,7 @@ app.get('/embed', async (c) => {
     }
 
     try {
-        const result = await handler.handle(url, c.env);
+        const result = await handler.handle(url, c.env, { language });
 
         if (!result.success) {
             // Handler failed, redirect if available

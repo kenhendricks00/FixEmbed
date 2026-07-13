@@ -23,6 +23,9 @@ FIXEMBED_VOTER_ROLE_ID = "1195810157112852544"
 [dev]
 port = 8787
 
+[ai]
+binding = "AI"
+
 # Optional: KV namespace for caching
 # [[kv_namespaces]]
 # binding = "EMBED_CACHE"

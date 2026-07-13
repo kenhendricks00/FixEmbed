@@ -15,6 +15,7 @@ export interface Env {
     FIXEMBED_GUILD_ID?: string;
     FIXEMBED_VOTER_ROLE_ID?: string;
     TOPGG_BOT_ID?: string;
+    AI?: Ai;
 }
 
 // Supported platforms
@@ -70,11 +71,15 @@ export interface HandlerResponse {
     source?: 'first-party' | 'fallback';
 }
 
+export interface HandlerOptions {
+    language?: string;
+}
+
 // Platform handler interface
 export interface PlatformHandler {
     name: Platform;
     patterns: RegExp[];
-    handle: (url: string, env: Env) => Promise<HandlerResponse>;
+    handle: (url: string, env: Env, options?: HandlerOptions) => Promise<HandlerResponse>;
 }
 
 // API response from external services

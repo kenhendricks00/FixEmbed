@@ -1,3 +1,18 @@
+## Unreleased
+
+#### **🚀 New Features**
+- **`Richer First-Party X Embeds`**
+  - Preserve every photo in X/Twitter carousel posts.
+  - Support opt-in translated posts by appending a two-letter language code to the status URL.
+
+#### **🔧 Backend Changes**
+- **`Workers AI Translation`**
+  - Translate requested X posts with Cloudflare's M2M100 binding while retaining the original text.
+  - Keep the original first-party embed when translation is unavailable instead of failing the post.
+
+#### **🧪 Testing**
+- Added regression coverage for multi-photo carousels and translated X post links.
+
 ## v1.4.8 (07/11/2026)
 
 #### **🔧 Enhancements**
