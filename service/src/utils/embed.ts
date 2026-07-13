@@ -22,6 +22,18 @@ function normalizeTimestamp(timestamp?: string): string | undefined {
     return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
+const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
+
+/** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
+export function encodeSnowcode(data: object): string {
+    const json = JSON.stringify(data).slice(1, -1);
+    return [...json].map((character) => {
+        const index = SNOWCODE_CHARS.indexOf(character);
+        if (index < 0) throw new Error('Character not supported in activity status: ' + character);
+        return index.toString().padStart(2, '0');
+    }).join('');
+}
+
 /** Preserve source line breaks in the safe HTML consumed by Discord's ActivityPub renderer. */
 export function formatActivityContent(description: string, trailingStats?: string): string {
     const normalized = description.replace(/\r\n?/g, '\n');
@@ -208,14 +220,18 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         au: embed.authorUrl,
         sn: embed.siteName,
     };
-    const encodedActivity = btoa(encodeURIComponent(JSON.stringify(activityData)))
+    const legacyEncodedActivity = btoa(encodeURIComponent(JSON.stringify(activityData)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
+    const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
+    const encodedActivity = embed.platform === 'twitter' && twitterStatusId
+        ? encodeSnowcode({ i: twitterStatusId })
+        : legacyEncodedActivity;
     const activityUrl = embed.platform === 'twitter'
         ? `https://fixembed.app/users/${encodeURIComponent((embed.authorHandle || 'fixembed').replace(/^@/, ''))}/statuses/${encodedActivity}`
         : `https://fixembed.app/activity/${encodedActivity}`;
-    html += `  <link href="${activityUrl}" rel="alternate" type="application/activity+json">\n`;
+    html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";
 
 
     // Close head and add redirect body

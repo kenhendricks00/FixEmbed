@@ -7,7 +7,7 @@
  * Built with Hono + Cloudflare Workers
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { Env } from './types.ts';
@@ -74,7 +74,27 @@ interface MastodonMediaAttachment {
     };
 }
 
+const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
+
+function decodeSnowcode(encodedData: string): ActivityEmbedData {
+    if (encodedData.length % 2 !== 0) return {};
+    let json = '';
+    for (let index = 0; index < encodedData.length; index += 2) {
+        const characterIndex = Number(encodedData.slice(index, index + 2));
+        if (!Number.isInteger(characterIndex) || characterIndex < 0 || characterIndex >= SNOWCODE_CHARS.length) {
+            return {};
+        }
+        json += SNOWCODE_CHARS[characterIndex];
+    }
+    try {
+        return JSON.parse('{' + json + '}') as ActivityEmbedData;
+    } catch {
+        return {};
+    }
+}
+
 function decodeActivityData(encodedData: string): ActivityEmbedData {
+    if (/^\d+$/.test(encodedData)) return decodeSnowcode(encodedData);
     try {
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4) base64 += '=';
@@ -389,11 +409,45 @@ app.get('/activity/:encodedData/actor', (c) => {
 
 // Mastodon-compatible status endpoint. Discord recognizes this shape and uses
 // it for the author-first card, engagement, media, and source/timestamp footer.
-app.get('/users/:author/statuses/:status', (c) => {
-    const author = c.req.param('author');
-    const status = c.req.param('status');
+const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
+    const params = c.req.param();
+    const author = params.author || 'fixembed';
+    const status = params.status;
 
-    const embedData = decodeActivityData(status);
+    let embedData = decodeActivityData(status);
+    if (embedData.i && !embedData.u) {
+        const sourceUrl = 'https://x.com/' + encodeURIComponent(author) + '/status/' + embedData.i;
+        const result = await findHandler(sourceUrl)?.handle(sourceUrl, c.env);
+        if (!result?.success || !result.data) {
+            return c.json({ error: result?.error || 'Unable to rebuild X activity status' }, 502);
+        }
+
+        const source = result.data;
+        const sectionText = (source.sections || [])
+            .map((section) => '**' + section.title + '**\n' + section.body + (section.url ? '\n' + section.url : ''))
+            .join('\n\n');
+        const description = [source.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
+        const parsedTimestamp = source.timestamp ? new Date(source.timestamp) : null;
+        embedData = {
+            d: description,
+            i: source.image,
+            is: source.images,
+            v: source.video?.url,
+            vt: source.video?.thumbnail,
+            vw: source.video?.width,
+            vh: source.video?.height,
+            p: source.platform,
+            a: source.authorName,
+            h: source.authorHandle,
+            ic: source.authorAvatar,
+            s: source.stats,
+            u: source.url,
+            m: source.mode,
+            ts: parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime()) ? parsedTimestamp.toISOString() : undefined,
+            au: source.authorUrl,
+            sn: source.siteName,
+        };
+    }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
     const createdAt = embedData.ts || new Date().toISOString();
     const mediaAttachments: MastodonMediaAttachment[] = [];
@@ -490,7 +544,10 @@ app.get('/users/:author/statuses/:status', (c) => {
     };
 
     return c.json(activityStatus);
-});
+};
+
+app.get('/users/:author/statuses/:status', mastodonStatusRequest);
+app.get('/api/v1/statuses/:status', mastodonStatusRequest);
 
 // ActivityPub actor endpoint for Discord to fetch branding info
 app.get('/users/:author', (c) => {

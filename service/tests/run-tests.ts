@@ -828,7 +828,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'generateEmbedHTML advertises every image through ActivityPub',
+        name: 'generateEmbedHTML advertises a compact numeric X activity status',
         run: () => {
             const html = generateEmbedHTML({
                 title: '@gallery',
@@ -845,17 +845,11 @@ const tests: TestCase[] = [
                 mode: 'mosaic',
             }, 'Discordbot/2.0');
 
-            assert.match(html, /href="https:\/\/fixembed\.app\/users\/gallery\/statuses\/[^"]+" rel="alternate" type="application\/activity\+json"/);
-            const encoded = html.match(/\/users\/gallery\/statuses\/([^"?]+)/)?.[1];
+            assert.match(html, /href='https:\/\/fixembed\.app\/users\/gallery\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/);
+            const encoded = html.match(/\/users\/gallery\/statuses\/(\d+)/)?.[1];
             assert.ok(encoded);
-            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-            while (base64.length % 4) base64 += '=';
-            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
-            assert.deepEqual(activityData.is, [
-                'https://pbs.twimg.com/media/one.jpg',
-                'https://pbs.twimg.com/media/two.jpg',
-            ]);
-            assert.equal(activityData.m, 'mosaic');
+            assert.match(encoded, /^\d+$/);
+            assert.ok(encoded.length < 100);
         },
     },
     {
@@ -898,19 +892,44 @@ const tests: TestCase[] = [
             assert.doesNotMatch(html, /property="og:video/);
             assert.match(html, /<meta property="og:title" content="Author Name \(@author\)">/);
             assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/pbs\.twimg\.com\/profile_images\/author\.jpg">/);
-            assert.match(html, /href="https:\/\/fixembed\.app\/users\/author\/statuses\/[^"]+" rel="alternate" type="application\/activity\+json"/);
+            assert.match(html, /href='https:\/\/fixembed\.app\/users\/author\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/);
 
-            const encoded = html.match(/\/users\/author\/statuses\/([^"?]+)/)?.[1];
+            const encoded = html.match(/\/users\/author\/statuses\/(\d+)/)?.[1];
             assert.ok(encoded);
-            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-            while (base64.length % 4) base64 += '=';
-            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
+            assert.match(encoded, /^\d+$/);
+            assert.ok(encoded.length < 100);
 
-            assert.equal(activityData.p, 'twitter');
-            assert.equal(activityData.ts, '2026-07-09T16:20:00.000Z');
-            assert.equal(activityData.au, 'https://x.com/author');
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '123',
+                text: 'Opening paragraph\n\nClosing paragraph',
+                user: {
+                    name: 'Author Name',
+                    screen_name: 'author',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/author.jpg',
+                },
+                created_at: 'Thu Jul 09 16:20:00 +0000 2026',
+                conversation_count: 12,
+                retweet_count: 34,
+                favorite_count: 56,
+                view_count_info: { count: '789' },
+                mediaDetails: [{
+                    type: 'video',
+                    media_url_https: 'https://pbs.twimg.com/post.jpg',
+                    video_info: {
+                        aspect_ratio: [16, 9],
+                        variants: [{
+                            bitrate: 2176000,
+                            content_type: 'video/mp4',
+                            url: 'https://video.twimg.com/post.mp4',
+                        }],
+                    },
+                }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-            const activityResponse = await app.request(`/users/author/statuses/${encoded}`);
+            try {
+            const activityResponse = await app.request('/api/v1/statuses/' + encoded, {}, env);
             assert.equal(activityResponse.status, 200);
             assert.match(activityResponse.headers.get('content-type') || '', /^application\/json/);
             const activity = await activityResponse.json() as any;
@@ -930,10 +949,13 @@ const tests: TestCase[] = [
             assert.equal(activity.media_attachments[0].preview_url, 'https://pbs.twimg.com/post.jpg');
             assert.equal(activity.media_attachments[0].meta.original.width, 1280);
             assert.equal(activity.media_attachments[0].meta.original.height, 720);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {
-        name: 'generateEmbedHTML keeps the complete Discord ActivityPub description',
+        name: 'generateEmbedHTML keeps long X activity discovery URLs compact',
         run: () => {
             const description = `Paragraph one\n\n${'Long post content. '.repeat(90)}\n\n1. Final item`;
             assert.ok(description.length > 1000);
@@ -945,13 +967,10 @@ const tests: TestCase[] = [
                 siteName: 'FixEmbed • X',
                 platform: 'twitter',
             }, 'Discordbot/2.0');
-            const encoded = html.match(/\/users\/fixembed\/statuses\/([^"?]+)/)?.[1];
+            const encoded = html.match(/\/users\/fixembed\/statuses\/(\d+)/)?.[1];
             assert.ok(encoded);
-            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-            while (base64.length % 4) base64 += '=';
-            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
-
-            assert.equal(activityData.d, description);
+            assert.match(encoded, /^\d+$/);
+            assert.ok(encoded.length < 100);
         },
     },
     {
