@@ -542,7 +542,11 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         in_reply_to_id: null,
         in_reply_to_account_id: null,
         language: null,
-        content: formatActivityContent(embedData.d || '', embedData.s, embedData.p !== 'twitter'),
+        content: formatActivityContent(
+            embedData.d || '',
+            embedData.s,
+            embedData.p !== 'twitter' && embedData.p !== 'instagram',
+        ),
         spoiler_text: '',
         visibility: 'public',
         application: {

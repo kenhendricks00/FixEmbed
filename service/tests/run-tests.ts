@@ -1129,7 +1129,7 @@ const tests: TestCase[] = [
                         '<a class="Avatar"><img src="https://scontent.example/avatar.jpg" alt="creator" /></a>',
                         '<span class="UsernameText">creator</span>',
                         '<div class="Caption">Creator caption</div>',
-                        '<script>window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
+                        '<script>window.__data={"username":"creator","comment_count":12,"video_url":"https://scontent.example/reel.mp4",',
                         '"thumbnail_src":"https://scontent.example/reel.jpg"};</script>',
                     ].join(''), { status: 200 });
                 }
@@ -1145,6 +1145,7 @@ const tests: TestCase[] = [
                 assert.equal(activity.account.acct, 'creator');
                 assert.equal(activity.account.url, 'https://fixembed.app/users/creator');
                 assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
+                assert.equal(activity.content, '<p>caption<br><br><strong>💬 12</strong></p>');
             } finally {
                 globalThis.fetch = originalFetch;
             }
