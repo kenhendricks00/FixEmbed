@@ -13,6 +13,8 @@ import discord
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 INSTAGRAM_COLOR = 0xE4405F
+FIXEMBED_EMOJI_ID = 1525580543503106148
+INSTAGRAM_EMOJI_ID = 1486919548732051586
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,71 @@ def build_instagram_embed(
 ) -> discord.Embed:
     """Build the card embed without downloading its optional video."""
     return build_instagram_card(payload, footer_icon_url).embed
+
+
+def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
+    """Build an Embedded-style Components V2 card with remotely unfurled media."""
+    name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
+    handle = _clean_handle(payload.get("authorHandle")) or name
+    author_url = str(payload.get("authorUrl") or "").strip()
+    author_avatar = str(payload.get("authorAvatar") or "").strip()
+    source_url = str(payload.get("url") or "").strip()
+
+    caption = str(payload.get("description") or payload.get("title") or "")
+    caption = _remove_redundant_identity(caption, name, handle)
+    if len(caption) > 3500:
+        caption = f"{caption[:3497].rstrip()}…"
+
+    author_label = handle or name
+    if author_url:
+        author_line = f"**[{author_label}]({author_url})**"
+    else:
+        author_line = f"**{author_label}**"
+    header_text = "\n".join(part for part in (author_line, caption) if part)
+
+    children: list[discord.ui.Item[Any]] = []
+    if author_avatar:
+        children.append(
+            discord.ui.Section(
+                header_text,
+                accessory=discord.ui.Thumbnail(author_avatar, description=f"{author_label} profile photo"),
+            )
+        )
+    else:
+        children.append(discord.ui.TextDisplay(header_text))
+
+    video = payload.get("video")
+    video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
+    image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
+    fallback_image = str(payload.get("image") or "")
+    media_urls = [video_url] if video_url else [str(url) for url in image_urls if url]
+    if not media_urls and fallback_image:
+        media_urls = [fallback_image]
+    if media_urls:
+        description = caption[:1024] or None
+        children.append(
+            discord.ui.MediaGallery(
+                *(discord.MediaGalleryItem(url, description=description) for url in media_urls[:10])
+            )
+        )
+
+    stats = str(payload.get("stats") or "").strip()
+    if stats:
+        children.append(discord.ui.TextDisplay(stats))
+
+    children.append(discord.ui.Separator())
+    footer_parts = [
+        f"<:fixembed:{FIXEMBED_EMOJI_ID}> FixEmbed",
+        f"<:instagram:{INSTAGRAM_EMOJI_ID}> Instagram",
+    ]
+    if source_url:
+        footer_parts.append(f"[Link]({source_url})")
+    footer_parts.append(f"<t:{int(datetime.now(timezone.utc).timestamp())}:R>")
+    children.append(discord.ui.TextDisplay(" • ".join(footer_parts)))
+
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*children, accent_color=INSTAGRAM_COLOR))
+    return view
 
 
 async def fetch_instagram_card(

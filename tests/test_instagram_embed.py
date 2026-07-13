@@ -1,6 +1,6 @@
 import unittest
 
-from instagram_embed import build_instagram_card, build_instagram_embed
+from instagram_embed import build_instagram_card, build_instagram_embed, build_instagram_layout
 
 
 class InstagramEmbedTests(unittest.TestCase):
@@ -75,6 +75,38 @@ class InstagramEmbedTests(unittest.TestCase):
 
         self.assertEqual(card.video_url, payload["video"]["url"])
         self.assertEqual(card.embed.image.url, payload["video"]["thumbnail"])
+
+    def test_components_v2_layout_uses_plain_username_and_remote_video(self):
+        payload = {
+            "title": "A reel caption",
+            "url": "https://www.instagram.com/reel/example/",
+            "authorName": "Brooke",
+            "authorHandle": "@brooke_annm",
+            "authorUrl": "https://www.instagram.com/brooke_annm/",
+            "authorAvatar": "https://cdn.example/avatar.jpg",
+            "stats": "💬 133",
+            "video": {
+                "url": "https://fixembed.app/video/instagram?url=video",
+                "thumbnail": "https://cdn.example/poster.jpg",
+            },
+        }
+
+        components = build_instagram_layout(payload).to_components()
+        container = components[0]
+        header = container["components"][0]
+        gallery = container["components"][1]
+        stats = container["components"][2]
+        footer = container["components"][-1]
+
+        self.assertEqual(container["type"], 17)
+        self.assertIn("[brooke_annm]", header["components"][0]["content"])
+        self.assertNotIn("@brooke_annm", header["components"][0]["content"])
+        self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
+        self.assertEqual(stats["content"], payload["stats"])
+        self.assertEqual(gallery["items"][0]["media"]["url"], payload["video"]["url"])
+        self.assertIn("FixEmbed", footer["content"])
+        self.assertIn("Instagram", footer["content"])
+        self.assertIn("[Link]", footer["content"])
 
 
 if __name__ == "__main__":
