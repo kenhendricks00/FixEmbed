@@ -60,6 +60,13 @@ interface RedditPost {
     num_comments: number;
 }
 
+interface RedditCommunityResponse {
+    data?: {
+        icon_img?: string;
+        community_icon?: string;
+    };
+}
+
 function decodeRedditHtml(value: string): string {
     return value
         .replace(/&amp;/g, '&')
@@ -86,6 +93,26 @@ function redditGalleryImages(post: RedditPost): string[] {
         })
         .filter(Boolean)
         .map(decodeRedditHtml);
+}
+
+async function fetchSubredditIcon(subreddit: string, fallback = ''): Promise<string | undefined> {
+    const fallbackIcon = decodeRedditHtml(fallback) || undefined;
+    try {
+        const encodedSubreddit = encodeURIComponent(safeDecodeURIComponent(subreddit));
+        const community = await fetchJSON<RedditCommunityResponse>(
+            `https://www.reddit.com/r/${encodedSubreddit}/about.json?raw_json=1`,
+            {
+                headers: {
+                    'User-Agent': 'FixEmbed/1.0 (embed service)',
+                },
+            },
+        );
+        return decodeRedditHtml(
+            community?.data?.community_icon || community?.data?.icon_img || '',
+        ) || fallbackIcon;
+    } catch {
+        return fallbackIcon;
+    }
 }
 
 function linkedArticleSection(post: RedditPost, hasMedia: boolean) {
@@ -131,6 +158,10 @@ async function recoverFromRedditEmbed(
     const comments = Number(html.match(/View\s+([\d,]+)\s+comments?/i)?.[1].replace(/,/g, '')) || undefined;
     const cleanTitle = decodeRedditHtml(title.replace(/<[^>]+>/g, ''));
     const displayAuthor = author ? safeDecodeURIComponent(author) : undefined;
+    const authorAvatar = await fetchSubredditIcon(
+        displaySubreddit,
+        subredditIcon ? decodeRedditHtml(subredditIcon) : '',
+    );
 
     return {
         success: true,
@@ -142,7 +173,7 @@ async function recoverFromRedditEmbed(
             siteName: getBrandedSiteName('reddit'),
             authorName: displayAuthor ? `u/${displayAuthor}` : undefined,
             authorUrl: displayAuthor ? `https://www.reddit.com/user/${encodeURIComponent(displayAuthor)}/` : undefined,
-            authorAvatar: subredditIcon ? decodeRedditHtml(subredditIcon) : undefined,
+            authorAvatar,
             image: image ? decodeRedditHtml(image) : undefined,
             color: platformColors.reddit,
             platform: 'reddit',
@@ -225,9 +256,13 @@ export const redditHandler: PlatformHandler = {
                 image = post.url;
             }
 
-            const subredditIcon = decodeRedditHtml(
+            const fallbackSubredditIcon = decodeRedditHtml(
                 post.sr_detail?.icon_img || post.sr_detail?.community_icon || '',
-            ) || undefined;
+            );
+            const subredditIcon = await fetchSubredditIcon(
+                post.subreddit,
+                fallbackSubredditIcon,
+            );
             const timestamp = Number.isFinite(post.created_utc) && post.created_utc > 0
                 ? new Date(post.created_utc * 1000).toISOString()
                 : undefined;

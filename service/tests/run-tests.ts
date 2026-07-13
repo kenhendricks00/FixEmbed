@@ -774,6 +774,55 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler upgrades low-resolution subreddit icons from community metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('/about.json')) {
+                    return new Response(JSON.stringify({
+                        data: {
+                            community_icon: 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_hd.png?width=256&amp;s=signed',
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                }
+                return new Response(JSON.stringify([{
+                    data: { children: [{ data: {
+                        title: 'usage limits reset for the 5th time today',
+                        selftext: '',
+                        author: 'Distinct_Ingenuity21',
+                        subreddit: 'codex',
+                        url: 'https://www.reddit.com/r/codex/comments/1utc8qv/',
+                        permalink: '/r/codex/comments/1utc8qv/usage_limits_reset_for_the_5th_time_today/',
+                        thumbnail: 'self',
+                        is_video: false,
+                        created_utc: 1783900800,
+                        score: 218,
+                        num_comments: 75,
+                        sr_detail: {
+                            community_icon: 'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_small.png?width=64&amp;height=64&amp;s=signed',
+                        },
+                    } }] },
+                }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            };
+
+            try {
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/codex/comments/1utc8qv/usage_limits_reset_for_the_5th_time_today/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://styles.redditmedia.com/t5_2t1qf/styles/communityIcon_hd.png?width=256&s=signed',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'redditHandler preserves subreddit identity gallery order and timestamp',
         run: async () => {
             const originalFetch = globalThis.fetch;
