@@ -1378,6 +1378,9 @@ app.get('/debug/bilibili', async (c) => {
 // API endpoint for embed data (JSON)
 app.get('/api/embed', async (c) => {
     const url = c.req.query('url');
+    const language = c.req.query('lang');
+    const requestedMode = c.req.query('mode');
+    const mode = requestedMode === 'gallery' || requestedMode === 'mosaic' ? requestedMode : undefined;
 
     if (!url) {
         return c.json({ error: 'Missing url parameter' }, 400);
@@ -1390,7 +1393,7 @@ app.get('/api/embed', async (c) => {
     }
 
     try {
-        const result = await handler.handle(url, c.env);
+        const result = await handler.handle(url, c.env, { language, mode });
 
         if (!result.success) {
             return c.json({

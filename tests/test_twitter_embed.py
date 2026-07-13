@@ -76,6 +76,18 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertIn("[Community Note]", text)
         self.assertIn("Additional context.", text)
 
+    def test_components_v2_footer_accepts_native_x_timestamp_format(self):
+        payload = {
+            "description": "A post with a native X timestamp.",
+            "authorName": "Primary Author",
+            "authorHandle": "@primary",
+            "timestamp": "Sun Jul 12 00:00:00 +0000 2026",
+        }
+
+        container = build_twitter_layout(payload).to_components()[0]
+
+        self.assertIn("<t:1783814400:R>", container["components"][-1]["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

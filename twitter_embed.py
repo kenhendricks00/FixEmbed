@@ -28,7 +28,10 @@ def _post_timestamp(value: Any) -> int:
         try:
             return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
         except ValueError:
-            pass
+            try:
+                return int(datetime.strptime(raw, "%a %b %d %H:%M:%S %z %Y").timestamp())
+            except ValueError:
+                pass
     return int(datetime.now(timezone.utc).timestamp())
 
 

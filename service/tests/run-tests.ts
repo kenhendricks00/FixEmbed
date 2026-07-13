@@ -875,6 +875,53 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: '/api/embed forwards X translation and display options to the handler',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'Text hidden in gallery mode',
+                lang: 'en',
+                user: {
+                    name: 'Gallery Author',
+                    screen_name: 'gallery',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/gallery.jpg',
+                },
+                created_at: '2026-07-12T00:00:00.000Z',
+                favorite_count: 10,
+                mediaDetails: [
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/gallery-one.jpg' },
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/gallery-two.jpg' },
+                ],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const source = encodeURIComponent('https://x.com/gallery/status/1234567890');
+                const response = await app.request(
+                    `/api/embed?url=${source}&lang=es&mode=gallery`,
+                    {},
+                    env,
+                );
+                const payload = await response.json() as { data?: {
+                    description?: string;
+                    stats?: string;
+                    images?: string[];
+                } };
+
+                assert.equal(response.status, 200);
+                assert.equal(payload.data?.description, '');
+                assert.equal(payload.data?.stats, undefined);
+                assert.deepEqual(payload.data?.images, [
+                    'https://pbs.twimg.com/media/gallery-one.jpg',
+                    'https://pbs.twimg.com/media/gallery-two.jpg',
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'generateEmbedHTML advertises a compact numeric X activity status',
         run: () => {
             const html = generateEmbedHTML({
