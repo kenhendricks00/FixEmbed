@@ -201,12 +201,17 @@ async def send_worker():
                 file=file,
                 allowed_mentions=allowed_mentions,
                 view=view,
+                silent=True,
             )
         except Exception as e:
             if fallback_content:
                 logging.warning(f"Component send failed; using link fallback: {e}")
                 try:
-                    await channel.send(content=fallback_content, allowed_mentions=allowed_mentions)
+                    await channel.send(
+                        content=fallback_content,
+                        allowed_mentions=allowed_mentions,
+                        silent=True,
+                    )
                 except Exception as fallback_error:
                     logging.error(f"Queue fallback send failed: {fallback_error}")
             else:

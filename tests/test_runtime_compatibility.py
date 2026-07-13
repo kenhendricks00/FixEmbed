@@ -13,6 +13,11 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn('"YouTube": 1525579761479450686', main_source)
 
+    def test_automatic_queue_sends_are_silent(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(main_source.count("silent=True"), 2)
+
     def test_instagram_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
