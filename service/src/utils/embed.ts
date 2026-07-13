@@ -17,6 +17,7 @@ function escapeHtml(str: string): string {
 }
 
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
+const INSTAGRAM_ACTIVITY_REVISION = '2';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
@@ -241,9 +242,12 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     if (supportsDiscordActivityCard) {
         const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
+        const activitySourceUrl = embed.platform === 'instagram'
+            ? `${embed.url}${embed.url.includes('?') ? '&' : '?'}fixembed_activity=${INSTAGRAM_ACTIVITY_REVISION}`
+            : embed.url;
         const encodedActivity = embed.platform === 'twitter' && twitterStatusId
             ? encodeSnowcode({ i: twitterStatusId })
-            : encodeActivitySource(embed.url);
+            : encodeActivitySource(activitySourceUrl);
         const activityUrl = `https://fixembed.app/users/${encodeURIComponent(activityActorSlug(embed))}/statuses/${encodedActivity}`;
         html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";
     }

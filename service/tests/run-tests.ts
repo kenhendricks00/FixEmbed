@@ -14,7 +14,7 @@ import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
-import { formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
+import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -1089,10 +1089,11 @@ const tests: TestCase[] = [
     {
         name: 'Discord Instagram reels with a poster use the branded Activity card',
         run: () => {
+            const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
                 title: 'A reel caption',
                 description: '',
-                url: 'https://www.instagram.com/reel/PreviewReel/',
+                url: sourceUrl,
                 siteName: 'FixEmbed • Instagram',
                 authorName: 'Creator',
                 authorHandle: '@creator',
@@ -1109,6 +1110,9 @@ const tests: TestCase[] = [
             assert.match(html, /application\/activity\+json/);
             assert.doesNotMatch(html, /property="og:video"/);
             assert.doesNotMatch(html, /property="og:image"/);
+            const statusToken = html.match(/\/statuses\/(\d+)/)?.[1];
+            assert.ok(statusToken);
+            assert.notEqual(statusToken, encodeActivitySource(sourceUrl));
         },
     },
     {
