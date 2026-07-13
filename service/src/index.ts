@@ -553,10 +553,12 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         account: {
             id: handle,
             display_name: isInstagram ? `@${handle}` : (embedData.a || handle),
-            // Discord expands Mastodon username fields into a federated-looking
-            // @handle@host label. Omitting them leaves Instagram's display
-            // handle intact without inventing an Instagram server identity.
-            ...(isInstagram ? {} : {
+            ...(isInstagram ? {
+                username: handle,
+                acct: handle,
+                url: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
+                uri: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
+            } : {
                 username: handle,
                 acct: handle,
                 url: embedData.au || embedData.u || `https://x.com/${handle}`,
