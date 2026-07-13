@@ -236,7 +236,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string } = {};
+    let embedData: { t?: string; d?: string; i?: string; is?: string[]; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string; m?: string } = {};
     try {
         // Restore base64 padding and special chars
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -254,25 +254,26 @@ app.get('/activity/:encodedData', (c) => {
         const authorName = embedData.a || 'FixEmbed';
 
         // Build attachment
-        let attachment: any[] = [];
+        const attachment: any[] = [];
         if (embedData.v) {
             // Include video as ActivityPub attachment - this is how FxEmbed does it
             // Discord will use this for playback AND we get the footer/branding
-            attachment = [{
+            attachment.push({
                 'type': 'Document',
                 'mediaType': 'video/mp4',
                 'url': embedData.v,
                 'name': embedData.t || 'Video'
-            }];
-        } else if (embedData.i) {
-            // Image attachment
-            attachment = [{
+            });
+        }
+        const imageUrls = embedData.is?.length ? embedData.is : embedData.i ? [embedData.i] : [];
+        imageUrls.forEach((imageUrl, index) => {
+            attachment.push({
                 'type': 'Document',
                 'mediaType': 'image/jpeg',
-                'url': embedData.i,
-                'name': embedData.t || 'Image'
-            }];
-        }
+                'url': imageUrl,
+                'name': `${embedData.t || 'Image'}${imageUrls.length > 1 ? ` ${index + 1}` : ''}`
+            });
+        });
 
         const activityPubResponse = {
             '@context': [
@@ -419,6 +420,8 @@ app.get('/users/:author', (c) => {
 app.get('/embed', async (c) => {
     const url = c.req.query('url');
     const language = c.req.query('lang');
+    const requestedMode = c.req.query('mode');
+    const mode = requestedMode === 'gallery' || requestedMode === 'mosaic' ? requestedMode : undefined;
     const userAgent = c.req.header('User-Agent') || '';
 
     if (!url) {
@@ -434,7 +437,7 @@ app.get('/embed', async (c) => {
     }
 
     try {
-        const result = await handler.handle(url, c.env, { language });
+        const result = await handler.handle(url, c.env, { language, mode });
 
         if (!result.success) {
             // Handler failed, redirect if available

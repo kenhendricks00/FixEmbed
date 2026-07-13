@@ -178,7 +178,7 @@ export const twitterHandler: PlatformHandler = {
                 source: 'first-party',
                 data: {
                     title: `@${handle}`,
-                    description,
+                    description: options.mode === 'gallery' ? '' : description,
                     url: `https://x.com/${handle}/status/${parsed.tweetId}`,
                     siteName: getBrandedSiteName('twitter'),
                     authorName: tweet.user.name,
@@ -191,13 +191,14 @@ export const twitterHandler: PlatformHandler = {
                     color: platformColors.twitter,
                     platform: 'twitter',
                     timestamp: tweet.created_at,
-                    stats: formatStats({
+                    stats: options.mode === 'gallery' ? undefined : formatStats({
                         comments: tweet.conversation_count,
                         retweets: (tweet.retweet_count || 0) + (tweet.quote_count || 0),
                         likes: tweet.favorite_count,
                         views: Number(tweet.video?.viewCount || tweet.view_count_info?.count) || undefined,
                     }),
-                    sections,
+                    sections: options.mode === 'gallery' ? [] : sections,
+                    mode: options.mode,
                 },
             };
         } catch (error) {

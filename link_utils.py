@@ -21,6 +21,7 @@ class SupportedLink:
     start: int
     end: int
     language: Optional[str] = None
+    mode: Optional[str] = None
 
 
 def _hostname(url: str) -> str:
@@ -134,11 +135,15 @@ def extract_supported_links(
         if canonical:
             service, canonical_url, display_text = canonical
             language = None
+            mode = None
             if service == "Twitter":
                 segments = [segment for segment in urlparse(_unwrap_fixembed_url(raw_url)).path.split("/") if segment]
-                if len(segments) >= 4 and re.fullmatch(r"[A-Za-z]{2}", segments[3]):
-                    language = segments[3].lower()
-            links.append(SupportedLink(service, canonical_url, display_text, match.start(), end, language))
+                for modifier in segments[3:]:
+                    if re.fullmatch(r"[A-Za-z]{2}", modifier):
+                        language = modifier.lower()
+                    elif modifier.lower() in {"gallery", "mosaic"}:
+                        mode = modifier.lower()
+            links.append(SupportedLink(service, canonical_url, display_text, match.start(), end, language, mode))
     return links
 
 
@@ -149,6 +154,8 @@ def build_fixembed_url(link: SupportedLink, quality: Optional[str] = None) -> st
         url = f"{url}&quality={quote(quality, safe='')}"
     if link.language:
         url = f"{url}&lang={quote(link.language, safe='')}"
+    if link.mode:
+        url = f"{url}&mode={quote(link.mode, safe='')}"
     return url
 
 

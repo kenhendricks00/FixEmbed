@@ -110,6 +110,19 @@ class SocialServiceTests(unittest.TestCase):
             "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&lang=es",
         )
 
+    def test_build_fixembed_url_preserves_gallery_and_mosaic_modifiers(self):
+        gallery = extract_supported_links("https://x.com/openai/status/123/gallery")[0]
+        mosaic = extract_supported_links("https://x.com/openai/status/456/es/mosaic")[0]
+
+        self.assertEqual(
+            build_fixembed_url(gallery),
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&mode=gallery",
+        )
+        self.assertEqual(
+            build_fixembed_url(mosaic),
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=149&lang=es&mode=mosaic",
+        )
+
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):
         lines = [f"link-{index}-" + ("x" * 700) for index in range(5)]
 

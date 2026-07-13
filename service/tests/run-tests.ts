@@ -764,6 +764,75 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler gallery mode keeps media while hiding post text and stats',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'Text hidden in gallery mode',
+                user: {
+                    name: 'Gallery Author',
+                    screen_name: 'gallery',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/gallery.jpg',
+                },
+                created_at: '2026-07-12T00:00:00.000Z',
+                favorite_count: 10,
+                mediaDetails: [
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/gallery-one.jpg' },
+                    { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/gallery-two.jpg' },
+                ],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/gallery/status/1234567890',
+                    env,
+                    { mode: 'gallery' },
+                );
+                assert.equal(response.data?.description, '');
+                assert.equal(response.data?.stats, undefined);
+                assert.deepEqual(response.data?.images, [
+                    'https://pbs.twimg.com/media/gallery-one.jpg',
+                    'https://pbs.twimg.com/media/gallery-two.jpg',
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'generateEmbedHTML advertises every image through ActivityPub',
+        run: () => {
+            const html = generateEmbedHTML({
+                title: '@gallery',
+                description: 'A gallery',
+                url: 'https://x.com/gallery/status/123',
+                siteName: 'FixEmbed • X',
+                authorName: 'Gallery Author',
+                authorHandle: '@gallery',
+                images: [
+                    'https://pbs.twimg.com/media/one.jpg',
+                    'https://pbs.twimg.com/media/two.jpg',
+                ],
+                platform: 'twitter',
+                mode: 'mosaic',
+            }, 'Discordbot/2.0');
+
+            assert.match(html, /rel="alternate" type="application\/activity\+json"/);
+            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            assert.ok(encoded);
+            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
+            assert.deepEqual(activityData.is, [
+                'https://pbs.twimg.com/media/one.jpg',
+                'https://pbs.twimg.com/media/two.jpg',
+            ]);
+            assert.equal(activityData.m, 'mosaic');
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;

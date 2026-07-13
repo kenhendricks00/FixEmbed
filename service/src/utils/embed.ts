@@ -165,6 +165,25 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.description) oembedUrl.searchParams.set('desc', embed.description.slice(0, 1000)); // Limit length for URL
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
+    const activityData = {
+        t: embed.title,
+        d: renderedDescription.slice(0, 1000),
+        i: embed.image,
+        is: embed.images,
+        v: embed.video?.url,
+        a: embed.authorName,
+        h: embed.authorHandle,
+        ic: embed.authorAvatar,
+        s: embed.stats,
+        u: embed.url,
+        m: embed.mode,
+    };
+    const encodedActivity = btoa(encodeURIComponent(JSON.stringify(activityData)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    html += `  <link rel="alternate" type="application/activity+json" href="https://fixembed.app/activity/${encodedActivity}">\n`;
+
 
     // Close head and add redirect body
     html += `</head>

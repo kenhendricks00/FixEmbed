@@ -54,6 +54,7 @@ export interface EmbedData {
     platform: Platform;
     stats?: string;
     sections?: EmbedSection[];
+    mode?: 'gallery' | 'mosaic';
 }
 
 export interface EmbedSection {
@@ -81,6 +82,7 @@ export interface HandlerResponse {
 
 export interface HandlerOptions {
     language?: string;
+    mode?: 'gallery' | 'mosaic';
 }
 
 // Platform handler interface
