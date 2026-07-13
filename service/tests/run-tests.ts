@@ -537,6 +537,9 @@ const tests: TestCase[] = [
                 const url = String(input);
                 if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
                     return new Response([
+                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />Actual reel caption</div>',
                         '<script>',
                         'window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
                         '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
@@ -555,6 +558,12 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.video?.url, 'https://scontent.example/reel.mp4');
                 assert.equal(response.data?.video?.thumbnail, 'https://scontent.example/reel.jpg');
                 assert.equal(response.data?.image, 'https://scontent.example/reel.jpg');
+                assert.equal(response.data?.authorName, 'creator');
+                assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.authorUrl, 'https://www.instagram.com/creator/');
+                assert.equal(response.data?.authorAvatar, 'https://scontent.example/avatar.jpg?x=1&y=2');
+                assert.equal(response.data?.title, 'Actual reel caption');
+                assert.doesNotMatch(response.data?.title || '', /^creator\b/i);
             } finally {
                 globalThis.fetch = originalFetch;
             }

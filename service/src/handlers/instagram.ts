@@ -377,6 +377,9 @@ export const instagramHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         authorName: metadata?.authorName,
+                        authorHandle: metadata?.authorHandle,
+                        authorUrl: metadata?.authorUrl,
+                        authorAvatar: metadata?.authorAvatar,
                         stats: metadata?.stats,
                         video: {
                             url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
@@ -396,6 +399,9 @@ export const instagramHandler: PlatformHandler = {
 
                 // Fetch author metadata since vxinstagram doesn't provide it reliably
                 let authorName = undefined;
+                let authorHandle = undefined;
+                let authorUrl = undefined;
+                let authorAvatar = undefined;
                 try {
                     const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
                     if (embedInfo.success && embedInfo.data) {
@@ -417,6 +423,9 @@ export const instagramHandler: PlatformHandler = {
                         if (!authorName && embedInfo.data.authorName) {
                             authorName = embedInfo.data.authorName;
                         }
+                        authorHandle = embedInfo.data.authorHandle;
+                        authorUrl = embedInfo.data.authorUrl;
+                        authorAvatar = embedInfo.data.authorAvatar;
                     }
                 } catch (e) {
                     console.warn('Failed to fetch carousel metadata:', e);
@@ -463,6 +472,9 @@ export const instagramHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('instagram'),
                         authorName: authorName || undefined,
+                        authorHandle,
+                        authorUrl,
+                        authorAvatar,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
@@ -648,6 +660,9 @@ export const instagramHandler: PlatformHandler = {
                     if (authorName) {
                         result.data!.authorName = authorName;
                     }
+                    result.data!.authorHandle = embedInfo.data.authorHandle;
+                    result.data!.authorUrl = embedInfo.data.authorUrl;
+                    result.data!.authorAvatar = embedInfo.data.authorAvatar;
 
                     // Update description if we have a better one
                     if (!description && embedInfo.data.description) {
@@ -774,6 +789,13 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             }
         }
 
+        const avatarMatch = html.match(
+            /<a[^>]+class=["'][^"']*\bAvatar\b[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+)["']/i,
+        );
+        const authorAvatar = avatarMatch
+            ? decodeInstagramMediaUrl(avatarMatch[1])
+            : undefined;
+
         // Extract media URL - check multiple patterns
         let mediaUrl = '';
         let isVideo = false;
@@ -877,6 +899,12 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 if (caption.length > 0 && caption.length < 500) break;
             }
         }
+        if (caption && username) {
+            const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            caption = caption
+                .replace(new RegExp(`^@?${escapedUsername}(?:\\s|:|-)*`, 'i'), '')
+                .trim();
+        }
 
         const result: HandlerResponse = {
             success: true,
@@ -888,7 +916,10 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 description: '',
                 url: canonicalUrl,
                 siteName: getBrandedSiteName('instagram'),
-                authorName: username ? `@${username}` : undefined,
+                authorName: username || undefined,
+                authorHandle: username ? `@${username}` : undefined,
+                authorUrl: username ? `https://www.instagram.com/${username}/` : undefined,
+                authorAvatar,
                 color: platformColors.instagram,
                 platform: 'instagram',
                 stats: formatStats({ likes, comments }),
