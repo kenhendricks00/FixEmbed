@@ -778,6 +778,8 @@ const tests: TestCase[] = [
                 assert.deepEqual(response.data?.sections?.map((section) => section.kind), [
                     'poll', 'quote', 'community-note', 'article',
                 ]);
+                assert.match(response.data?.stats || '', /20/);
+                assert.doesNotMatch(response.data?.stats || '', /25/);
 
                 const html = generateEmbedHTML(response.data!, 'Discordbot/2.0');
                 assert.match(html, /Yes.*75%/s);

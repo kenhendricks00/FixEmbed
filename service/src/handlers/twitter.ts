@@ -202,7 +202,7 @@ export const twitterHandler: PlatformHandler = {
                     timestamp: tweet.created_at,
                     stats: options.mode === 'gallery' ? undefined : formatStats({
                         comments: tweet.conversation_count,
-                        retweets: (tweet.retweet_count || 0) + (tweet.quote_count || 0),
+                        retweets: tweet.retweet_count,
                         likes: tweet.favorite_count,
                         views: Number(tweet.video?.viewCount || tweet.view_count_info?.count) || undefined,
                     }),
