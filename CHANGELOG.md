@@ -8,6 +8,9 @@
   - Add gallery and native multi-image mosaic URL modifiers.
 
 #### **🔧 Backend Changes**
+- **`Discord X Text Rendering`**
+  - Preserve paragraphs and numbered lists in ActivityPub-backed X embeds.
+  - Carry the complete Discord-sized post description instead of truncating it at 1,000 characters.
 - **`Workers AI Translation`**
   - Translate requested X posts with Cloudflare's M2M100 binding while retaining the original text.
   - Keep the original first-party embed when translation is unavailable instead of failing the post.

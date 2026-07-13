@@ -12,7 +12,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { Env } from './types.ts';
 import { findHandler } from './handlers/index.ts';
-import { FIXEMBED_LOGO, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
+import { FIXEMBED_LOGO, formatActivityContent, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
@@ -287,7 +287,7 @@ app.get('/activity/:encodedData', (c) => {
             'id': `https://fixembed.app/activity/${encodedData}`,
             'type': 'Note',
             'summary': embedData.s || null, // Stats row
-            'content': `<p>${embedData.d || ''}</p>`,
+            'content': formatActivityContent(embedData.d || ''),
             'attributedTo': `https://fixembed.app/activity/${encodedData}/actor`,
             'published': new Date().toISOString(),
             'url': embedData.u || 'https://fixembed.app',

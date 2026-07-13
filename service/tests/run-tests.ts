@@ -13,7 +13,7 @@ import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
-import { generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
+import { formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -855,6 +855,37 @@ const tests: TestCase[] = [
                 'https://pbs.twimg.com/media/two.jpg',
             ]);
             assert.equal(activityData.m, 'mosaic');
+        },
+    },
+    {
+        name: 'ActivityPub preserves multiline X formatting without HTML injection',
+        run: () => {
+            assert.equal(
+                formatActivityContent('Opening paragraph\n\n1. First item\n2. Second & <unsafe>'),
+                '<p>Opening paragraph<br><br>1. First item<br>2. Second &amp; &lt;unsafe&gt;</p>',
+            );
+        },
+    },
+    {
+        name: 'generateEmbedHTML keeps the complete Discord ActivityPub description',
+        run: () => {
+            const description = `Paragraph one\n\n${'Long post content. '.repeat(90)}\n\n1. Final item`;
+            assert.ok(description.length > 1000);
+
+            const html = generateEmbedHTML({
+                title: '@author',
+                description,
+                url: 'https://x.com/author/status/123',
+                siteName: 'FixEmbed • X',
+                platform: 'twitter',
+            }, 'Discordbot/2.0');
+            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            assert.ok(encoded);
+            let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const activityData = JSON.parse(decodeURIComponent(atob(base64)));
+
+            assert.equal(activityData.d, description);
         },
     },
     {

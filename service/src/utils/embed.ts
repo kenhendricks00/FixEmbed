@@ -9,6 +9,19 @@ import type { EmbedData } from '../types.ts';
  */
 export const FIXEMBED_LOGO = 'https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/logo.png';
 
+function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Preserve source line breaks in the safe HTML consumed by Discord's ActivityPub renderer. */
+export function formatActivityContent(description: string): string {
+    const normalized = description.replace(/\r\n?/g, '\n');
+    return `<p>${escapeHtml(normalized).replace(/\n/g, '<br>')}</p>`;
+}
+
 const GENERIC_POST_TITLES = new Set(['post', 'reel', 'thread', 'tweet']);
 
 function comparableIdentity(value?: string): string {
@@ -68,11 +81,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const isTelegram = userAgent.toLowerCase().includes('telegram');
 
     // Escape HTML entities
-    const escape = (str: string) =>
-        str.replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+    const escape = escapeHtml;
 
     const sectionText = (embed.sections || [])
         .map((section) => `**${section.title}**\n${section.body}${section.url ? `\n${section.url}` : ''}`)
@@ -167,7 +176,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     const activityData = {
         t: embed.title,
-        d: renderedDescription.slice(0, 1000),
+        d: renderedDescription,
         i: embed.image,
         is: embed.images,
         v: embed.video?.url,
