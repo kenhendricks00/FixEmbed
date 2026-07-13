@@ -12,7 +12,7 @@ import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import { docsHtml, indexHtml, statusHtml } from '../src/utils/static_site.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
-import { normalizeEmbedLayout } from '../src/utils/embed.ts';
+import { generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
     parseBlueskyUrl,
@@ -650,6 +650,114 @@ const tests: TestCase[] = [
                 );
 
                 assert.equal(response.data?.description, 'こんにちは世界\n\n🌐 Translation (EN): Hello world');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler renders GraphQL polls quotes notes articles and Community Notes',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.endsWith('/1.1/guest/activate.json')) {
+                    return new Response(JSON.stringify({ guest_token: 'guest-123' }), { status: 200 });
+                }
+                if (url.includes('/graphql/') && url.includes('/TweetResultByRestId')) {
+                    return new Response(JSON.stringify({
+                        data: {
+                            tweetResult: {
+                                result: {
+                                    __typename: 'Tweet',
+                                    rest_id: '2000000000000000000',
+                                    core: { user_results: { result: {
+                                        core: { name: 'Primary Author', screen_name: 'primary' },
+                                        avatar: { image_url: 'https://pbs.twimg.com/profile_images/primary.jpg' },
+                                    } } },
+                                    legacy: {
+                                        id_str: '2000000000000000000',
+                                        full_text: 'Truncated note…',
+                                        created_at: 'Sun Jul 12 00:00:00 +0000 2026',
+                                        favorite_count: 100,
+                                        retweet_count: 20,
+                                        quote_count: 5,
+                                        reply_count: 4,
+                                        lang: 'en',
+                                        entities: { urls: [], media: [] },
+                                        extended_entities: { media: [
+                                            { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/root-one.jpg' },
+                                            { type: 'photo', media_url_https: 'https://pbs.twimg.com/media/root-two.jpg' },
+                                        ] },
+                                    },
+                                    note_tweet: { note_tweet_results: { result: {
+                                        text: 'The complete long-form note text.',
+                                        entity_set: { urls: [], media: [] },
+                                    } } },
+                                    card: { legacy: { name: 'poll2choice_text_only', binding_values: [
+                                        { key: 'choice1_label', value: { string_value: 'Yes' } },
+                                        { key: 'choice1_count', value: { string_value: '75' } },
+                                        { key: 'choice2_label', value: { string_value: 'No' } },
+                                        { key: 'choice2_count', value: { string_value: '25' } },
+                                        { key: 'end_datetime_utc', value: { string_value: '2026-07-11T00:00:00Z' } },
+                                        { key: 'counts_are_final', value: { boolean_value: true } },
+                                    ] } },
+                                    quoted_status_result: { result: {
+                                        __typename: 'Tweet',
+                                        rest_id: '1999999999999999999',
+                                        core: { user_results: { result: {
+                                            core: { name: 'Quoted Author', screen_name: 'quoted' },
+                                            avatar: { image_url: 'https://pbs.twimg.com/profile_images/quoted.jpg' },
+                                        } } },
+                                        legacy: {
+                                            id_str: '1999999999999999999',
+                                            full_text: 'Quoted post body',
+                                            created_at: 'Sat Jul 11 00:00:00 +0000 2026',
+                                            entities: { urls: [], media: [] },
+                                        },
+                                    } },
+                                    birdwatch_pivot: {
+                                        destinationUrl: 'https://x.com/i/birdwatch/n/123',
+                                        subtitle: { text: 'Readers added important context.' },
+                                    },
+                                    article: { article_results: { result: {
+                                        title: 'A full X Article',
+                                        preview_text: 'Article preview text',
+                                        cover_media: { media_info: {
+                                            __typename: 'ApiImage',
+                                            original_img_url: 'https://pbs.twimg.com/media/article-cover.jpg',
+                                        } },
+                                    } } },
+                                    views: { count: '1000' },
+                                },
+                            },
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/primary/status/2000000000000000000',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.description, 'The complete long-form note text.');
+                assert.deepEqual(response.data?.images, [
+                    'https://pbs.twimg.com/media/root-one.jpg',
+                    'https://pbs.twimg.com/media/root-two.jpg',
+                ]);
+                assert.deepEqual(response.data?.sections?.map((section) => section.kind), [
+                    'poll', 'quote', 'community-note', 'article',
+                ]);
+
+                const html = generateEmbedHTML(response.data!, 'Discordbot/2.0');
+                assert.match(html, /Yes.*75%/s);
+                assert.match(html, /Quoted @quoted.*Quoted post body/s);
+                assert.match(html, /Readers added important context/);
+                assert.match(html, /A full X Article.*Article preview text/s);
             } finally {
                 globalThis.fetch = originalFetch;
             }

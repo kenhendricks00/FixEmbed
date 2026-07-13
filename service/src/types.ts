@@ -53,6 +53,14 @@ export interface EmbedData {
     timestamp?: string;
     platform: Platform;
     stats?: string;
+    sections?: EmbedSection[];
+}
+
+export interface EmbedSection {
+    kind: 'poll' | 'quote' | 'community-note' | 'article' | 'link-card' | 'tombstone';
+    title: string;
+    body: string;
+    url?: string;
 }
 
 export interface VideoEmbed {

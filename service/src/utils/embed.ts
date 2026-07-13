@@ -74,12 +74,17 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
 
+    const sectionText = (embed.sections || [])
+        .map((section) => `**${section.title}**\n${section.body}${section.url ? `\n${section.url}` : ''}`)
+        .join('\n\n');
+    const renderedDescription = [embed.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
+
     let html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta property="og:title" content="${escape(embed.title)}">
-  <meta property="og:description" content="${escape(embed.description)}">
+  <meta property="og:description" content="${escape(renderedDescription)}">
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
   <meta property="og:type" content="${embed.video ? 'video.other' : 'website'}">
@@ -140,7 +145,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     // Twitter-specific tags
     html += `  <meta name="twitter:title" content="${escape(embed.title)}">\n`;
-    html += `  <meta name="twitter:description" content="${escape(embed.description)}">\n`;
+    html += `  <meta name="twitter:description" content="${escape(renderedDescription)}">\n`;
 
     // FixEmbed branding - multiple approaches for Discord enhanced embeds
     // 1. Single high-quality icon for branding

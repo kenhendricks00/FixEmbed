@@ -6,41 +6,12 @@
 import type { Env, HandlerOptions, HandlerResponse, PlatformHandler } from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
-
-interface SyndicationMedia {
-    type: 'photo' | 'video' | 'animated_gif';
-    media_url_https: string;
-    video_info?: {
-        aspect_ratio?: [number, number];
-        variants: Array<{
-            bitrate?: number;
-            content_type: string;
-            url: string;
-        }>;
-    };
-}
-
-interface SyndicationTweet {
-    __typename: string;
-    id_str: string;
-    text: string;
-    user: {
-        name: string;
-        screen_name: string;
-        profile_image_url_https: string;
-    };
-    created_at: string;
-    favorite_count?: number;
-    retweet_count?: number;
-    quote_count?: number;
-    conversation_count?: number;
-    view_count_info?: { count: string };
-    video?: { viewCount: string };
-    lang?: string;
-    entities?: { media?: SyndicationMedia[] };
-    extended_entities?: { media?: SyndicationMedia[] };
-    mediaDetails?: SyndicationMedia[];
-}
+import {
+    fetchTwitterGraphQL,
+    normalizeTwitterPoll,
+    type TwitterMedia as SyndicationMedia,
+    type TwitterTweetData as SyndicationTweet,
+} from './twitter_graphql.ts';
 
 function fallbackResponse(username: string, tweetId: string, error: string): HandlerResponse {
     return {
@@ -71,19 +42,21 @@ export const twitterHandler: PlatformHandler = {
         }
 
         try {
-            const apiUrl = `https://cdn.syndication.twimg.com/tweet-result?id=${parsed.tweetId}&lang=en&token=0`;
-            const response = await fetchWithTimeout(apiUrl, {
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'FixEmbed/1.3 (+https://fixembed.app)',
-                },
-            }, 5000);
-
-            if (!response.ok) {
-                return fallbackResponse(parsed.username, parsed.tweetId, `Twitter API error: ${response.status}`);
+            let tweet = await fetchTwitterGraphQL(parsed.tweetId);
+            if (!tweet) {
+                const apiUrl = `https://cdn.syndication.twimg.com/tweet-result?id=${parsed.tweetId}&lang=en&token=0`;
+                const response = await fetchWithTimeout(apiUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)',
+                    },
+                }, 5000);
+                if (!response.ok) {
+                    return fallbackResponse(parsed.username, parsed.tweetId, `Twitter API error: ${response.status}`);
+                }
+                tweet = await response.json() as SyndicationTweet;
+                tweet.poll ||= normalizeTwitterPoll((tweet as unknown as { card?: unknown }).card);
             }
-
-            const tweet = await response.json() as SyndicationTweet;
             if (!tweet?.user || tweet.__typename === 'TweetTombstone') {
                 return fallbackResponse(parsed.username, parsed.tweetId, 'Tweet not found, private, or deleted');
             }
@@ -148,6 +121,58 @@ export const twitterHandler: PlatformHandler = {
                 }
             }
 
+            const sections = [] as NonNullable<HandlerResponse['data']>['sections'];
+            if (tweet.poll) {
+                const choices = tweet.poll.choices.map((choice) => {
+                    const bar = '█'.repeat(Math.max(1, Math.round(choice.percentage / 10)));
+                    return `${bar} ${choice.label} — ${choice.percentage}% (${choice.count})`;
+                });
+                const state = tweet.poll.final ? 'Final results' : `Ends ${tweet.poll.endsAt || 'soon'}`;
+                sections?.push({
+                    kind: 'poll',
+                    title: 'Poll',
+                    body: `${choices.join('\n')}\n${tweet.poll.totalVotes} votes · ${state}`,
+                });
+            }
+            if (tweet.quote) {
+                if (tweet.quote.user && tweet.quote.text) {
+                    sections?.push({
+                        kind: 'quote',
+                        title: `Quoted @${tweet.quote.user.screen_name}`,
+                        body: tweet.quote.text,
+                    });
+                    if (!media.length && tweet.quote.mediaDetails?.length) {
+                        const quotePhotos = tweet.quote.mediaDetails
+                            .filter((item) => item.type === 'photo')
+                            .map((item) => item.media_url_https);
+                        if (quotePhotos.length === 1) [image] = quotePhotos;
+                        if (quotePhotos.length > 1) images = quotePhotos;
+                    }
+                } else {
+                    sections?.push({
+                        kind: 'tombstone',
+                        title: 'Quoted post unavailable',
+                        body: tweet.quote.unavailableReason || 'This quoted post is unavailable.',
+                    });
+                }
+            }
+            if (tweet.communityNote) {
+                sections?.push({
+                    kind: 'community-note',
+                    title: 'Community Note',
+                    body: tweet.communityNote.text,
+                    url: tweet.communityNote.url,
+                });
+            }
+            if (tweet.article) {
+                sections?.push({
+                    kind: 'article',
+                    title: tweet.article.title,
+                    body: tweet.article.preview || 'Read the full article on X.',
+                });
+                if (!image && !images && !video && tweet.article.image) image = tweet.article.image;
+            }
+
             return {
                 success: true,
                 source: 'first-party',
@@ -172,6 +197,7 @@ export const twitterHandler: PlatformHandler = {
                         likes: tweet.favorite_count,
                         views: Number(tweet.video?.viewCount || tweet.view_count_info?.count) || undefined,
                     }),
+                    sections,
                 },
             };
         } catch (error) {
