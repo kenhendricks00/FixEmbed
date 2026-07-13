@@ -710,6 +710,45 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler upgrades low-resolution profile pictures with Instagram HD metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/p/HDProfile/embed/captioned/')) {
+                    return new Response([
+                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?stp=dst-jpg_s100x100_tt6&amp;x=1" /></a>',
+                        '<span class="UsernameText">creator</span>',
+                        '<script>{"display_url":"https:\\/\\/scontent.example\\/photo.jpg","text":"Caption"}</script>',
+                    ].join(''), { status: 200 });
+                }
+                if (url.includes('/api/v1/users/web_profile_info/?username=creator')) {
+                    return Response.json({
+                        data: {
+                            user: {
+                                profile_pic_url: 'https://scontent.example/avatar-150.jpg',
+                                profile_pic_url_hd: 'https://scontent.example/avatar-320.jpg',
+                            },
+                        },
+                        status: 'ok',
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/HDProfile/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorAvatar, 'https://scontent.example/avatar-320.jpg');
+                assert.equal(requested.length, 2);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'blueskyHandler preserves creator identity and every carousel image',
         run: async () => {
             const originalFetch = globalThis.fetch;
