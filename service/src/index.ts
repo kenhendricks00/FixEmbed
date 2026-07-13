@@ -557,11 +557,10 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         media_attachments: mediaAttachments,
         account: {
             id: handle,
-            display_name: isInstagram ? `${handle} (@${handle})` : (embedData.a || handle),
+            display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
-                // The complete Instagram creator label is the display name.
-                // Omitting the federated username prevents Discord from
-                // appending an unrelated Activity host to it.
+                username: handle,
+                acct: handle,
                 url: instagramProfileUrl,
                 uri: instagramProfileUrl,
             } : {
