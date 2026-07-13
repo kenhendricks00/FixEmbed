@@ -16,6 +16,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from instagram_embed import fetch_instagram_layout
+from twitter_embed import fetch_twitter_layout
 from message_context import format_tagged_users
 from settings_components import render_settings_layout
 from settings_migrations import migrate_youtube_service_default
@@ -1225,7 +1226,7 @@ async def on_message(message):
                 include_fixembed=False,
             )
             formatted_links = []
-            instagram_layouts = []
+            component_layouts = []
             for item in links:
                 default_enabled = item.service in enabled_services
                 service_enabled = get_service_rule(guild_id, message.channel.id, item.service, default_enabled)
@@ -1242,9 +1243,16 @@ async def on_message(message):
                     if item.service == "Instagram":
                         try:
                             layout = await fetch_instagram_layout(item.canonical_url)
-                            instagram_layouts.append((layout, automatic_url))
+                            component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Instagram component build failed; using link fallback: {error}")
+                            formatted_links.append(automatic_url)
+                    elif item.service == "Twitter":
+                        try:
+                            layout = await fetch_twitter_layout(item.canonical_url, item.language, item.mode)
+                            component_layouts.append((layout, automatic_url))
+                        except Exception as error:
+                            logging.warning(f"X component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")
@@ -1253,7 +1261,7 @@ async def on_message(message):
                     service_stats["ok"] += 1
                     processing_stats["total_fixed"] += 1
 
-            if formatted_links or instagram_layouts:
+            if formatted_links or component_layouts:
                 if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
@@ -1273,7 +1281,7 @@ async def on_message(message):
                             content=chunk,
                             allowed_mentions=allowed_mentions,
                         )
-                    for layout, automatic_url in instagram_layouts:
+                    for layout, automatic_url in component_layouts:
                         await rate_limited_send(
                             message.channel,
                             view=layout,
@@ -1285,7 +1293,7 @@ async def on_message(message):
                     await message.edit(suppress=True)
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for layout, automatic_url in instagram_layouts:
+                    for layout, automatic_url in component_layouts:
                         await rate_limited_send(
                             message.channel,
                             view=layout,
@@ -1294,7 +1302,7 @@ async def on_message(message):
                 else:
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for layout, automatic_url in instagram_layouts:
+                    for layout, automatic_url in component_layouts:
                         await rate_limited_send(
                             message.channel,
                             view=layout,
