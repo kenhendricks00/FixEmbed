@@ -139,6 +139,12 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_youtube", main_source)
 
+    def test_forbidden_channel_errors_keep_discord_context(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("except discord.Forbidden as error:", main_source)
+        self.assertIn('logging.warning("Missing permissions in channel %s: %s"', main_source)
+
 
 if __name__ == "__main__":
     unittest.main()

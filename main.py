@@ -1365,8 +1365,8 @@ async def on_message(message):
                             fallback_content=automatic_url,
                         )
 
-        except discord.Forbidden:
-            logging.warning(f"Missing permissions in channel {message.channel.id}")
+        except discord.Forbidden as error:
+            logging.warning("Missing permissions in channel %s: %s", message.channel.id, error)
             processing_stats["total_failed"] += 1
         except discord.NotFound:
             logging.debug(f"Message already deleted in channel {message.channel.id}")

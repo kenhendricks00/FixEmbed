@@ -224,11 +224,48 @@ export const redditHandler: PlatformHandler = {
     name: 'reddit',
     patterns: [
         /reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/i,
+        /reddit\.com\/r\/[^\/]+\/s\/[^\/\?]+/i,
         /redd\.it\/([^\/\?]+)/i,
     ],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
-        const parsed = parseRedditUrl(url);
+        let resolvedUrl = url;
+        try {
+            const candidate = new URL(url);
+            const hostname = candidate.hostname.toLowerCase().replace(/^www\./, '');
+            const isShareUrl = candidate.protocol === 'https:'
+                && hostname === 'reddit.com'
+                && /^\/r\/[^/]+\/s\/[^/]+\/?$/i.test(candidate.pathname);
+
+            if (isShareUrl) {
+                const response = await fetchWithTimeout(url, {
+                    redirect: 'manual',
+                    headers: {
+                        'Accept': 'text/html',
+                        'User-Agent': 'FixEmbed/1.0 (embed service)',
+                    },
+                });
+                const location = response.headers.get('location');
+                if (!location) {
+                    return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
+                }
+
+                const destination = new URL(location, url);
+                const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
+                if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
+                    return { success: false, error: 'Invalid Reddit share redirect', redirect: url };
+                }
+                resolvedUrl = destination.toString();
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Could not resolve Reddit share link',
+                redirect: url,
+            };
+        }
+
+        const parsed = parseRedditUrl(resolvedUrl);
 
         if (!parsed) {
             // Try short URL format

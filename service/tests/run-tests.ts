@@ -722,6 +722,78 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler resolves Reddit share links before fetching metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const shareUrl = 'https://www.reddit.com/r/capybara/s/XQjKj3quL6';
+            const canonicalUrl = 'https://www.reddit.com/r/capybara/comments/abc123/capybara_post/';
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url === shareUrl) {
+                    return new Response(null, {
+                        status: 302,
+                        headers: { Location: canonicalUrl },
+                    });
+                }
+                if (url.includes('/comments/abc123.json')) {
+                    return new Response(JSON.stringify([{
+                        data: { children: [{ data: {
+                            title: 'Capybara post',
+                            selftext: '',
+                            author: 'capybara_friend',
+                            subreddit: 'capybara',
+                            url: canonicalUrl,
+                            permalink: '/r/capybara/comments/abc123/capybara_post/',
+                            thumbnail: 'self',
+                            is_video: false,
+                            created_utc: 1_783_987_200,
+                            score: 42,
+                            num_comments: 7,
+                        } }] },
+                    }]));
+                }
+                if (url.includes('/about.json')) {
+                    return new Response(JSON.stringify({ data: {} }));
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await redditHandler.handle(shareUrl, env);
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.url, `https://reddit.com/r/capybara/comments/abc123/capybara_post/`);
+                assert.equal(requested[0], shareUrl);
+                assert.match(requested[1], /comments\/abc123\.json/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler rejects share redirects outside Reddit',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const shareUrl = 'https://www.reddit.com/r/capybara/s/XQjKj3quL6';
+            globalThis.fetch = async () => new Response(null, {
+                status: 302,
+                headers: { Location: 'https://example.com/internal-target' },
+            });
+
+            try {
+                const response = await redditHandler.handle(shareUrl, env);
+
+                assert.equal(response.success, false);
+                assert.equal(response.error, 'Invalid Reddit share redirect');
+                assert.equal(response.redirect, shareUrl);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'YouTube community posts preserve long text for Components V2',
         run: () => {
             const longText = 'Community update '.repeat(90).trim();

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
@@ -21,6 +22,8 @@ FIXEMBED_EMOJI_ID = 1525580543503106148
 INSTAGRAM_EMOJI_ID = 1526267158793949435
 INSTAGRAM_WEB_APP_ID = "936619743392459"
 INSTAGRAM_PROFILE_API_HOSTS = ("www.instagram.com", "i.instagram.com")
+INSTAGRAM_HD_AVATAR_COOLDOWN_SECONDS = 30 * 60
+_instagram_avatar_blocked_until = 0.0
 
 
 @dataclass(frozen=True)
@@ -63,9 +66,13 @@ async def _upgrade_instagram_avatar(
     payload: Mapping[str, Any],
     session: aiohttp.ClientSession,
 ) -> Mapping[str, Any]:
+    global _instagram_avatar_blocked_until
+
     avatar = str(payload.get("authorAvatar") or "").strip()
     handle = _clean_handle(payload.get("authorHandle"))
     if not handle or not avatar or not any(size in avatar for size in ("s100x100", "s150x150")):
+        return payload
+    if time.monotonic() < _instagram_avatar_blocked_until:
         return payload
 
     failures = []
@@ -92,6 +99,15 @@ async def _upgrade_instagram_avatar(
                 },
                 timeout=aiohttp.ClientTimeout(total=8),
             ) as response:
+                if getattr(response, "status", None) == 429:
+                    _instagram_avatar_blocked_until = (
+                        time.monotonic() + INSTAGRAM_HD_AVATAR_COOLDOWN_SECONDS
+                    )
+                    logging.warning(
+                        "Instagram HD avatar lookup rate limited; pausing enrichment "
+                        "for 30 minutes and using metadata avatars"
+                    )
+                    return payload
                 response.raise_for_status()
                 body = await response.json(content_type=None)
             candidate = str(

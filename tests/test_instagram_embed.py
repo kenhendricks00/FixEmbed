@@ -2,6 +2,7 @@ import asyncio
 import unittest
 
 import aiohttp
+import instagram_embed
 
 from instagram_embed import (
     _upgrade_instagram_avatar,
@@ -61,6 +62,22 @@ class _FallbackProfileSession:
         return _FallbackProfileResponse(should_fail=len(self.requested_urls) == 1)
 
 
+class _RateLimitedProfileResponse(_ProfileResponse):
+    status = 429
+
+    def raise_for_status(self):
+        raise aiohttp.ClientError("Too Many Requests")
+
+
+class _RateLimitedProfileSession:
+    def __init__(self):
+        self.requested_urls = []
+
+    def get(self, url, **kwargs):
+        self.requested_urls.append(url)
+        return _RateLimitedProfileResponse()
+
+
 class InstagramEmbedTests(unittest.TestCase):
     def test_low_resolution_avatar_is_upgraded_from_instagram_profile_metadata(self):
         payload = {
@@ -94,6 +111,27 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertIn("www.instagram.com/api/", session.requested_urls[0])
         self.assertIn("i.instagram.com/api/", session.requested_urls[1])
         self.assertIn("s320x320", enriched["authorAvatar"])
+
+    def test_avatar_upgrade_stops_retrying_during_rate_limit_cooldown(self):
+        payload = {
+            "authorHandle": "@brooke_annm",
+            "authorAvatar": (
+                "https://scontent.example.cdninstagram.com/avatar.jpg"
+                "?stp=dst-jpg_s100x100_tt6"
+            ),
+        }
+        session = _RateLimitedProfileSession()
+        instagram_embed._instagram_avatar_blocked_until = 0.0
+
+        try:
+            first = asyncio.run(_upgrade_instagram_avatar(payload, session))
+            second = asyncio.run(_upgrade_instagram_avatar(payload, session))
+        finally:
+            instagram_embed._instagram_avatar_blocked_until = 0.0
+
+        self.assertIs(first, payload)
+        self.assertIs(second, payload)
+        self.assertEqual(len(session.requested_urls), 1)
 
     def test_author_uses_name_and_handle_without_fixembed_domain(self):
         payload = {
