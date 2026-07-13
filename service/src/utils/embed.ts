@@ -135,7 +135,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter' && supportsDiscordActivityCard;
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
     const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
-    const displayTitle = (embed.platform === 'twitter' || embed.platform === 'instagram') && embed.authorName && embed.authorHandle
+    const displayTitle = embed.platform === 'twitter' && embed.authorName && embed.authorHandle
         ? `${embed.authorName} (${embed.authorHandle})`
         : embed.title;
 
@@ -145,8 +145,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const sectionText = (embed.sections || [])
         .map((section) => `**${section.title}**\n${section.body}${section.url ? `\n${section.url}` : ''}`)
         .join('\n\n');
-    const primaryDescription = embed.platform === 'instagram' ? activityBodyText(embed) : embed.description;
-    const renderedDescription = [primaryDescription, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
+    const renderedDescription = [embed.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
 
     let html = `<!DOCTYPE html>
 <html>

@@ -1114,8 +1114,8 @@ const tests: TestCase[] = [
             assert.doesNotMatch(html, /application\/activity\+json/);
             assert.match(html, /property="og:video"/);
             assert.match(html, /property="og:image"/);
-            assert.match(html, /property="og:title" content="Creator \(@creator\)"/);
-            assert.match(html, /property="og:description" content="A reel caption"/);
+            assert.match(html, /property="og:title" content="A reel caption"/);
+            assert.match(html, /property="og:description" content=""/);
             assert.match(html, /provider=Creator\+%28%40creator%29/);
             assert.match(
                 html,
