@@ -64,7 +64,7 @@ export const twitterHandler: PlatformHandler = {
             const handle = tweet.user.screen_name;
             let description = truncateText(
                 tweet.text.replace(/https?:\/\/t\.co\/\w+/g, '').trim(),
-                1000,
+                3000,
             );
             const targetLanguage = options.language?.toLowerCase();
             if (
@@ -84,7 +84,7 @@ export const twitterHandler: PlatformHandler = {
                     if (translation.translated_text?.trim()) {
                         description = truncateText(
                             `${description}\n\n🌐 Translation (${targetLanguage.toUpperCase()}): ${translation.translated_text.trim()}`,
-                            1000,
+                            3000,
                         );
                     }
                 } catch (error) {
@@ -171,6 +171,15 @@ export const twitterHandler: PlatformHandler = {
                     body: tweet.article.preview || 'Read the full article on X.',
                 });
                 if (!image && !images && !video && tweet.article.image) image = tweet.article.image;
+            }
+            if (tweet.linkCard) {
+                sections?.push({
+                    kind: 'link-card',
+                    title: tweet.linkCard.title,
+                    body: tweet.linkCard.description || tweet.linkCard.domain || 'Open link',
+                    url: tweet.linkCard.url,
+                });
+                if (!image && !images && !video && tweet.linkCard.image) image = tweet.linkCard.image;
             }
 
             return {

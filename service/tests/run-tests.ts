@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
+import { normalizeTwitterWebsiteCard } from '../src/handlers/twitter_graphql.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
 import { redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
@@ -52,6 +53,30 @@ async function topGgSignature(body: string, secret: string, timestamp: number): 
 }
 
 const tests: TestCase[] = [
+    {
+        name: 'normalizeTwitterWebsiteCard preserves link preview metadata',
+        run: () => {
+            const websiteCard = normalizeTwitterWebsiteCard({
+                legacy: {
+                    name: 'summary_large_image',
+                    binding_values: [
+                        { key: 'title', value: { string_value: 'Linked story' } },
+                        { key: 'description', value: { string_value: 'Story description' } },
+                        { key: 'domain', value: { string_value: 'example.com' } },
+                        { key: 'card_url', value: { string_value: 'https://example.com/story' } },
+                        { key: 'summary_photo_image_large', value: { image_value: { url: 'https://example.com/story.jpg' } } },
+                    ],
+                },
+            });
+            assert.deepEqual(websiteCard, {
+                title: 'Linked story',
+                description: 'Story description',
+                domain: 'example.com',
+                url: 'https://example.com/story',
+                image: 'https://example.com/story.jpg',
+            });
+        },
+    },
     {
         name: 'normalizeEmbedLayout promotes post text when the title repeats the creator',
         run: () => {

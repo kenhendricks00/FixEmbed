@@ -91,6 +91,7 @@ export interface TwitterTweetData {
     quote?: TwitterQuote;
     communityNote?: { text: string; url?: string };
     article?: { title: string; preview?: string; image?: string };
+    linkCard?: { title: string; description?: string; url: string; domain?: string; image?: string };
 }
 
 function record(value: unknown): Record<string, any> {
@@ -145,6 +146,34 @@ export function normalizeTwitterPoll(cardValue: unknown): TwitterPoll | undefine
         totalVotes,
         endsAt: bindings.get('end_datetime_utc')?.string_value,
         final: bindings.get('counts_are_final')?.boolean_value === true,
+    };
+}
+
+export function normalizeTwitterWebsiteCard(cardValue: unknown): TwitterTweetData['linkCard'] {
+    const card = record(cardValue);
+    const cardName = String(card.legacy?.name ?? card.name ?? '');
+    if (!['summary', 'summary_large_image', 'summary_photo_image', 'promo_image', 'summary_large_image_app'].includes(cardName)) {
+        return undefined;
+    }
+    const bindings = bindingMap(card);
+    const title = bindings.get('title')?.string_value;
+    const url = bindings.get('card_url')?.string_value ?? card.legacy?.url ?? card.url;
+    if (typeof title !== 'string' || typeof url !== 'string') return undefined;
+    const imageKeys = [
+        'summary_photo_image_large', 'photo_image_full_size_large', 'summary_photo_image',
+        'photo_image_full_size', 'summary_photo_image_x_large', 'photo_image_full_size_x_large',
+        'thumbnail_image_large', 'thumbnail_image', 'thumbnail_image_original',
+        'summary_photo_image_original', 'photo_image_full_size_original',
+    ];
+    const image = imageKeys
+        .map((key) => bindings.get(key)?.image_value?.url)
+        .find((value) => typeof value === 'string');
+    return {
+        title,
+        url,
+        description: bindings.get('description')?.string_value,
+        domain: bindings.get('domain')?.string_value ?? bindings.get('vanity_url')?.string_value,
+        image,
     };
 }
 
@@ -218,6 +247,7 @@ export function normalizeGraphQLTweet(value: unknown): TwitterTweetData | null {
                     : undefined,
             }
             : undefined,
+        linkCard: normalizeTwitterWebsiteCard(node.card),
     };
 }
 
