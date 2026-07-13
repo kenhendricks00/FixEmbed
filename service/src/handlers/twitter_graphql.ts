@@ -1,8 +1,11 @@
 import { fetchWithTimeout } from '../utils/fetch.ts';
 
 const X_API_ROOT = 'https://api.x.com';
+// Public bearer used by X's logged-out web client; this is not an account credential or private API key.
 const GUEST_BEARER = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 const TWEET_QUERY_ID = 'f2sagi1jweVHFkTUIHzmMQ';
+const GUEST_TOKEN_TTL_MS = 60 * 60 * 1000;
+let cachedGuestToken: { value: string; expiresAt: number } | null = null;
 
 const GRAPHQL_FEATURES = {
     rweb_video_screen_enabled: false,
@@ -95,6 +98,7 @@ export interface TwitterTweetData {
 }
 
 function record(value: unknown): Record<string, any> {
+    // X's undocumented GraphQL response drifts frequently. Keep `any` confined to this normalization boundary.
     return value && typeof value === 'object' ? value as Record<string, any> : {};
 }
 
@@ -107,13 +111,26 @@ function unwrapTweet(value: unknown): Record<string, any> {
 
 function normalizeMedia(value: unknown): TwitterMedia[] {
     if (!Array.isArray(value)) return [];
-    return value.flatMap((item) => {
+    return value.slice(0, 4).flatMap((item) => {
         const media = record(item);
         if (!['photo', 'video', 'animated_gif'].includes(media.type) || typeof media.media_url_https !== 'string') {
             return [];
         }
         return [media as unknown as TwitterMedia];
     });
+}
+
+async function getGuestToken(headers: Record<string, string>): Promise<string | null> {
+    if (cachedGuestToken && cachedGuestToken.expiresAt > Date.now()) return cachedGuestToken.value;
+    const activation = await fetchWithTimeout(`${X_API_ROOT}/1.1/guest/activate.json`, {
+        method: 'POST',
+        headers,
+    }, 4000);
+    if (!activation.ok) return null;
+    const guest = await activation.json() as { guest_token?: string };
+    if (!guest.guest_token) return null;
+    cachedGuestToken = { value: guest.guest_token, expiresAt: Date.now() + GUEST_TOKEN_TTL_MS };
+    return guest.guest_token;
 }
 
 function bindingMap(card: Record<string, any>): Map<string, Record<string, any>> {
@@ -259,13 +276,8 @@ export async function fetchTwitterGraphQL(tweetId: string): Promise<TwitterTweet
         'x-twitter-client-language': 'en',
     };
     try {
-        const activation = await fetchWithTimeout(`${X_API_ROOT}/1.1/guest/activate.json`, {
-            method: 'POST',
-            headers: baseHeaders,
-        }, 4000);
-        if (!activation.ok) return null;
-        const guest = await activation.json() as { guest_token?: string };
-        if (!guest.guest_token) return null;
+        const guestToken = await getGuestToken(baseHeaders);
+        if (!guestToken) return null;
 
         const variables = { tweetId, withCommunity: false, includePromotedContent: false, withVoice: false };
         const fieldToggles = {
@@ -279,9 +291,12 @@ export async function fetchTwitterGraphQL(tweetId: string): Promise<TwitterTweet
         query.searchParams.set('features', JSON.stringify(GRAPHQL_FEATURES));
         query.searchParams.set('fieldToggles', JSON.stringify(fieldToggles));
         const response = await fetchWithTimeout(query.toString(), {
-            headers: { ...baseHeaders, 'x-guest-token': guest.guest_token },
+            headers: { ...baseHeaders, 'x-guest-token': guestToken },
         }, 5000);
-        if (!response.ok) return null;
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403 || response.status === 429) cachedGuestToken = null;
+            return null;
+        }
         const payload = await response.json() as Record<string, any>;
         return normalizeGraphQLTweet(payload.data?.tweetResult?.result);
     } catch (error) {

@@ -74,12 +74,12 @@ Keep optional features additive and preserve the original post when optional enr
 
 ## Implementation Tasks
 
-- [ ] Normalize quote, poll, note/article, Community Note, tombstone, and mixed-media payloads.
-- [ ] Extend the shared embed contract and metadata renderer for structured X enrichments.
-- [ ] Preserve and render gallery/mosaic modifiers.
-- [ ] Add fixtures and end-to-end metadata tests for each parity behavior.
-- [ ] Update public documentation and cache revision.
-- [ ] Complete quality, security, and parity review with a clean committed worktree.
+- [x] Normalize quote, poll, note/article, Community Note, tombstone, and mixed-media payloads.
+- [x] Extend the shared embed contract and metadata renderer for structured X enrichments.
+- [x] Preserve and render gallery/mosaic modifiers.
+- [x] Add fixtures and end-to-end metadata tests for each parity behavior.
+- [x] Update public documentation and cache revision.
+- [x] Complete quality, security, and parity review with a clean committed worktree.
 
 ## Open Questions
 

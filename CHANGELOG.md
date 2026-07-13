@@ -4,14 +4,19 @@
 - **`Richer First-Party X Embeds`**
   - Preserve every photo in X/Twitter carousel posts.
   - Support opt-in translated posts by appending a two-letter language code to the status URL.
+  - Render polls, quotes, Community Notes, long-form notes, X Articles, and website cards inline.
+  - Add gallery and native multi-image mosaic URL modifiers.
 
 #### **🔧 Backend Changes**
 - **`Workers AI Translation`**
   - Translate requested X posts with Cloudflare's M2M100 binding while retaining the original text.
   - Keep the original first-party embed when translation is unavailable instead of failing the post.
+- **`Direct X GraphQL Enrichment`**
+  - Use X's guest GraphQL response as the primary rich-data source, with public syndication and FxTwitter retained as successive fallbacks.
+  - Advertise all media through the existing first-party ActivityPub route for Discord multi-image support.
 
 #### **🧪 Testing**
-- Added regression coverage for multi-photo carousels and translated X post links.
+- Added regression coverage for multi-photo carousels, translations, polls, quotes, notes/articles, Community Notes, link cards, gallery mode, and native multi-image metadata.
 
 ## v1.4.8 (07/11/2026)
 

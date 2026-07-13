@@ -99,7 +99,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link, quality="high"),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&quality=high",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=150&quality=high",
         )
 
     def test_build_fixembed_url_preserves_twitter_translation_suffix(self):
@@ -107,7 +107,7 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(link),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&lang=es",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=150&lang=es",
         )
 
     def test_build_fixembed_url_preserves_gallery_and_mosaic_modifiers(self):
@@ -116,11 +116,11 @@ class SocialServiceTests(unittest.TestCase):
 
         self.assertEqual(
             build_fixembed_url(gallery),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=149&mode=gallery",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=150&mode=gallery",
         )
         self.assertEqual(
             build_fixembed_url(mosaic),
-            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=149&lang=es&mode=mosaic",
+            "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F456&v=150&lang=es&mode=mosaic",
         )
 
     def test_chunk_lines_preserves_every_line_within_discord_limits(self):

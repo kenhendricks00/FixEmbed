@@ -6,7 +6,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 
 | Platform | Emoji | Status | Method |
 |----------|-------|--------|--------|
-| Twitter/X | 𝕏 | ✅ | Syndication API |
+| Twitter/X | 𝕏 | ✅ | X guest GraphQL + Syndication fallback |
 | Instagram | 📷 | ✅ | VxInstagram + Snapsave |
 | Threads | 🧵 | ✅ | GraphQL API |
 | Bluesky | 🦋 | ✅ | AT Protocol |
@@ -22,6 +22,8 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 - **Video Playback**: Native video support for Twitter, Instagram Reels, Threads, Reddit, and Bilibili
 - **Carousel Images**: Multi-image posts display as grids (Twitter/X, Instagram, Threads)
 - **Opt-in X Translation**: Add `&lang=<two-letter-code>` to the embed endpoint to show original and translated post text using Workers AI
+- **Complete X Context**: Polls, quoted posts, long-form notes, X Articles, Community Notes, and website cards render inline
+- **X Layout Modes**: `mode=gallery` hides text/stats; `mode=mosaic` advertises every image as a native ActivityPub attachment
 - **Engagement Stats**: Metrics displayed via oEmbed (💬 comments, ❤️ likes, � reposts, 👁 views)
   - Zero values are automatically hidden for cleaner display
 - **Author Attribution**: Consistent `@handle` display across all social platforms
@@ -52,13 +54,16 @@ npm run deploy
 
 ### Embed Endpoint
 ```
-GET /embed?url=<social-media-url>[&lang=<two-letter-code>]
+GET /embed?url=<social-media-url>[&lang=<two-letter-code>][&mode=gallery|mosaic]
 ```
 Returns HTML with OG meta tags for Discord/Telegram bots.
 
 The optional `lang` parameter applies to Twitter/X posts. For example,
 `/embed?url=https%3A%2F%2Fx.com%2Fuser%2Fstatus%2F123&lang=es` keeps the
 original post text and appends a Spanish translation.
+
+The Discord bot also accepts FixupX-style path modifiers on X links:
+`/status/123/es`, `/status/123/gallery`, or `/status/123/es/mosaic`.
 
 ### JSON API
 ```

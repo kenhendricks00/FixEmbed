@@ -36,7 +36,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
-- **Richer X Posts**: First-party X embeds preserve complete photo carousels. Append a two-letter language code to a status URL (for example, `/es`) to show the original post with an on-demand translation.
+- **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 
 # 📋 Key Features
 1. **Multi-Platform Support**:
@@ -66,6 +66,9 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 
 8. **X Translation**:
     - Append `/en`, `/es`, or another two-letter language code to an X status URL to include both the original and translated post text.
+9. **X Layout Modifiers**:
+    - Append `/gallery` for media-and-author-only cards or `/mosaic` to force native multi-image attachments.
+    - Modifiers can be combined, such as `https://x.com/user/status/123/es/mosaic`.
 
 # 💎 Premium
 Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.
