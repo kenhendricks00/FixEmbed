@@ -1119,6 +1119,7 @@ const tests: TestCase[] = [
                     title: 'Bilibili Video',
                     desc: '',
                     pic: '//i.example.com/cover.jpg',
+                    owner: { name: 'fixembed' },
                 },
             }), { status: 200 });
 

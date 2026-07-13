@@ -130,6 +130,10 @@ function decodeActivityData(encodedData: string): ActivityEmbedData {
     }
 }
 
+function isFixEmbedPlaceholder(value?: string): boolean {
+    return /^@?fixembed(?:\s+service)?$/i.test(value?.trim() || '');
+}
+
 const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Twitter/X', sampleUrl: 'https://x.com/jack/status/20' },
     { platform: 'Instagram', sampleUrl: 'https://www.instagram.com/p/CuE2WN4oKyR/' },
@@ -457,6 +461,12 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             .join('\n\n');
         const description = [activityBodyText(source), sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
         const parsedTimestamp = source.timestamp ? new Date(source.timestamp) : null;
+        const creatorName = source.authorName && !isFixEmbedPlaceholder(source.authorName)
+            ? source.authorName
+            : source.siteName;
+        const creatorHandle = source.authorHandle && !isFixEmbedPlaceholder(source.authorHandle)
+            ? source.authorHandle
+            : source.platform;
         embedData = {
             d: description,
             i: source.image,
@@ -466,8 +476,8 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             vw: source.video?.width,
             vh: source.video?.height,
             p: source.platform,
-            a: source.authorName || source.siteName,
-            h: source.authorHandle || source.platform,
+            a: creatorName,
+            h: creatorHandle,
             ic: source.authorAvatar || FIXEMBED_LOGO,
             s: source.stats,
             u: source.url,
