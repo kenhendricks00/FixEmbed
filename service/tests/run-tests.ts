@@ -66,19 +66,26 @@ const tests: TestCase[] = [
         name: 'threadsHandler preserves full post text and creator identity metadata',
         run: async () => {
             const originalFetch = globalThis.fetch;
-            globalThis.fetch = async () => new Response(JSON.stringify({
-                data: { data: { edges: [{ node: { thread_items: [{ post: {
-                    code: 'ABC123',
-                    user: {
-                        username: 'creator',
-                        profile_pic_url: 'https://cdn.example/avatar.jpg',
-                    },
-                    caption: { text: 'A full Threads post that should remain intact.' },
-                    like_count: 1200,
-                    text_post_app_info: { direct_reply_count: 34 },
-                    image_versions2: { candidates: [{ url: 'https://cdn.example/post.jpg' }] },
-                } }] } }] } },
-            }), { status: 200 });
+            globalThis.fetch = async (input) => {
+                if (String(input) === 'https://www.threads.net/@creator') {
+                    return new Response(`
+                        <meta property="og:image" content="https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s640x640_tt6&amp;s=signed">
+                    `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                }
+                return new Response(JSON.stringify({
+                    data: { data: { edges: [{ node: { thread_items: [{ post: {
+                        code: 'ABC123',
+                        user: {
+                            username: 'creator',
+                            profile_pic_url: 'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s150x150_tt6&amp;s=signed',
+                        },
+                        caption: { text: 'A full Threads post that should remain intact.' },
+                        like_count: 1200,
+                        text_post_app_info: { direct_reply_count: 34 },
+                        image_versions2: { candidates: [{ url: 'https://cdn.example/post.jpg' }] },
+                    } }] } }] } },
+                }), { status: 200 });
+            };
 
             try {
                 const response = await threadsHandler.handle(
@@ -89,7 +96,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.caption, 'A full Threads post that should remain intact.');
                 assert.equal(response.data?.authorName, 'creator');
                 assert.equal(response.data?.authorHandle, '@creator');
-                assert.equal(response.data?.authorAvatar, 'https://cdn.example/avatar.jpg');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s640x640_tt6&s=signed',
+                );
             } finally {
                 globalThis.fetch = originalFetch;
             }

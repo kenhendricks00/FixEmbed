@@ -9,6 +9,50 @@ import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 
+function decodeThreadsHtml(value: string): string {
+    return value
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .trim();
+}
+
+function isThreadsAvatarUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && (
+            url.hostname.endsWith('.cdninstagram.com')
+            || url.hostname.endsWith('.fbcdn.net')
+        );
+    } catch {
+        return false;
+    }
+}
+
+async function fetchThreadsProfilePic(username: string, fallback = ''): Promise<string | undefined> {
+    const fallbackPic = decodeThreadsHtml(fallback) || undefined;
+    try {
+        const profileUrl = `https://www.threads.net/@${encodeURIComponent(username)}`;
+        const response = await fetch(profileUrl, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        });
+        if (!response.ok) return fallbackPic;
+        const html = await response.text();
+        const match = html.match(
+            /<meta\b[^>]*\bproperty=["']og:image["'][^>]*\bcontent=["']([^"']+)["'][^>]*>/i,
+        ) || html.match(
+            /<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*\bproperty=["']og:image["'][^>]*>/i,
+        );
+        const candidate = decodeThreadsHtml(match?.[1] || '');
+        return isThreadsAvatarUrl(candidate) ? candidate : fallbackPic;
+    } catch {
+        return fallbackPic;
+    }
+}
+
 // Convert Threads short code to numeric post ID
 function decodeThreadsPostId(shortcode: string): string {
     // Clean up the shortcode
@@ -233,6 +277,10 @@ export const threadsHandler: PlatformHandler = {
             if (graphqlResult.success) {
                 const displayUsername = graphqlResult.username || username;
                 const description = graphqlResult.caption || '';
+                const authorAvatar = await fetchThreadsProfilePic(
+                    displayUsername,
+                    graphqlResult.profilePic,
+                );
 
                 // Build stats for oEmbed row
                 const statsStr = formatStats({
@@ -252,7 +300,7 @@ export const threadsHandler: PlatformHandler = {
                         authorName: displayUsername,
                         authorHandle: `@${displayUsername}`,
                         authorUrl: `https://threads.net/@${displayUsername}`,
-                        authorAvatar: graphqlResult.profilePic,
+                        authorAvatar,
                         color: platformColors.threads,
                         platform: 'threads',
                         stats: statsStr, // Stats shown via oEmbed author_name
@@ -298,6 +346,8 @@ export const threadsHandler: PlatformHandler = {
                         title?: string;
                         thumbnail_url?: string;
                     };
+                    const displayUsername = data.author_name || username;
+                    const authorAvatar = await fetchThreadsProfilePic(displayUsername);
 
                     return {
                         success: true,
@@ -307,8 +357,9 @@ export const threadsHandler: PlatformHandler = {
                             description: data.title ? truncateText(data.title, 280) : '',
                             url: normalizedUrl,
                             siteName: getBrandedSiteName('threads'),
-                            authorName: `@${data.author_name || username}`,
-                            authorUrl: `https://threads.net/@${username}`,
+                            authorName: `@${displayUsername}`,
+                            authorUrl: `https://threads.net/@${displayUsername}`,
+                            authorAvatar,
                             image: data.thumbnail_url,
                             color: platformColors.threads,
                             platform: 'threads',
@@ -320,6 +371,7 @@ export const threadsHandler: PlatformHandler = {
             }
 
             // Final fallback: return basic info
+            const authorAvatar = await fetchThreadsProfilePic(username);
             return {
                 success: true,
                 source: 'first-party',
@@ -330,6 +382,7 @@ export const threadsHandler: PlatformHandler = {
                     siteName: getBrandedSiteName('threads'),
                     authorName: `@${username}`,
                     authorUrl: `https://threads.net/@${username}`,
+                    authorAvatar,
                     color: platformColors.threads,
                     platform: 'threads',
                 },
