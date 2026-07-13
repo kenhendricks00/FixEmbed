@@ -13,7 +13,7 @@ class BilibiliEmbedTests(unittest.TestCase):
             "authorUrl": "https://space.bilibili.com/42",
             "authorAvatar": "https://i0.hdslb.com/avatar.jpg",
             "image": "https://i0.hdslb.com/video.jpg",
-            "stats": "💬 321 ❤️ 5K 👁️ 98.8K 🔖 1K 🔁 42",
+            "stats": "💬 321 ❤️ 5K 👁️ 98.8K 🪙 456 🔖 1K 🔁 42",
             "timestamp": "2026-07-14T00:00:00.000Z",
         }
         converted_url = "https://fixembed.app/embed?url=bilibili-video"
@@ -34,6 +34,7 @@ class BilibiliEmbedTests(unittest.TestCase):
         self.assertIn("<:comment:1526254715250282506> 321", stats["content"])
         self.assertIn("<:like:1526255244483362866> 5K", stats["content"])
         self.assertIn("<:views:1526255708683636896> 98.8K", stats["content"])
+        self.assertIn("<:coins:1526369937013342350> 456", stats["content"])
         self.assertIn("<:bookmark:1526255813268733962> 1K", stats["content"])
         self.assertIn("<:repost:1526255036072591450> 42", stats["content"])
         self.assertIn("<:bilibili:1526271150739423304> Bilibili", footer["content"])

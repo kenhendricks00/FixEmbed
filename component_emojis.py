@@ -9,6 +9,7 @@ APPLICATION_EMOJI_IDS: Final[dict[str, int]] = {
     "quote": 1526256046786609164,
     "upvote": 1526256000641007616,
     "downvote": 1526255999210487859,
+    "coins": 1526369937013342350,
     "bookmark": 1526255813268733962,
     "views": 1526255708683636896,
     "like": 1526255244483362866,
@@ -32,6 +33,7 @@ def format_component_stats(stats: str, platform: Optional[str] = None) -> str:
         ("\u2764", "like"),
         ("\U0001f441\ufe0f", "views"),
         ("\U0001f441", "views"),
+        ("\U0001fa99", "coins"),
         ("\U0001f516", "bookmark"),
     )
     rendered = stats

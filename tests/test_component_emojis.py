@@ -11,6 +11,7 @@ class ComponentEmojiTests(unittest.TestCase):
                 "quote": 1526256046786609164,
                 "upvote": 1526256000641007616,
                 "downvote": 1526255999210487859,
+                "coins": 1526369937013342350,
                 "bookmark": 1526255813268733962,
                 "views": 1526255708683636896,
                 "like": 1526255244483362866,
@@ -43,6 +44,11 @@ class ComponentEmojiTests(unittest.TestCase):
             rendered,
             f"{application_emoji('upvote')} 2.5K  {application_emoji('comment')} 287",
         )
+
+    def test_bilibili_coin_stats_use_the_uploaded_coins_emoji(self):
+        rendered = format_component_stats("\U0001fa99 456", platform="bilibili")
+
+        self.assertEqual(rendered, f"{application_emoji('coins')} 456")
 
 
 if __name__ == "__main__":

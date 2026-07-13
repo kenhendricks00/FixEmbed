@@ -27,6 +27,7 @@ interface BilibiliVideoResponse {
             favorite?: number;
             share?: number;
             like?: number;
+            coin?: number;
         };
         pubdate?: number;
     };
@@ -91,6 +92,7 @@ async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null>
             video.stat?.reply !== undefined ? `💬 ${formatNumber(video.stat.reply)}` : '',
             video.stat?.like !== undefined ? `❤️ ${formatNumber(video.stat.like)}` : '',
             video.stat?.view !== undefined ? `👁️ ${formatNumber(video.stat.view)}` : '',
+            video.stat?.coin !== undefined ? `🪙 ${formatNumber(video.stat.coin)}` : '',
             video.stat?.favorite !== undefined ? `🔖 ${formatNumber(video.stat.favorite)}` : '',
             video.stat?.share !== undefined ? `🔁 ${formatNumber(video.stat.share)}` : '',
         ].filter(Boolean).join(' ');

@@ -345,7 +345,7 @@ const tests: TestCase[] = [
                 return new Response(JSON.stringify({ code: 0, data: {
                     title: 'Video', desc: 'Description', pic: '//i0.hdslb.com/video.jpg',
                     owner: { name: 'Creator', mid: 42, face: 'https://i0.hdslb.com/avatar.jpg' },
-                    stat: { view: 98765, reply: 321, favorite: 1000, share: 42, like: 5000 },
+                    stat: { view: 98765, reply: 321, coin: 456, favorite: 1000, share: 42, like: 5000 },
                     pubdate: 1783987200,
                 } }), { status: 200 });
             };
@@ -356,7 +356,7 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Video');
                 assert.equal(response.data?.authorAvatar, 'https://i0.hdslb.com/avatar.jpg');
-                assert.equal(response.data?.stats, '💬 321 ❤️ 5K 👁️ 98.8K 🔖 1K 🔁 42');
+                assert.equal(response.data?.stats, '💬 321 ❤️ 5K 👁️ 98.8K 🪙 456 🔖 1K 🔁 42');
                 assert.equal(response.data?.timestamp, new Date(1783987200 * 1000).toISOString());
             } finally { globalThis.fetch = originalFetch; }
         },
