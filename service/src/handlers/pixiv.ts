@@ -39,6 +39,14 @@ interface PixivArtworkPagesResponse {
     }>;
 }
 
+interface PixivUserResponse {
+    error?: boolean;
+    body?: {
+        image?: string;
+        imageBig?: string;
+    };
+}
+
 function proxyPixivImage(sourceUrl: string, env: Env): string {
     const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
     return `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceUrl)}`;
@@ -88,7 +96,7 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
         const artwork = payload?.body;
         if (payload?.error || !artwork?.title) return null;
         const sourceImage = artwork.urls?.regular || artwork.urls?.original;
-        const profileImage = findPixivProfileImage(artwork, illustId);
+        let profileImage = findPixivProfileImage(artwork, illustId);
         let image = sourceImage ? proxyPixivImage(sourceImage, env) : undefined;
         let images: string[] | undefined;
         try {
@@ -114,6 +122,31 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
             }
         } catch (error) {
             console.warn('Pixiv pages request failed:', error);
+        }
+
+        if (artwork.userId && /^\d+$/.test(artwork.userId)) {
+            try {
+                const profileResponse = await fetch(
+                    `https://www.pixiv.net/ajax/user/${artwork.userId}?full=1&lang=en`,
+                    {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Referer': `https://www.pixiv.net/en/users/${artwork.userId}`,
+                            'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                        },
+                    },
+                );
+                if (profileResponse.ok) {
+                    const profilePayload = await profileResponse.json() as PixivUserResponse;
+                    if (!profilePayload.error) {
+                        profileImage = profilePayload.body?.imageBig
+                            || profilePayload.body?.image
+                            || profileImage;
+                    }
+                }
+            } catch (error) {
+                console.warn('Pixiv profile request failed:', error);
+            }
         }
 
         const stats = [

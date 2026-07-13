@@ -16,6 +16,7 @@ from component_emojis import format_component_stats
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 PIXIV_ARTWORK_API = "https://www.pixiv.net/ajax/illust"
+PIXIV_USER_API = "https://www.pixiv.net/ajax/user"
 PIXIV_COLOR = 0x0096FA
 FIXEMBED_EMOJI_ID = 1525580543503106148
 PIXIV_EMOJI_ID = 1526268469920792577
@@ -70,6 +71,17 @@ def _profile_image(payload: Mapping[str, Any], artwork_id: str) -> str:
             if profile_image:
                 return profile_image
     return ""
+
+
+def _profile_avatar(payload: Mapping[str, Any]) -> str:
+    profile = payload.get("body") if isinstance(payload.get("body"), Mapping) else {}
+    return str(profile.get("imageBig") or profile.get("image") or "").strip()
+
+
+def _creator_user_id(payload: Mapping[str, Any]) -> str:
+    artwork = payload.get("body") if isinstance(payload.get("body"), Mapping) else {}
+    user_id = str(artwork.get("userId") or "").strip()
+    return user_id if user_id.isdigit() else ""
 
 
 def _merge_creator_identity(
@@ -187,7 +199,7 @@ async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
 
         data = dict(body.get("data") or {})
         artwork_id = _artwork_id(source_url)
-        if artwork_id and not data.get("authorAvatar"):
+        if artwork_id:
             headers = {
                 "Accept": "application/json",
                 "Referer": f"https://www.pixiv.net/artworks/{artwork_id}",
@@ -201,6 +213,18 @@ async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
                         pixiv_payload = await response.json()
                         data = _merge_creator_identity(data, pixiv_payload)
                         avatar = _profile_image(pixiv_payload, artwork_id)
+                        user_id = _creator_user_id(pixiv_payload)
+                        if user_id:
+                            try:
+                                async with session.get(
+                                    f"{PIXIV_USER_API}/{user_id}?full=1&lang=en",
+                                    headers=headers,
+                                ) as profile_response:
+                                    if profile_response.ok:
+                                        profile_payload = await profile_response.json()
+                                        avatar = _profile_avatar(profile_payload) or avatar
+                            except (aiohttp.ClientError, TimeoutError, ValueError):
+                                pass
                         if avatar:
                             data["authorAvatar"] = _proxy_pixiv_image(avatar)
             except (aiohttp.ClientError, TimeoutError, ValueError):

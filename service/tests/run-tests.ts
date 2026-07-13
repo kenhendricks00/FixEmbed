@@ -271,6 +271,12 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
+                if (String(input).includes('/ajax/user/42')) {
+                    return new Response(JSON.stringify({ error: false, body: {
+                        image: 'https://i.pximg.net/user-profile/avatar_50.jpg',
+                        imageBig: 'https://i.pximg.net/user-profile/avatar_170.jpg',
+                    } }), { status: 200 });
+                }
                 if (String(input).endsWith('/pages')) {
                     return new Response(JSON.stringify({ error: false, body: [
                         { urls: { regular: 'https://i.pximg.net/page-1.jpg' } },
@@ -290,9 +296,10 @@ const tests: TestCase[] = [
             };
             try {
                 const response = await pixivHandler.handle('https://www.pixiv.net/artworks/123', env);
-                assert.equal(requested.length, 2);
+                assert.equal(requested.length, 3);
                 assert.match(requested[0], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123/);
                 assert.match(requested[1], /^https:\/\/www\.pixiv\.net\/ajax\/illust\/123\/pages/);
+                assert.match(requested[2], /^https:\/\/www\.pixiv\.net\/ajax\/user\/42\?full=1/);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Artwork');
                 assert.equal(response.data?.description, 'Uses , commas');
@@ -300,7 +307,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
                 assert.equal(
                     response.data?.authorAvatar,
-                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fuser-profile%2Favatar.jpg',
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fuser-profile%2Favatar_170.jpg',
                 );
                 assert.deepEqual(response.data?.images, [
                     'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-1.jpg',

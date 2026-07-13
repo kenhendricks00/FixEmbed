@@ -5,6 +5,19 @@ from pixiv_embed import _profile_image, build_pixiv_layout
 
 
 class PixivEmbedTests(unittest.TestCase):
+    def test_profile_avatar_prefers_the_larger_pixiv_user_image(self):
+        payload = {
+            "body": {
+                "image": "https://i.pximg.net/user-profile/avatar_50.png",
+                "imageBig": "https://i.pximg.net/user-profile/avatar_170.png",
+            }
+        }
+
+        self.assertEqual(
+            pixiv_embed._profile_avatar(payload),
+            "https://i.pximg.net/user-profile/avatar_170.png",
+        )
+
     def test_creator_identity_uses_numeric_pixiv_user_id_for_profile_url(self):
         fallback_data = {
             "authorName": "aion21",
