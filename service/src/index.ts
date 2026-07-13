@@ -34,6 +34,57 @@ interface StatusProbe {
     sampleUrl: string;
 }
 
+interface ActivityEmbedData {
+    t?: string;
+    d?: string;
+    i?: string;
+    is?: string[];
+    v?: string;
+    vt?: string;
+    vw?: number;
+    vh?: number;
+    p?: string;
+    a?: string;
+    h?: string;
+    ic?: string;
+    s?: string;
+    u?: string;
+    m?: string;
+    ts?: string;
+    au?: string;
+    sn?: string;
+}
+
+interface MastodonMediaAttachment {
+    id: string;
+    type: 'video' | 'image';
+    url: string;
+    preview_url: string | null;
+    remote_url: null;
+    preview_remote_url: null;
+    text_url: null;
+    description: null;
+    meta: {
+        original: {
+            width: number;
+            height: number;
+            size?: string;
+            aspect?: number;
+        };
+    };
+}
+
+function decodeActivityData(encodedData: string): ActivityEmbedData {
+    try {
+        let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        return JSON.parse(decodeURIComponent(atob(base64))) as ActivityEmbedData;
+    } catch (error) {
+        console.error('Failed to decode activity data:', error);
+        return {};
+    }
+}
+
 const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Twitter/X', sampleUrl: 'https://x.com/jack/status/20' },
     { platform: 'Instagram', sampleUrl: 'https://www.instagram.com/p/CuE2WN4oKyR/' },
@@ -236,18 +287,7 @@ app.get('/activity/:encodedData', (c) => {
     const accept = c.req.header('Accept') || '';
 
     // Decode the embed data from URL-safe base64
-    let embedData: { t?: string; d?: string; i?: string; is?: string[]; v?: string; p?: string; a?: string; h?: string; ic?: string; s?: string; u?: string; m?: string; ts?: string; au?: string } = {};
-    try {
-        // Restore base64 padding and special chars
-        let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
-        while (base64.length % 4) base64 += '=';
-        // Decode base64, then decodeURIComponent for UTF-8 support
-        const decoded = atob(base64);
-        const jsonStr = decodeURIComponent(decoded);
-        embedData = JSON.parse(jsonStr);
-    } catch (e) {
-        console.error('Failed to decode activity data:', e);
-    }
+    const embedData = decodeActivityData(encodedData);
 
     // Only respond with ActivityPub JSON if client requests it
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
@@ -311,14 +351,7 @@ app.get('/activity/:encodedData/actor', (c) => {
     const encodedData = c.req.param('encodedData');
 
     // Decode data
-    let embedData: { a?: string; h?: string; ic?: string; au?: string } = {};
-    try {
-        let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
-        while (base64.length % 4) base64 += '=';
-        const decoded = atob(base64);
-        const jsonStr = decodeURIComponent(decoded);
-        embedData = JSON.parse(jsonStr);
-    } catch (e) { }
+    const embedData = decodeActivityData(encodedData);
 
     const authorName = embedData.a || 'FixEmbed';
     const authorHandle = embedData.h || 'fixembed';
@@ -354,24 +387,111 @@ app.get('/activity/:encodedData/actor', (c) => {
     });
 });
 
-// Legacy ActivityPub endpoint (keep for backwards compatibility)
+// Mastodon-compatible status endpoint. Discord recognizes this shape and uses
+// it for the author-first card, engagement, media, and source/timestamp footer.
 app.get('/users/:author/statuses/:status', (c) => {
     const author = c.req.param('author');
     const status = c.req.param('status');
     const accept = c.req.header('Accept') || '';
 
     if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
-        const activityPubResponse = {
-            '@context': ['https://www.w3.org/ns/activitystreams'],
-            'id': `https://fixembed.app/users/${author}/statuses/${status}`,
-            'type': 'Note',
-            'content': '',
-            'attributedTo': `https://fixembed.app/users/${author}`,
-            'published': new Date().toISOString(),
-            'url': `https://fixembed.app/users/${author}/statuses/${status}`,
+        const embedData = decodeActivityData(status);
+        const handle = (embedData.h || `@${author}`).replace(/^@/, '');
+        const createdAt = embedData.ts || new Date().toISOString();
+        const mediaAttachments: MastodonMediaAttachment[] = [];
+
+        if (embedData.v) {
+            const width = embedData.vw || 0;
+            const height = embedData.vh || 0;
+            mediaAttachments.push({
+                id: '1',
+                type: 'video',
+                url: embedData.v,
+                preview_url: embedData.vt || embedData.i || null,
+                remote_url: null,
+                preview_remote_url: null,
+                text_url: null,
+                description: null,
+                meta: {
+                    original: {
+                        width,
+                        height,
+                        size: `${width}x${height}`,
+                        aspect: height ? width / height : 0,
+                    },
+                },
+            });
+        }
+
+        const imageUrls = embedData.is?.length ? embedData.is : embedData.i ? [embedData.i] : [];
+        if (!embedData.v) {
+            imageUrls.forEach((url, index) => {
+                mediaAttachments.push({
+                    id: String(index + 1),
+                    type: 'image',
+                    url,
+                    preview_url: null,
+                    remote_url: null,
+                    preview_remote_url: null,
+                    text_url: null,
+                    description: null,
+                    meta: { original: { width: 0, height: 0 } },
+                });
+            });
+        }
+
+        const activityStatus = {
+            id: status,
+            url: embedData.u || `https://x.com/${handle}`,
+            uri: embedData.u || `https://x.com/${handle}`,
+            created_at: createdAt,
+            edited_at: null,
+            reblog: null,
+            in_reply_to_id: null,
+            in_reply_to_account_id: null,
+            language: null,
+            content: formatActivityContent(embedData.d || '', embedData.s),
+            spoiler_text: '',
+            visibility: 'public',
+            application: {
+                name: embedData.sn || 'FixEmbed',
+                website: 'https://fixembed.app',
+            },
+            media_attachments: mediaAttachments,
+            account: {
+                id: handle,
+                display_name: embedData.a || handle,
+                username: handle,
+                acct: handle,
+                url: embedData.au || embedData.u || `https://x.com/${handle}`,
+                uri: embedData.au || embedData.u || `https://x.com/${handle}`,
+                created_at: createdAt,
+                locked: false,
+                bot: false,
+                discoverable: true,
+                indexable: false,
+                group: false,
+                avatar: embedData.ic || FIXEMBED_LOGO,
+                avatar_static: embedData.ic || FIXEMBED_LOGO,
+                header: '',
+                header_static: '',
+                followers_count: 0,
+                following_count: 0,
+                statuses_count: 0,
+                hide_collections: false,
+                noindex: false,
+                emojis: [],
+                roles: [],
+                fields: [],
+            },
+            mentions: [],
+            tags: [],
+            emojis: [],
+            card: null,
+            poll: null,
         };
 
-        return c.json(activityPubResponse, 200, {
+        return c.json(activityStatus, 200, {
             'Content-Type': 'application/activity+json; charset=utf-8',
         });
     }

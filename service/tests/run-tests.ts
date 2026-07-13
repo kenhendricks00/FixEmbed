@@ -846,7 +846,7 @@ const tests: TestCase[] = [
             }, 'Discordbot/2.0');
 
             assert.match(html, /rel="alternate" type="application\/activity\+json"/);
-            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            const encoded = html.match(/\/users\/gallery\/statuses\/([^"?]+)/)?.[1];
             assert.ok(encoded);
             let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
             while (base64.length % 4) base64 += '=';
@@ -899,7 +899,7 @@ const tests: TestCase[] = [
             assert.match(html, /<meta property="og:title" content="Author Name \(@author\)">/);
             assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/pbs\.twimg\.com\/profile_images\/author\.jpg">/);
 
-            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            const encoded = html.match(/\/users\/author\/statuses\/([^"?]+)/)?.[1];
             assert.ok(encoded);
             let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
             while (base64.length % 4) base64 += '=';
@@ -909,25 +909,27 @@ const tests: TestCase[] = [
             assert.equal(activityData.ts, '2026-07-09T16:20:00.000Z');
             assert.equal(activityData.au, 'https://x.com/author');
 
-            const activityResponse = await app.request(`/activity/${encoded}`, {
+            const activityResponse = await app.request(`/users/author/statuses/${encoded}`, {
                 headers: { Accept: 'application/activity+json' },
             });
             assert.equal(activityResponse.status, 200);
             const activity = await activityResponse.json() as any;
-            assert.equal(activity.summary, null);
+            assert.equal(activity.summary, undefined);
             assert.equal(
                 activity.content,
                 '<p>Opening paragraph<br><br>Closing paragraph<br><br><strong>💬 12 🔁 34 ❤️ 56 👁 789</strong></p>',
             );
-            assert.equal(activity.published, '2026-07-09T16:20:00.000Z');
-
-            const actorResponse = await app.request(`/activity/${encoded}/actor`, {
-                headers: { Accept: 'application/activity+json' },
-            });
-            const actor = await actorResponse.json() as any;
-            assert.equal(actor.name, 'Author Name');
-            assert.equal(actor.url, 'https://x.com/author');
-            assert.equal(actor.icon.url, 'https://pbs.twimg.com/profile_images/author.jpg');
+            assert.equal(activity.created_at, '2026-07-09T16:20:00.000Z');
+            assert.equal(activity.application.name, 'FixEmbed • 𝕏 Twitter');
+            assert.equal(activity.account.display_name, 'Author Name');
+            assert.equal(activity.account.username, 'author');
+            assert.equal(activity.account.url, 'https://x.com/author');
+            assert.equal(activity.account.avatar, 'https://pbs.twimg.com/profile_images/author.jpg');
+            assert.equal(activity.media_attachments[0].type, 'video');
+            assert.equal(activity.media_attachments[0].url, 'https://video.twimg.com/post.mp4');
+            assert.equal(activity.media_attachments[0].preview_url, 'https://pbs.twimg.com/post.jpg');
+            assert.equal(activity.media_attachments[0].meta.original.width, 1280);
+            assert.equal(activity.media_attachments[0].meta.original.height, 720);
         },
     },
     {
@@ -943,7 +945,7 @@ const tests: TestCase[] = [
                 siteName: 'FixEmbed • X',
                 platform: 'twitter',
             }, 'Discordbot/2.0');
-            const encoded = html.match(/\/activity\/([^"?]+)/)?.[1];
+            const encoded = html.match(/\/users\/fixembed\/statuses\/([^"?]+)/)?.[1];
             assert.ok(encoded);
             let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
             while (base64.length % 4) base64 += '=';

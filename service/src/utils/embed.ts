@@ -194,6 +194,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         i: embed.image,
         is: embed.images,
         v: embed.video?.url,
+        vt: embed.video?.thumbnail,
+        vw: embed.video?.width,
+        vh: embed.video?.height,
         a: embed.authorName,
         h: embed.authorHandle,
         ic: embed.authorAvatar,
@@ -203,12 +206,16 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         p: embed.platform,
         ts: normalizeTimestamp(embed.timestamp),
         au: embed.authorUrl,
+        sn: embed.siteName,
     };
     const encodedActivity = btoa(encodeURIComponent(JSON.stringify(activityData)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-    html += `  <link rel="alternate" type="application/activity+json" href="https://fixembed.app/activity/${encodedActivity}">\n`;
+    const activityUrl = embed.platform === 'twitter'
+        ? `https://fixembed.app/users/${encodeURIComponent((embed.authorHandle || 'fixembed').replace(/^@/, ''))}/statuses/${encodedActivity}`
+        : `https://fixembed.app/activity/${encodedActivity}`;
+    html += `  <link rel="alternate" type="application/activity+json" href="${activityUrl}">\n`;
 
 
     // Close head and add redirect body
