@@ -1433,6 +1433,70 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler builds a FixEmbed payload from FxTwitter when first-party sources fail',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    return Response.json({
+                        code: 200,
+                        message: 'OK',
+                        tweet: {
+                            url: 'https://x.com/kuriimu0203/status/2022261416439525543',
+                            id: '2022261416439525543',
+                            text: 'Fallback post text',
+                            author: {
+                                name: 'Kuriimu',
+                                screen_name: 'kuriimu0203',
+                                avatar_url: 'https://pbs.twimg.com/profile_images/avatar.jpg',
+                            },
+                            replies: 12,
+                            retweets: 34,
+                            likes: 56,
+                            views: 789,
+                            created_at: 'Fri Feb 13 10:47:48 +0000 2026',
+                            media: {
+                                photos: [{
+                                    type: 'photo',
+                                    url: 'https://pbs.twimg.com/media/photo.jpg?name=orig',
+                                    width: 1511,
+                                    height: 2048,
+                                }],
+                                videos: [{
+                                    type: 'video',
+                                    url: 'https://video.twimg.com/video.mp4',
+                                    thumbnail_url: 'https://pbs.twimg.com/media/video.jpg',
+                                    width: 1280,
+                                    height: 720,
+                                }],
+                            },
+                        },
+                    });
+                }
+                return new Response('upstream unavailable', { status: 503 });
+            };
+
+            try {
+                const source = encodeURIComponent(
+                    'https://x.com/kuriimu0203/status/2022261416439525543',
+                );
+                const response = await app.request(`/api/embed?url=${source}`, {}, env);
+                const body = await response.json() as any;
+
+                assert.equal(response.status, 200);
+                assert.equal(body.success, true);
+                assert.equal(body.data.authorHandle, '@kuriimu0203');
+                assert.equal(body.data.description, 'Fallback post text');
+                assert.equal(body.data.image, 'https://pbs.twimg.com/media/photo.jpg?name=orig');
+                assert.equal(body.data.video.url, 'https://video.twimg.com/video.mp4');
+                assert.match(body.data.stats, /56/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;

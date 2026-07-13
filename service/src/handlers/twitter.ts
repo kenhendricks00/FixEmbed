@@ -22,6 +22,106 @@ function fallbackResponse(username: string, tweetId: string, error: string): Han
     };
 }
 
+interface FxTwitterMedia {
+    type?: string;
+    url?: string;
+    thumbnail_url?: string;
+    width?: number;
+    height?: number;
+}
+
+interface FxTwitterTweet {
+    text?: string;
+    author?: {
+        name?: string;
+        screen_name?: string;
+        avatar_url?: string;
+    };
+    replies?: number;
+    retweets?: number;
+    likes?: number;
+    views?: number;
+    created_at?: string;
+    media?: {
+        all?: FxTwitterMedia[];
+        photos?: FxTwitterMedia[];
+        videos?: FxTwitterMedia[];
+    };
+}
+
+async function fetchFxTwitterFallback(
+    username: string,
+    tweetId: string,
+    options: HandlerOptions,
+    firstPartyError: string,
+): Promise<HandlerResponse> {
+    try {
+        const response = await fetchWithTimeout(
+            `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}`,
+            { headers: { 'Accept': 'application/json', 'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)' } },
+            5000,
+        );
+        if (!response.ok) return fallbackResponse(username, tweetId, firstPartyError);
+
+        const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
+        const tweet = body.tweet;
+        const author = tweet?.author;
+        if (body.code !== 200 || !tweet || !author?.screen_name || !author.name || !author.avatar_url) {
+            return fallbackResponse(username, tweetId, firstPartyError);
+        }
+
+        const allMedia = tweet.media?.all || [];
+        const photos = (tweet.media?.photos || allMedia.filter((item) => item.type === 'photo'))
+            .map((item) => item.url)
+            .filter((url): url is string => typeof url === 'string');
+        const firstVideo = (tweet.media?.videos || allMedia.filter((item) => item.type === 'video'))[0];
+        const canonicalUrl = `https://x.com/${author.screen_name}/status/${tweetId}`;
+        const galleryMode = options.mode === 'gallery';
+        let image: string | undefined;
+        let images: string[] | undefined;
+        if (photos.length === 1) [image] = photos;
+        if (photos.length > 1) images = photos.slice(0, 4);
+
+        return {
+            success: true,
+            source: 'fallback',
+            data: {
+                title: `@${author.screen_name}`,
+                description: galleryMode ? '' : truncateText(tweet.text?.trim() || '', 3000),
+                url: canonicalUrl,
+                siteName: getBrandedSiteName('twitter'),
+                authorName: author.name,
+                authorHandle: `@${author.screen_name}`,
+                authorUrl: `https://x.com/${author.screen_name}`,
+                authorAvatar: author.avatar_url,
+                image: image || firstVideo?.thumbnail_url,
+                images,
+                video: firstVideo?.url
+                    ? {
+                        url: firstVideo.url,
+                        width: firstVideo.width || 1280,
+                        height: firstVideo.height || 720,
+                        thumbnail: firstVideo.thumbnail_url,
+                    }
+                    : undefined,
+                color: platformColors.twitter,
+                platform: 'twitter',
+                timestamp: tweet.created_at,
+                stats: galleryMode ? undefined : formatStats({
+                    comments: Number(tweet.replies) || undefined,
+                    retweets: Number(tweet.retweets) || undefined,
+                    likes: Number(tweet.likes) || undefined,
+                    views: Number(tweet.views) || undefined,
+                }),
+                sections: [],
+                mode: options.mode,
+            },
+        };
+    } catch {
+        return fallbackResponse(username, tweetId, firstPartyError);
+    }
+}
+
 function bestVideoUrl(media: SyndicationMedia): string | null {
     const variants = (media.video_info?.variants || [])
         .filter((variant) => variant.content_type === 'video/mp4')
@@ -52,13 +152,23 @@ export const twitterHandler: PlatformHandler = {
                     },
                 }, 5000);
                 if (!response.ok) {
-                    return fallbackResponse(parsed.username, parsed.tweetId, `Twitter API error: ${response.status}`);
+                    return fetchFxTwitterFallback(
+                        parsed.username,
+                        parsed.tweetId,
+                        options,
+                        `Twitter API error: ${response.status}`,
+                    );
                 }
                 tweet = await response.json() as SyndicationTweet;
                 tweet.poll ||= normalizeTwitterPoll((tweet as unknown as { card?: unknown }).card);
             }
             if (!tweet?.user || tweet.__typename === 'TweetTombstone') {
-                return fallbackResponse(parsed.username, parsed.tweetId, 'Tweet not found, private, or deleted');
+                return fetchFxTwitterFallback(
+                    parsed.username,
+                    parsed.tweetId,
+                    options,
+                    'Tweet not found, private, or deleted',
+                );
             }
 
             const handle = tweet.user.screen_name;
@@ -212,7 +322,7 @@ export const twitterHandler: PlatformHandler = {
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to fetch tweet';
-            return fallbackResponse(parsed.username, parsed.tweetId, message);
+            return fetchFxTwitterFallback(parsed.username, parsed.tweetId, options, message);
         }
     },
 };
