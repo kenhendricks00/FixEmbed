@@ -552,12 +552,10 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         media_attachments: mediaAttachments,
         account: {
             id: handle,
-            display_name: isInstagram ? `@${handle}` : (embedData.a || handle),
+            display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
                 username: handle,
                 acct: handle,
-                url: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
-                uri: `https://fixembed.app/users/${encodeURIComponent(handle)}`,
             } : {
                 username: handle,
                 acct: handle,

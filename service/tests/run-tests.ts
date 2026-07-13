@@ -1140,10 +1140,10 @@ const tests: TestCase[] = [
                 const response = await app.request('/api/v1/statuses/' + statusToken, {}, env);
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
-                assert.equal(activity.account.display_name, '@creator');
+                assert.equal(activity.account.display_name, 'creator');
                 assert.equal(activity.account.username, 'creator');
                 assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, 'https://fixembed.app/users/creator');
+                assert.equal(activity.account.url, undefined);
                 assert.equal(activity.account.avatar, 'https://scontent.example/avatar.jpg');
             } finally {
                 globalThis.fetch = originalFetch;
