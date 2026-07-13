@@ -26,6 +26,7 @@ def format_component_stats(stats: str, platform: Optional[str] = None) -> str:
     """Replace portable Unicode activity icons with FixEmbed application emojis."""
     replacements = (
         ("\U0001f4ac", "comment"),
+        ("\U0001f44d", "like"),
         ("\U0001f501", "repost"),
         ("\u2764\ufe0f", "like"),
         ("\u2764", "like"),

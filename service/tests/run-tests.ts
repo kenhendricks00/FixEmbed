@@ -722,6 +722,27 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'YouTube community posts preserve long text for Components V2',
+        run: () => {
+            const longText = 'Community update '.repeat(90).trim();
+            const renderer = {
+                contents: {
+                    backstagePostRenderer: {
+                        contentText: { runs: [{ text: longText }] },
+                    },
+                },
+            };
+            const html = `<script>var ytInitialData = ${JSON.stringify(renderer)};</script>`;
+
+            const data = parseYouTubeCommunityPostHtml(
+                html,
+                'https://www.youtube.com/post/UgkxLongPost',
+            );
+
+            assert.equal(data?.description, longText);
+        },
+    },
+    {
         name: 'pixivHandler proxies Phixiv fallback artwork for Discord media components',
         run: async () => {
             const originalFetch = globalThis.fetch;

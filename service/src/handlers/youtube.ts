@@ -159,7 +159,7 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
     if (!description && !image) return null;
     return {
         title: 'Community post',
-        description: truncateText(description, 1000),
+        description: truncateText(description, 2500),
         url: canonicalUrl,
         siteName: getBrandedSiteName('youtube'),
         authorName: authorName || undefined,

@@ -1,0 +1,129 @@
+"""Build bot-authored YouTube community-post cards from FixEmbed metadata."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Mapping, Optional
+from urllib.parse import quote
+
+import aiohttp
+import discord
+
+from component_emojis import format_component_stats
+
+
+FIXEMBED_API = "https://fixembed.app/api/embed"
+YOUTUBE_COLOR = 0xFF0033
+FIXEMBED_EMOJI_ID = 1525580543503106148
+YOUTUBE_EMOJI_ID = 1526267390592290926
+
+
+def _post_timestamp(value: Any) -> Optional[int]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
+def build_youtube_community_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
+    """Build a YouTube community-post Components V2 card from remote media."""
+    description = str(payload.get("description") or "").strip()
+    if len(description) > 2500:
+        description = f"{description[:2497].rstrip()}…"
+
+    author_name = str(payload.get("authorName") or "").strip()
+    author_url = str(payload.get("authorUrl") or "").strip()
+    author_avatar = str(payload.get("authorAvatar") or "").strip()
+    source_url = str(payload.get("url") or "").strip()
+
+    if author_name and author_url:
+        author_line = f"**[{author_name}]({author_url})**"
+    elif author_name:
+        author_line = f"**{author_name}**"
+    else:
+        author_line = ""
+    header_text = "\n".join(part for part in (author_line, description) if part)
+    if not header_text:
+        header_text = "**YouTube community post**"
+
+    children: list[discord.ui.Item[Any]] = []
+    if author_avatar:
+        children.append(
+            discord.ui.Section(
+                header_text,
+                accessory=discord.ui.Thumbnail(
+                    author_avatar,
+                    description=f"{author_name or 'YouTube creator'} profile photo",
+                ),
+            )
+        )
+    else:
+        children.append(discord.ui.TextDisplay(header_text))
+
+    image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
+    media_urls = [str(url).strip() for url in image_urls if str(url).strip()]
+    fallback_image = str(payload.get("image") or "").strip()
+    if not media_urls and fallback_image:
+        media_urls = [fallback_image]
+    if media_urls:
+        children.append(
+            discord.ui.MediaGallery(
+                *(
+                    discord.MediaGalleryItem(
+                        url,
+                        description=(description or "YouTube community post")[:1024],
+                    )
+                    for url in media_urls[:10]
+                )
+            )
+        )
+
+    stats = format_component_stats(str(payload.get("stats") or "").strip())
+    if stats:
+        children.append(discord.ui.TextDisplay(f"-# {stats}"))
+
+    children.append(discord.ui.Separator())
+    footer_parts = [
+        f"<:fixembed:{FIXEMBED_EMOJI_ID}> FixEmbed",
+        f"<:youtube:{YOUTUBE_EMOJI_ID}> YouTube",
+    ]
+    if source_url:
+        footer_parts.append(f"[View original]({source_url})")
+    if converted_url:
+        footer_parts.append(f"[FixEmbed link]({converted_url})")
+    timestamp = _post_timestamp(payload.get("timestamp"))
+    if timestamp is not None:
+        footer_parts.append(f"<t:{timestamp}:R>")
+    children.append(discord.ui.TextDisplay(f"-# {'  ·  '.join(footer_parts)}"))
+
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*children, accent_color=YOUTUBE_COLOR))
+    return view
+
+
+async def _fetch_youtube_community_payload(source_url: str) -> Mapping[str, Any]:
+    api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}&renderer=components-v2"
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(api_url) as response:
+            response.raise_for_status()
+            body = await response.json()
+
+    if not body.get("success") or body.get("platform") != "youtube":
+        raise ValueError("FixEmbed did not return YouTube community-post metadata")
+    return body.get("data") or {}
+
+
+async def fetch_youtube_community_layout(
+    source_url: str,
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
+    """Fetch metadata and return a YouTube community-post Components V2 card."""
+    payload = await _fetch_youtube_community_payload(source_url)
+    return build_youtube_community_layout(payload, converted_url)
