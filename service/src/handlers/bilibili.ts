@@ -32,6 +32,44 @@ interface BilibiliVideoResponse {
     };
 }
 
+interface BiliFixOEmbedResponse {
+    title?: string;
+    author_name?: string;
+    author_url?: string;
+    provider_name?: string;
+}
+
+function htmlAttribute(tag: string, name: string): string | undefined {
+    const match = tag.match(new RegExp(
+        `\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+        'i',
+    ));
+    return match?.[1] ?? match?.[2] ?? match?.[3];
+}
+
+function metaContent(html: string, key: string): string | undefined {
+    for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+        const tag = match[0];
+        if (htmlAttribute(tag, 'property') === key || htmlAttribute(tag, 'name') === key) {
+            return htmlAttribute(tag, 'content');
+        }
+    }
+    return undefined;
+}
+
+function biliFixStats(providerName = ''): string | undefined {
+    const activity = providerName.split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.includes('📺'));
+    if (!activity) return undefined;
+    return activity
+        .replace(/📺\s*/u, '👁️ ')
+        .replace(/👍\s*/u, '❤️ ')
+        .replace(/🪙\s*/u, '🪙 ')
+        .replace(/⭐\s*/u, '🔖 ')
+        .replace(/📤\s*/u, '🔁 ');
+}
+
 async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null> {
     try {
         const response = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`, {
@@ -87,7 +125,9 @@ async function scrapeVxBilibili(bvid: string): Promise<{
     image?: string;
     description?: string;
     author?: string;
+    authorUrl?: string;
     video?: string;
+    stats?: string;
     error?: string;
 }> {
     try {
@@ -105,20 +145,32 @@ async function scrapeVxBilibili(bvid: string): Promise<{
 
         const html = await response.text();
 
-        // Extract OG tags
-        const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1];
-        const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
-        const ogDesc = html.match(/<meta property="og:description" content="([^"]+)"/)?.[1];
-        const ogVideo = html.match(/<meta property="og:video(?::url)?" content="([^"]+)"/)?.[1];
+        const ogTitle = metaContent(html, 'og:title');
+        const ogImage = metaContent(html, 'og:image');
+        const ogDesc = metaContent(html, 'og:description');
+        const ogVideo = metaContent(html, 'og:video') || metaContent(html, 'og:video:url');
+        const ogSiteName = metaContent(html, 'og:site_name');
 
-        // Try to extract author from description or title
-        // vxbilibili format: "Title - Author的bilibili视频"
-        let author: string | undefined;
+        let oembed: BiliFixOEmbedResponse | undefined;
+        try {
+            const oembedResponse = await fetch(
+                `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-tw`,
+                { headers: { 'Accept': 'application/json' } },
+            );
+            if (oembedResponse.ok) {
+                oembed = await oembedResponse.json() as BiliFixOEmbedResponse;
+            }
+        } catch {
+            // Open Graph still provides a useful media card when oEmbed is unavailable.
+        }
+
+        // Older BiliFix pages included the author in the title.
+        let author = oembed?.author_name;
         const authorMatch = ogTitle?.match(/(.+?) - (.+?)的bilibili视频/);
-        let title = ogTitle || 'Bilibili Video';
+        let title = oembed?.title || ogTitle || 'Bilibili Video';
         if (authorMatch) {
             title = authorMatch[1];
-            author = authorMatch[2];
+            author ||= authorMatch[2];
         }
 
         return {
@@ -127,7 +179,9 @@ async function scrapeVxBilibili(bvid: string): Promise<{
             image: ogImage,
             description: ogDesc,
             author,
+            authorUrl: oembed?.author_url,
             video: ogVideo,
+            stats: biliFixStats(oembed?.provider_name || ogSiteName),
         };
     } catch (error) {
         console.error('vxbilibili scrape error:', error);
@@ -206,6 +260,7 @@ export const bilibiliHandler: PlatformHandler = {
                         url: canonicalUrl,
                         siteName: getBrandedSiteName('bilibili'),
                         authorName: scrapeResult.author || undefined, // Don't set if no author found
+                        authorUrl: scrapeResult.authorUrl,
                         image: imageUrl,
                         video: scrapeResult.video ? {
                             url: `https://${embedDomain}/proxy/bilibili?url=${encodeURIComponent(scrapeResult.video)}`,
@@ -215,6 +270,7 @@ export const bilibiliHandler: PlatformHandler = {
                         } : undefined,
                         color: platformColors.bilibili,
                         platform: 'bilibili',
+                        stats: scrapeResult.stats,
                     },
                 };
             }

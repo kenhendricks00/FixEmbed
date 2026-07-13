@@ -722,6 +722,98 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'bilibiliHandler recovers complete cards from minified BiliFix metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('api.bilibili.com/x/web-interface/view')) {
+                    return new Response('Precondition Failed', { status: 412 });
+                }
+                if (url.includes('vxbilibili.com/video/')) {
+                    return new Response(
+                        '<meta content="BiliFix / vxbilibili.com\n📺53.7萬 👍2.3萬 🪙927 ⭐6931 📤1843"property=og:site_name>'
+                        + '<meta content=最棒的更新就得配上最多的bug！ property=og:title>'
+                        + '<meta content=http://i1.hdslb.com/video.jpg property=og:image>'
+                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('vxbilibili.com/oembed/video')) {
+                    return new Response(JSON.stringify({
+                        title: '最棒的更新就得配上最多的bug！',
+                        author_name: '这里是莱里',
+                        author_url: 'https://space.bilibili.com/37093763',
+                    }), { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await bilibiliHandler.handle(
+                    'https://www.bilibili.com/video/BV1p3Nc6pEoP/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.title, '最棒的更新就得配上最多的bug！');
+                assert.equal(response.data?.authorName, '这里是莱里');
+                assert.equal(response.data?.authorUrl, 'https://space.bilibili.com/37093763');
+                assert.equal(response.data?.image, 'https://i1.hdslb.com/video.jpg');
+                assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/proxy\/bilibili\?/);
+                assert.equal(response.data?.stats, '👁️ 53.7萬 ❤️ 2.3萬 🪙 927 🔖 6931 🔁 1843');
+                assert.equal(requested.some((url) => url.includes('/oembed/video')), true);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'Bilibili media proxy rejects URLs outside trusted video hosts',
+        run: async () => {
+            const response = await app.request(
+                '/proxy/bilibili?url=' + encodeURIComponent('https://example.com/internal-target'),
+                {},
+                env,
+            );
+
+            assert.equal(response.status, 400);
+            assert.deepEqual(await response.json(), { error: 'Invalid Bilibili video URL' });
+        },
+    },
+    {
+        name: 'Bilibili media proxy rejects redirects outside trusted video hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: 'https://example.com/internal-target' },
+                });
+            };
+
+            try {
+                const response = await app.request(
+                    '/proxy/bilibili?url=' + encodeURIComponent(
+                        'https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1',
+                    ),
+                    {},
+                    env,
+                );
+
+                assert.equal(response.status, 502);
+                assert.deepEqual(await response.json(), { error: 'Unsafe Bilibili video redirect' });
+                assert.equal(requested.length, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'redditHandler resolves Reddit share links before fetching metadata',
         run: async () => {
             const originalFetch = globalThis.fetch;

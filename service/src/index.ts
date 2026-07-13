@@ -818,22 +818,58 @@ app.get('/proxy/pixiv', async (c) => {
 
 // Video proxy endpoint for Bilibili - streams video with proper Referer
 app.get('/proxy/bilibili', async (c) => {
-    const videoUrl = c.req.query('url');
+    const rawVideoUrl = c.req.query('url');
 
-    if (!videoUrl) {
+    if (!rawVideoUrl) {
         return c.json({ error: 'Missing video URL' }, 400);
     }
 
+    const trustedVideoUrl = (rawUrl: string): string | null => {
+        try {
+            const parsed = new URL(rawUrl);
+            const hostname = parsed.hostname.toLowerCase();
+            const trustedHost = hostname === 'media.vxbilibili.com'
+                || hostname.endsWith('.bilivideo.com')
+                || hostname.endsWith('.bilivideo.cn')
+                || hostname.endsWith('.akamaized.net');
+            return parsed.protocol === 'https:' && trustedHost ? parsed.toString() : null;
+        } catch {
+            return null;
+        }
+    };
+
+    let videoUrl = trustedVideoUrl(rawVideoUrl);
+    if (!videoUrl) {
+        return c.json({ error: 'Invalid Bilibili video URL' }, 400);
+    }
+
     try {
-        // Bilibili requires Referer header
-        const response = await fetch(videoUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.bilibili.com/',
-                'Accept': 'video/*,*/*',
-                'Range': c.req.header('Range') || 'bytes=0-',
-            },
-        });
+        const requestHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.bilibili.com/',
+            'Accept': 'video/*,*/*',
+            'Range': c.req.header('Range') || 'bytes=0-',
+        };
+        let response: Response;
+        for (let redirectCount = 0; ; redirectCount += 1) {
+            response = await fetch(videoUrl, {
+                headers: requestHeaders,
+                redirect: 'manual',
+            });
+
+            if (response.status < 300 || response.status >= 400) break;
+            const location = response.headers.get('location');
+            const redirectedUrl = location
+                ? trustedVideoUrl(new URL(location, videoUrl).toString())
+                : null;
+            if (!redirectedUrl) {
+                return c.json({ error: 'Unsafe Bilibili video redirect' }, 502);
+            }
+            if (redirectCount >= 2) {
+                return c.json({ error: 'Too many Bilibili video redirects' }, 502);
+            }
+            videoUrl = redirectedUrl;
+        }
 
         if (!response.ok && response.status !== 206) {
             return c.redirect(videoUrl, 302);
