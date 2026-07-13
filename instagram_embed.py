@@ -44,7 +44,7 @@ def build_instagram_embed(
     caption = str(payload.get("description") or payload.get("title") or "")
     caption = _remove_redundant_identity(caption, name, handle)
     stats = str(payload.get("stats") or "").strip()
-    description = "\n\n".join(part for part in (stats, caption) if part)
+    description = "\n\n".join(part for part in (caption, stats) if part)
     if len(description) > 4096:
         description = f"{description[:4093].rstrip()}…"
 

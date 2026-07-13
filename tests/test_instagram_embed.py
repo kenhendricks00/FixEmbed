@@ -39,7 +39,7 @@ class InstagramEmbedTests(unittest.TestCase):
 
         embed = build_instagram_embed(payload, "https://cdn.example/fixembed.png")
 
-        self.assertEqual(embed.description, "💬 2  ❤️ 10\n\nA caption")
+        self.assertEqual(embed.description, "A caption\n\n💬 2  ❤️ 10")
         self.assertEqual(embed.image.url, payload["video"]["thumbnail"])
         self.assertEqual(embed.footer.text, "FixEmbed • 📷 Instagram")
         self.assertEqual(embed.footer.icon_url, "https://cdn.example/fixembed.png")
