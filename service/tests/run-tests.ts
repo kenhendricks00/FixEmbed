@@ -1124,7 +1124,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Instagram Activity cards keep a compact creator identity and real profile link',
+        name: 'Instagram Activity cards use Discord compact creator identity',
         run: async () => {
             const sourceUrl = 'https://www.instagram.com/reel/PreviewReel/';
             const html = generateEmbedHTML({
@@ -1171,7 +1171,7 @@ const tests: TestCase[] = [
                 assert.equal(activity.account.display_name, 'creator');
                 assert.equal(activity.account.username, 'creator');
                 assert.equal(activity.account.acct, 'creator');
-                assert.equal(activity.account.url, 'https://www.instagram.com/creator/');
+                assert.equal(activity.account.url, 'https://x.com/creator');
                 assert.equal(activity.account.uri, 'https://x.com/creator');
                 assert.equal(activity.media_attachments[0].type, 'video');
                 assert.equal(activity.media_attachments[0].preview_url, 'https://scontent.example/reel.jpg');

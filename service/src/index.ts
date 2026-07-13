@@ -558,11 +558,12 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             id: handle,
             display_name: isInstagram ? handle : (embedData.a || handle),
             ...(isInstagram ? {
-                // Keep profile clicks on Instagram while using the X identity
-                // namespace Discord already renders as a compact @handle.
+                // Discord appends the Activity account URL's host to Mastodon
+                // creator labels. Its compact X identity omits that redundant
+                // host, matching the author-first card used by X embeds.
                 username: handle,
                 acct: handle,
-                url: embedData.au || `https://www.instagram.com/${encodeURIComponent(handle)}/`,
+                url: `https://x.com/${encodeURIComponent(handle)}`,
                 uri: `https://x.com/${encodeURIComponent(handle)}`,
             } : {
                 username: handle,
