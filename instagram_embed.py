@@ -13,6 +13,7 @@ import discord
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 INSTAGRAM_COLOR = 0xE4405F
+FIXEMBED_COLOR = 0x5865F2
 FIXEMBED_EMOJI_ID = 1525580543503106148
 INSTAGRAM_EMOJI_ID = 1486919548732051586
 
@@ -139,7 +140,7 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
 
     stats = str(payload.get("stats") or "").strip()
     if stats:
-        children.append(discord.ui.TextDisplay(stats))
+        children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
     footer_parts = [
@@ -147,12 +148,12 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
         f"<:instagram:{INSTAGRAM_EMOJI_ID}> Instagram",
     ]
     if source_url:
-        footer_parts.append(f"[Link]({source_url})")
+        footer_parts.append(f"[View original]({source_url})")
     footer_parts.append(f"<t:{int(datetime.now(timezone.utc).timestamp())}:R>")
-    children.append(discord.ui.TextDisplay(" • ".join(footer_parts)))
+    children.append(discord.ui.TextDisplay(f"-# {'  ·  '.join(footer_parts)}"))
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=INSTAGRAM_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=FIXEMBED_COLOR))
     return view
 
 

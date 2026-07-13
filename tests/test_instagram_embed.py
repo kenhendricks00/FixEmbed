@@ -99,14 +99,17 @@ class InstagramEmbedTests(unittest.TestCase):
         footer = container["components"][-1]
 
         self.assertEqual(container["type"], 17)
+        self.assertEqual(container["accent_color"], 0x5865F2)
         self.assertIn("[brooke_annm]", header["components"][0]["content"])
         self.assertNotIn("@brooke_annm", header["components"][0]["content"])
         self.assertEqual(header["accessory"]["media"]["url"], payload["authorAvatar"])
-        self.assertEqual(stats["content"], payload["stats"])
+        self.assertTrue(stats["content"].endswith(payload["stats"]))
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["video"]["url"])
         self.assertIn("FixEmbed", footer["content"])
         self.assertIn("Instagram", footer["content"])
-        self.assertIn("[Link]", footer["content"])
+        self.assertTrue(stats["content"].startswith("-# "))
+        self.assertTrue(footer["content"].startswith("-# "))
+        self.assertIn("[View original]", footer["content"])
 
 
 if __name__ == "__main__":
