@@ -18,6 +18,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("download_instagram_video", main_source)
         self.assertIn("video_file = discord.File(", main_source)
+        self.assertNotIn("card.embed.remove_image()", main_source)
+        self.assertIn("card.embed.set_image(url=None)", main_source)
         self.assertIn("instagram_cards.append((card.embed, video_file))", main_source)
         self.assertIn("file=video_file", main_source)
 
