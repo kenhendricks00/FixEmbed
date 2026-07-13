@@ -969,10 +969,133 @@ const tests: TestCase[] = [
                 siteName: 'FixEmbed • X',
                 platform: 'twitter',
             }, 'Discordbot/2.0');
-            const encoded = html.match(/\/users\/fixembed\/statuses\/(\d+)/)?.[1];
+            const encoded = html.match(/\/users\/twitter\/statuses\/(\d+)/)?.[1];
             assert.ok(encoded);
             assert.match(encoded, /^\d+$/);
             assert.ok(encoded.length < 100);
+        },
+    },
+    {
+        name: 'Discord uses the branded creator-first activity card for every platform',
+        run: () => {
+            const samples = [
+                ['twitter', 'https://x.com/creator/status/123'],
+                ['instagram', 'https://www.instagram.com/p/example/'],
+                ['reddit', 'https://www.reddit.com/r/example/comments/abc123/example/'],
+                ['threads', 'https://www.threads.net/@creator/post/example'],
+                ['pixiv', 'https://www.pixiv.net/artworks/123'],
+                ['bluesky', 'https://bsky.app/profile/creator.test/post/example'],
+                ['youtube', 'https://www.youtube.com/watch?v=example'],
+                ['bilibili', 'https://www.bilibili.com/video/BV1example'],
+            ] as const;
+
+            for (const [platform, url] of samples) {
+                const html = generateEmbedHTML({
+                    title: 'A polished post',
+                    description: 'Platform content',
+                    url,
+                    siteName: 'FixEmbed • ' + platform,
+                    authorName: 'Creator',
+                    authorHandle: '@creator',
+                    authorUrl: 'https://example.com/creator',
+                    authorAvatar: 'https://example.com/avatar.jpg',
+                    stats: '💬 12 ❤️ 34',
+                    image: 'https://example.com/media.jpg',
+                    platform,
+                }, 'Discordbot/2.0');
+
+                assert.match(
+                    html,
+                    /href='https:\/\/fixembed\.app\/users\/creator\/statuses\/\d+' rel='alternate' type='application\/activity\+json'/,
+                    platform,
+                );
+                assert.match(
+                    html,
+                    /<link rel="apple-touch-icon" href="https:\/\/example\.com\/avatar\.jpg">/,
+                    platform,
+                );
+                if (platform !== 'twitter') {
+                    assert.doesNotMatch(html, /property="og:image"/, platform);
+                    assert.doesNotMatch(html, /property="og:video"/, platform);
+                }
+            }
+        },
+    },
+    {
+        name: 'Mastodon activity API rebuilds a branded non-X image card',
+        run: async () => {
+            const html = generateEmbedHTML({
+                title: '@creator.test',
+                description: 'A Bluesky post',
+                url: 'https://bsky.app/profile/creator.test/post/abc123',
+                siteName: 'FixEmbed • Bluesky',
+                authorName: '@creator.test',
+                authorAvatar: 'https://cdn.bsky.app/avatar.jpg',
+                image: 'https://cdn.bsky.app/image.jpg',
+                platform: 'bluesky',
+            }, 'Discordbot/2.0');
+            const encoded = html.match(/\/users\/creator_test\/statuses\/(\d+)/)?.[1];
+            assert.ok(encoded);
+
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('resolveHandle')) {
+                    return new Response(JSON.stringify({ did: 'did:plc:creator' }), { status: 200 });
+                }
+                if (url.includes('getPostThread')) {
+                    return new Response(JSON.stringify({
+                        thread: {
+                            post: {
+                                author: {
+                                    did: 'did:plc:creator',
+                                    handle: 'creator.test',
+                                    avatar: 'https://cdn.bsky.app/avatar.jpg',
+                                },
+                                record: {
+                                    text: 'A Bluesky post',
+                                    createdAt: '2026-07-12T20:00:00.000Z',
+                                },
+                                embed: {
+                                    images: [{
+                                        fullsize: 'https://cdn.bsky.app/image.jpg',
+                                        thumb: 'https://cdn.bsky.app/thumb.jpg',
+                                    }],
+                                },
+                                likeCount: 34,
+                                repostCount: 5,
+                                replyCount: 12,
+                            },
+                        },
+                    }), { status: 200 });
+                }
+                throw new Error('Unexpected request: ' + url);
+            };
+
+            try {
+                const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
+                assert.equal(response.status, 200);
+                const activity = await response.json() as any;
+                assert.equal(activity.account.display_name, '@creator.test');
+                assert.equal(activity.account.avatar, 'https://cdn.bsky.app/avatar.jpg');
+                assert.equal(activity.content, '<p><strong>💬 12 🔁 5 ❤️ 34</strong><br><br>A Bluesky post</p>');
+                assert.equal(activity.created_at, '2026-07-12T20:00:00.000Z');
+                assert.equal(activity.application.name, 'FixEmbed • 🦋 Bluesky');
+                assert.equal(activity.media_attachments[0].type, 'image');
+                assert.equal(activity.media_attachments[0].url, 'https://cdn.bsky.app/image.jpg');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'Mastodon activity API rejects malformed and oversized status tokens',
+        run: async () => {
+            const malformed = await app.request('/api/v1/statuses/99abc', {}, env);
+            assert.equal(malformed.status, 400);
+
+            const oversized = await app.request('/api/v1/statuses/99' + '001'.repeat(1400), {}, env);
+            assert.equal(oversized.status, 400);
         },
     },
     {

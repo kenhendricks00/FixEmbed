@@ -133,6 +133,7 @@ export const blueskyHandler: PlatformHandler = {
                     image,
                     color: platformColors.bluesky,
                     platform: 'bluesky',
+                    timestamp: record.createdAt,
                     stats: statsStr, // Stats shown via oEmbed author_name row
                 },
             };

@@ -16,12 +16,6 @@ function escapeHtml(str: string): string {
         .replace(/"/g, '&quot;');
 }
 
-function normalizeTimestamp(timestamp?: string): string | undefined {
-    if (!timestamp) return undefined;
-    const parsed = new Date(timestamp);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-}
-
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
 
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
@@ -34,12 +28,24 @@ export function encodeSnowcode(data: object): string {
     }).join('');
 }
 
+/** Encode any canonical source URL as a compact digits-only status identifier. */
+export function encodeActivitySource(url: string): string {
+    return '99' + [...new TextEncoder().encode(url)]
+        .map((byte) => byte.toString().padStart(3, '0'))
+        .join('');
+}
+
 /** Preserve source line breaks in the safe HTML consumed by Discord's ActivityPub renderer. */
-export function formatActivityContent(description: string, trailingStats?: string): string {
+export function formatActivityContent(
+    description: string,
+    stats?: string,
+    statsFirst = false,
+): string {
     const normalized = description.replace(/\r\n?/g, '\n');
     const content = escapeHtml(normalized).replace(/\n/g, '<br>');
-    const stats = trailingStats ? `<br><br><strong>${escapeHtml(trailingStats)}</strong>` : '';
-    return `<p>${content}${stats}</p>`;
+    const statsMarkup = stats ? '<strong>' + escapeHtml(stats) + '</strong>' : '';
+    if (statsFirst && statsMarkup) return '<p>' + statsMarkup + '<br><br>' + content + '</p>';
+    return '<p>' + content + (statsMarkup ? '<br><br>' + statsMarkup : '') + '</p>';
 }
 
 const GENERIC_POST_TITLES = new Set(['post', 'reel', 'thread', 'tweet']);
@@ -92,6 +98,30 @@ export function normalizeEmbedLayout(embed: EmbedData): EmbedData {
     };
 }
 
+/** Build the post body shown beneath the creator identity in Discord's activity card. */
+export function activityBodyText(embed: EmbedData): string {
+    const normalized = normalizeEmbedLayout(embed);
+    if (normalized.platform === 'twitter') return normalized.description || normalized.title;
+
+    const title = normalized.title.trim();
+    const description = normalized.description.trim();
+    if (!description || title.toLowerCase().includes(description.toLowerCase())) return title;
+    if (normalized.authorName && description.toLowerCase() === ('by ' + normalized.authorName).toLowerCase()) {
+        return title;
+    }
+    return [title, description].filter(Boolean).join('\n\n');
+}
+
+function activityActorSlug(embed: EmbedData): string {
+    const identity = embed.authorHandle || embed.authorName || embed.platform;
+    return identity
+        .replace(/^@/, '')
+        .replace(/^u\//i, '')
+        .replace(/[^a-zA-Z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        || embed.platform;
+}
+
 /**
  * Generate Open Graph meta tags for Discord/Telegram embeds
  */
@@ -99,7 +129,9 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     embed = normalizeEmbedLayout(embed);
     const isDiscord = userAgent.toLowerCase().includes('discord');
     const isTelegram = userAgent.toLowerCase().includes('telegram');
+    const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter';
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
+    const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
     const displayTitle = embed.platform === 'twitter' && embed.authorName && embed.authorHandle
         ? `${embed.authorName} (${embed.authorHandle})`
         : embed.title;
@@ -120,7 +152,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
   <meta property="og:description" content="${escape(renderedDescription)}">
   <meta property="og:url" content="${escape(embed.url)}">
   <meta property="og:site_name" content="${escape(embed.siteName)}">
-  <meta property="og:type" content="${embed.video && !useDiscordActivityVideo ? 'video.other' : 'website'}">
+  <meta property="og:type" content="${embed.video && !suppressDiscordOgMedia ? 'video.other' : 'website'}">
 `;
 
     // Color theme
@@ -134,7 +166,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     }
 
     // Image embed - support single image or carousel
-    if (!useDiscordActivityVideo && embed.images && embed.images.length > 0) {
+    if (!suppressDiscordOgMedia && embed.images && embed.images.length > 0) {
         // Multiple images (carousel) - output all og:image tags
         for (const imgUrl of embed.images) {
             html += `  <meta property="og:image" content="${escape(imgUrl)}">\n`;
@@ -144,7 +176,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
             html += `  <meta name="twitter:card" content="summary_large_image">\n`;
         }
         html += `  <meta name="twitter:image" content="${escape(embed.images[0])}">\n`;
-    } else if (!useDiscordActivityVideo && embed.image) {
+    } else if (!suppressDiscordOgMedia && embed.image) {
         html += `  <meta property="og:image" content="${escape(embed.image)}">\n`;
         // Only set card to summary_large_image if NOT a video
         if (!embed.video) {
@@ -155,7 +187,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     // Video embed
     if (embed.video) {
-        if (useDiscordActivityVideo) {
+        if (suppressDiscordOgMedia) {
             // Avoid a competing Open Graph card so Discord uses the author-first
             // ActivityPub note and its playable video attachment.
             html += `  <meta name="twitter:card" content="player">\n`;
@@ -187,7 +219,7 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     html += `  <link href="${FIXEMBED_LOGO}" rel="icon" type="image/png">\n`;
 
     // 2. Apple touch icon for mobile
-    html += `  <link rel="apple-touch-icon" href="${escape(embed.platform === 'twitter' && embed.authorAvatar ? embed.authorAvatar : FIXEMBED_LOGO)}">\n`;
+    html += `  <link rel="apple-touch-icon" href="${escape(embed.authorAvatar || FIXEMBED_LOGO)}">\n`;
 
     // 3. oEmbed link for Discord to fetch provider and engagement info
     // Note: Previously excluded Instagram to force large images, but testing if it still works with oEmbed
@@ -200,37 +232,11 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     if (embed.description) oembedUrl.searchParams.set('desc', embed.description.slice(0, 1000)); // Limit length for URL
     html += `  <link rel="alternate" type="application/json+oembed" href="${escape(oembedUrl.toString())}">\n`;
 
-    const activityData = {
-        t: embed.title,
-        d: renderedDescription,
-        i: embed.image,
-        is: embed.images,
-        v: embed.video?.url,
-        vt: embed.video?.thumbnail,
-        vw: embed.video?.width,
-        vh: embed.video?.height,
-        a: embed.authorName,
-        h: embed.authorHandle,
-        ic: embed.authorAvatar,
-        s: embed.stats,
-        u: embed.url,
-        m: embed.mode,
-        p: embed.platform,
-        ts: normalizeTimestamp(embed.timestamp),
-        au: embed.authorUrl,
-        sn: embed.siteName,
-    };
-    const legacyEncodedActivity = btoa(encodeURIComponent(JSON.stringify(activityData)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
     const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
     const encodedActivity = embed.platform === 'twitter' && twitterStatusId
         ? encodeSnowcode({ i: twitterStatusId })
-        : legacyEncodedActivity;
-    const activityUrl = embed.platform === 'twitter'
-        ? `https://fixembed.app/users/${encodeURIComponent((embed.authorHandle || 'fixembed').replace(/^@/, ''))}/statuses/${encodedActivity}`
-        : `https://fixembed.app/activity/${encodedActivity}`;
+        : encodeActivitySource(embed.url);
+    const activityUrl = `https://fixembed.app/users/${encodeURIComponent(activityActorSlug(embed))}/statuses/${encodedActivity}`;
     html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";
 
 

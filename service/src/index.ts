@@ -12,7 +12,13 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { Env } from './types.ts';
 import { findHandler } from './handlers/index.ts';
-import { FIXEMBED_LOGO, formatActivityContent, generateEmbedHTML, generateErrorHTML } from './utils/embed.ts';
+import {
+    FIXEMBED_LOGO,
+    activityBodyText,
+    formatActivityContent,
+    generateEmbedHTML,
+    generateErrorHTML,
+} from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
@@ -35,6 +41,7 @@ interface StatusProbe {
 }
 
 interface ActivityEmbedData {
+    src?: string;
     t?: string;
     d?: string;
     i?: string;
@@ -53,6 +60,23 @@ interface ActivityEmbedData {
     ts?: string;
     au?: string;
     sn?: string;
+}
+
+function decodeActivitySource(encodedData: string): ActivityEmbedData {
+    if (encodedData.length > 4096) return {};
+    const bytes = encodedData.slice(2);
+    if (!bytes || bytes.length % 3 !== 0) return {};
+    const decoded: number[] = [];
+    for (let index = 0; index < bytes.length; index += 3) {
+        const byte = Number(bytes.slice(index, index + 3));
+        if (!Number.isInteger(byte) || byte < 0 || byte > 255) return {};
+        decoded.push(byte);
+    }
+    try {
+        return { src: new TextDecoder().decode(new Uint8Array(decoded)) };
+    } catch {
+        return {};
+    }
 }
 
 interface MastodonMediaAttachment {
@@ -94,6 +118,7 @@ function decodeSnowcode(encodedData: string): ActivityEmbedData {
 }
 
 function decodeActivityData(encodedData: string): ActivityEmbedData {
+    if (encodedData.startsWith('99')) return decodeActivitySource(encodedData);
     if (/^\d+$/.test(encodedData)) return decodeSnowcode(encodedData);
     try {
         let base64 = encodedData.replace(/-/g, '+').replace(/_/g, '/');
@@ -415,18 +440,22 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
     const status = params.status;
 
     let embedData = decodeActivityData(status);
-    if (embedData.i && !embedData.u) {
-        const sourceUrl = 'https://x.com/' + encodeURIComponent(author) + '/status/' + embedData.i;
+    if (Object.keys(embedData).length === 0) {
+        return c.json({ error: 'Invalid activity status token' }, 400);
+    }
+    if ((embedData.src || embedData.i) && !embedData.u) {
+        const sourceUrl = embedData.src
+            || 'https://x.com/' + encodeURIComponent(author) + '/status/' + embedData.i;
         const result = await findHandler(sourceUrl)?.handle(sourceUrl, c.env);
         if (!result?.success || !result.data) {
-            return c.json({ error: result?.error || 'Unable to rebuild X activity status' }, 502);
+            return c.json({ error: result?.error || 'Unable to rebuild activity status' }, 502);
         }
 
         const source = result.data;
         const sectionText = (source.sections || [])
             .map((section) => '**' + section.title + '**\n' + section.body + (section.url ? '\n' + section.url : ''))
             .join('\n\n');
-        const description = [source.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
+        const description = [activityBodyText(source), sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
         const parsedTimestamp = source.timestamp ? new Date(source.timestamp) : null;
         embedData = {
             d: description,
@@ -502,7 +531,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         in_reply_to_id: null,
         in_reply_to_account_id: null,
         language: null,
-        content: formatActivityContent(embedData.d || '', embedData.s),
+        content: formatActivityContent(embedData.d || '', embedData.s, embedData.p !== 'twitter'),
         spoiler_text: '',
         visibility: 'public',
         application: {
