@@ -926,6 +926,9 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 .replace(new RegExp(`^@?${escapedUsername}(?:\\s|:|-)*`, 'i'), '')
                 .trim();
         }
+        caption = caption
+            .replace(/\s*View all \d[\d,.]* comments?\s*$/i, '')
+            .trim();
 
         const result: HandlerResponse = {
             success: true,

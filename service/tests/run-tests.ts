@@ -540,7 +540,7 @@ const tests: TestCase[] = [
                     return new Response([
                         '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
                         '<span class="UsernameText">creator</span>',
-                        `<div class="Caption">creator<br /><br />${fullCaption}</div>`,
+                        `<div class="Caption">creator<br /><br />${fullCaption}View all 133 comments</div>`,
                         '<script>',
                         'window.__data={"username":"creator","video_url":"https://scontent.example/reel.mp4",',
                         '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
