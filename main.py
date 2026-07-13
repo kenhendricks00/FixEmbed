@@ -1243,7 +1243,7 @@ async def on_message(message):
                     )
                     if item.service == "Instagram":
                         try:
-                            layout = await fetch_instagram_layout(item.canonical_url)
+                            layout = await fetch_instagram_layout(item.canonical_url, automatic_url)
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Instagram component build failed; using link fallback: {error}")

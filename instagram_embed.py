@@ -99,7 +99,10 @@ def build_instagram_embed(
     return build_instagram_card(payload, footer_icon_url).embed
 
 
-def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
+def build_instagram_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
     """Build an Embedded-style Components V2 card with remotely unfurled media."""
     name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
     handle = _clean_handle(payload.get("authorHandle")) or name
@@ -161,6 +164,8 @@ def build_instagram_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
     ]
     if source_url:
         footer_parts.append(f"[View original]({source_url})")
+    if converted_url:
+        footer_parts.append(f"[FixEmbed link]({converted_url})")
     footer_parts.append(f"<t:{int(datetime.now(timezone.utc).timestamp())}:R>")
     children.append(discord.ui.TextDisplay(f"-# {'  ·  '.join(footer_parts)}"))
 
@@ -190,9 +195,12 @@ async def fetch_instagram_card(
     return build_instagram_card(await _fetch_instagram_payload(source_url), footer_icon_url)
 
 
-async def fetch_instagram_layout(source_url: str) -> discord.ui.LayoutView:
+async def fetch_instagram_layout(
+    source_url: str,
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a playable Components V2 card."""
-    return build_instagram_layout(await _fetch_instagram_payload(source_url))
+    return build_instagram_layout(await _fetch_instagram_payload(source_url), converted_url)
 
 
 async def fetch_instagram_embed(

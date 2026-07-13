@@ -92,7 +92,8 @@ class InstagramEmbedTests(unittest.TestCase):
             },
         }
 
-        components = build_instagram_layout(payload).to_components()
+        converted_url = "https://fixembed.app/embed?url=https%3A%2F%2Fwww.instagram.com%2Freel%2Fexample%2F&v=154"
+        components = build_instagram_layout(payload, converted_url).to_components()
         container = components[0]
         header = container["components"][0]
         gallery = container["components"][1]
@@ -115,6 +116,7 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertTrue(stats["content"].startswith("-# "))
         self.assertTrue(footer["content"].startswith("-# "))
         self.assertIn("[View original]", footer["content"])
+        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
 
 
 if __name__ == "__main__":
