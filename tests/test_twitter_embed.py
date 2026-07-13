@@ -19,8 +19,9 @@ class TwitterEmbedTests(unittest.TestCase):
                 "thumbnail": "https://pbs.twimg.com/post.jpg",
             },
         }
+        converted_url = "https://fixembed.app/embed?url=x-post"
 
-        components = build_twitter_layout(payload).to_components()
+        components = build_twitter_layout(payload, converted_url).to_components()
         container = components[0]
         header = container["components"][0]
         gallery = container["components"][1]
@@ -40,6 +41,7 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertIn("<:views:1526255708683636896> 8.39M", stats["content"])
         self.assertIn("<:twitter:1526268173589155921>", footer["content"])
         self.assertIn("[View original]", footer["content"])
+        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
         self.assertIn("<t:1783614000:R>", footer["content"])
 
     def test_components_v2_layout_preserves_photo_carousel_and_structured_sections(self):

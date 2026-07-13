@@ -1251,7 +1251,8 @@ async def on_message(message):
                             formatted_links.append(automatic_url)
                     elif item.service == "Twitter":
                         try:
-                            layout = await fetch_twitter_layout(item.canonical_url, item.language, item.mode)
+                            fixed_url = build_fixembed_url(item, media_quality)
+                            layout = await fetch_twitter_layout(item.canonical_url, item.language, item.mode, fixed_url)
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"X component build failed; using link fallback: {error}")

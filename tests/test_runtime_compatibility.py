@@ -72,9 +72,10 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from twitter_embed import fetch_twitter_layout", main_source)
         self.assertIn('elif item.service == "Twitter":', main_source)
         self.assertIn(
-            "fetch_twitter_layout(item.canonical_url, item.language, item.mode)",
+            "fetch_twitter_layout(item.canonical_url, item.language, item.mode, fixed_url)",
             main_source,
         )
+        self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
 
