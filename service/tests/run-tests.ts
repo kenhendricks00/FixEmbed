@@ -1119,6 +1119,8 @@ const tests: TestCase[] = [
                 html,
                 /<link rel="apple-touch-icon" href="https:\/\/raw\.githubusercontent\.com\/kenhendricks00\/FixEmbed\/main\/assets\/logo\.png">/,
             );
+            assert.match(html, /<meta property="twitter:site" content="@creator">/);
+            assert.match(html, /<meta property="twitter:creator" content="@creator">/);
             assert.doesNotMatch(html, /property="og:video"/);
             assert.doesNotMatch(html, /property="og:image"/);
         },
