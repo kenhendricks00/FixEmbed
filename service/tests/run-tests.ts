@@ -818,7 +818,7 @@ const tests: TestCase[] = [
                 const response = await redditHandler.handle(canonicalUrl, env);
 
                 assert.equal(response.success, true);
-                assert.equal(response.data?.title, 'r/capybara â€¢ Capybara post');
+                assert.equal(response.data?.title, 'r/capybara • Capybara post');
                 assert.equal(response.data?.authorName, 'u/capybara_friend');
                 assert.match(response.data?.authorAvatar || '', /redditstatic\.com/);
                 assert.equal(requested.some((url) => url.includes('/oembed?')), true);

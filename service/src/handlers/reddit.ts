@@ -202,7 +202,7 @@ async function recoverFromRedditEmbed(
                 success: true,
                 source: 'first-party',
                 data: {
-                    title: `r/${displaySubreddit} â€¢ ${truncateText(title, 100)}`,
+                    title: `r/${displaySubreddit} • ${truncateText(title, 100)}`,
                     description: '',
                     url: canonicalUrl,
                     siteName: getBrandedSiteName('reddit'),
