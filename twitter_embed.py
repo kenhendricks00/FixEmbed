@@ -106,9 +106,9 @@ def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any
         body = f"{body[:897].rstrip()}…"
     heading = f"> {application_emoji('quote')} {quote_label} {identity}"
     quoted_body = "\n".join(
-        f"> {line}" if line else ">" for line in body.splitlines()
+        f"> {line}" if line else "> \u200b" for line in body.splitlines()
     )
-    text = f"{heading}\n>\n{quoted_body}" if quoted_body else heading
+    text = f"{heading}\n> \u200b\n{quoted_body}" if quoted_body else heading
     items: list[discord.ui.Item[Any]] = []
     if avatar:
         items.append(

@@ -143,7 +143,7 @@ class TwitterEmbedTests(unittest.TestCase):
                 {
                     "kind": "quote",
                     "title": "Quoted post",
-                    "body": "The quoted post body.",
+                    "body": "The quoted post body.\n\nSecond quoted paragraph.",
                     "url": "https://x.com/quoted/status/456",
                     "authorName": "Quoted Author",
                     "authorHandle": "@quoted",
@@ -170,6 +170,12 @@ class TwitterEmbedTests(unittest.TestCase):
             quote_text,
         )
         self.assertIn("> The quoted post body.", quote_text)
+        self.assertNotIn("\n>\n", quote_text)
+        self.assertIn(
+            "**Quoted Author** ([@quoted](https://x.com/quoted))\n> \u200b\n"
+            "> The quoted post body.\n> \u200b\n> Second quoted paragraph.",
+            quote_text,
+        )
         self.assertNotIn("[Quoted post]", quote_text)
         self.assertEqual(
             quote_header["accessory"]["media"]["url"],
