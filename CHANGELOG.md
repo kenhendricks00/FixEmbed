@@ -1,5 +1,8 @@
 ## Unreleased
 
+#### **Premium discovery**
+- Added a restrained native Premium purchase button to `/settings` for non-subscribers while keeping social embed footers promotion-free.
+
 #### **Pinterest and acknowledgements**
 - Added first-party Pinterest Pin metadata, full-size image and playable video cards, and safe `pin.it` short-link resolution.
 - Added Pinterest Components V2 rendering, settings migration, public docs, status checks, commands, and localized service lists.

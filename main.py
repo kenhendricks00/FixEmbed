@@ -744,11 +744,17 @@ class SettingsDropdown(ui.Select):
 
 
 class SettingsView(SettingsPageView):
-    def __init__(self, interaction, settings):
+    def __init__(self, interaction, settings, *, premium=False):
         super().__init__(interaction, settings)
         enabled = settings.get("enabled_services", DEFAULT_ENABLED_SERVICES)
         delivery = settings.get("delivery_mode", "suppress")
         quality = settings.get("media_quality", "balanced")
+        controls = [(SettingsDropdown(interaction, settings),)]
+        if PREMIUM_SKU_ID and not premium:
+            controls.append((discord.ui.Button(
+                style=discord.ButtonStyle.premium,
+                sku_id=int(PREMIUM_SKU_ID),
+            ),))
         status = (
             f"**Services:** {len(enabled)}/{len(DEFAULT_ENABLED_SERVICES)} enabled\n"
             f"**Delivery:** {delivery.title()}  ·  **Quality:** {quality.title()}\n"
@@ -758,7 +764,7 @@ class SettingsView(SettingsPageView):
             title=get_text(self.lang, "settings_title"),
             description=get_text(self.lang, "settings_description"),
             status=status,
-            controls=((SettingsDropdown(interaction, settings),),),
+            controls=controls,
             footer="Server settings",
         )
 
@@ -1085,8 +1091,12 @@ class PremiumSettingsView(SettingsPageView):
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     guild_settings = bot_settings.get(guild_id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
-    
-    await interaction.response.send_message(view=SettingsView(interaction, guild_settings), ephemeral=True)
+    premium = await is_guild_premium(guild_id)
+
+    await interaction.response.send_message(
+        view=SettingsView(interaction, guild_settings, premium=premium),
+        ephemeral=True,
+    )
 
 @client.tree.command(name='delivery', description="Power-user alias for delivery mode (also in /settings)")
 @app_commands.describe(mode="delete, suppress, or reply")

@@ -42,7 +42,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("render_settings_layout(", settings_section)
         self.assertNotIn("discord.Embed(", settings_section)
         self.assertIn(
-            "interaction.response.send_message(view=SettingsView(interaction, guild_settings), ephemeral=True)",
+            "view=SettingsView(interaction, guild_settings, premium=premium)",
             settings_section,
         )
 
@@ -54,6 +54,17 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("view=DebugSettingsView(interaction, settings)", main_source)
         self.assertIn('title=f"{client.user.name} Activated"', main_source)
         self.assertIn('title=f"{client.user.name} Deactivated"', main_source)
+
+    def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(
+            "@client.tree.command(name='delivery'", 1
+        )[0]
+
+        self.assertIn("if PREMIUM_SKU_ID and not premium:", settings_section)
+        self.assertIn("style=discord.ButtonStyle.premium", settings_section)
+        self.assertIn("premium = await is_guild_premium(guild_id)", settings_section)
+        self.assertIn("SettingsView(interaction, guild_settings, premium=premium)", settings_section)
 
     def test_about_and_help_commands_use_components_v2(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
