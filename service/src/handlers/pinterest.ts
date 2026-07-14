@@ -45,12 +45,13 @@ function originalPinterestAvatar(value: string | undefined): string | undefined 
     return parsed.toString();
 }
 
-function embeddedObject(html: string, key: string): Record<string, unknown> | undefined {
+function embeddedObjects(html: string, key: string): Record<string, unknown>[] {
+    const objects: Record<string, unknown>[] = [];
     const marker = `"${key}":`;
     let searchFrom = 0;
-    while (searchFrom < html.length) {
+    while (searchFrom < html.length && objects.length < 20) {
         const markerIndex = html.indexOf(marker, searchFrom);
-        if (markerIndex < 0) return undefined;
+        if (markerIndex < 0) break;
         let start = markerIndex + marker.length;
         while (/\s/.test(html[start] || '')) start += 1;
         if (html[start] !== '{') {
@@ -75,16 +76,18 @@ function embeddedObject(html: string, key: string): Record<string, unknown> | un
                 try {
                     const parsed: unknown = JSON.parse(html.slice(start, index + 1));
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                        return parsed as Record<string, unknown>;
+                        objects.push(parsed as Record<string, unknown>);
                     }
                 } catch {
-                    break;
+                    // Continue looking for another copy of this object in the page.
                 }
+                searchFrom = index + 1;
+                break;
             }
         }
-        searchFrom = start + 1;
+        if (searchFrom <= start) searchFrom = start + 1;
     }
-    return undefined;
+    return objects;
 }
 
 function creatorMetadata(html: string): {
@@ -94,30 +97,33 @@ function creatorMetadata(html: string): {
     authorAvatar?: string;
 } {
     const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+    let bestMatch: ReturnType<typeof creatorMetadata> = {};
     for (const key of ['nativeCreator', 'closeupUnifiedAttribution', 'originPinner', 'pinner']) {
-        const creator = embeddedObject(html, key);
-        if (!creator) continue;
-        const username = text(creator.username).replace(/^@/, '');
-        const authorName = truncateText(
-            text(creator.fullName) || text(creator.firstName) || username,
-            100,
-        );
-        if (!authorName && !username) continue;
-        const safeUsername = /^[A-Za-z0-9_.-]+$/.test(username) ? username : '';
-        return {
-            authorName: authorName || safeUsername,
-            authorHandle: safeUsername ? `@${safeUsername}` : undefined,
-            authorUrl: safeUsername
-                ? `https://www.pinterest.com/${safeUsername}/`
-                : undefined,
-            authorAvatar: originalPinterestAvatar(
-                text(creator.imageLargeUrl)
-                || text(creator.imageMediumUrl)
-                || text(creator.imageSmallUrl),
-            ),
-        };
+        for (const creator of embeddedObjects(html, key)) {
+            const username = text(creator.username).replace(/^@/, '');
+            const authorName = truncateText(
+                text(creator.fullName) || text(creator.firstName) || username,
+                100,
+            );
+            if (!authorName && !username) continue;
+            const safeUsername = /^[A-Za-z0-9_.-]+$/.test(username) ? username : '';
+            const candidate = {
+                authorName: authorName || safeUsername,
+                authorHandle: safeUsername ? `@${safeUsername}` : undefined,
+                authorUrl: safeUsername
+                    ? `https://www.pinterest.com/${safeUsername}/`
+                    : undefined,
+                authorAvatar: originalPinterestAvatar(
+                    text(creator.imageLargeUrl)
+                    || text(creator.imageMediumUrl)
+                    || text(creator.imageSmallUrl),
+                ),
+            };
+            if (!bestMatch.authorName) bestMatch = candidate;
+            if (candidate.authorAvatar) return candidate;
+        }
     }
-    return {};
+    return bestMatch;
 }
 
 function pinIdFromUrl(value: string): string | undefined {

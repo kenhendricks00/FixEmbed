@@ -305,6 +305,7 @@ const tests: TestCase[] = [
                     <meta property="og:image:width" content="736">
                     <meta property="og:image:height" content="981">
                     <meta property="og:updated_time" content="2026-05-27T21:03:02.000Z">
+                    <script>{"nativeCreator":{"fullName":"christinabrautaset","username":"christinaebrautaset"}}</script>
                     <script>{"nativeCreator":{"fullName":"christinabrautaset","username":"christinaebrautaset","profileUrl":"https://www.pinterest.com/christinaebrautaset/","imageLargeUrl":"https://i.pinimg.com/140x140_RS/ba/ab/af/avatar.jpg"}}</script>
                 </head></html>`, { status: 200, headers: { 'Content-Type': 'text/html' } });
             };
