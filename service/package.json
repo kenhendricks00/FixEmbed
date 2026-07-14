@@ -12,10 +12,10 @@
     "test": "node --experimental-strip-types tests/run-tests.ts"
   },
   "dependencies": {
-    "hono": "^4.12.29"
+    "hono": "^4.12.30"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260711.1",
+    "@cloudflare/workers-types": "^5.20260714.1",
     "typescript": "^5.3.0",
     "wrangler": "^4.110.0"
   },
