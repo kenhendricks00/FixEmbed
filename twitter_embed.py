@@ -79,12 +79,6 @@ def _media_urls(data: Mapping[str, Any]) -> list[tuple[str, Optional[str]]]:
     return media[:10]
 
 
-def is_animated_gif(payload: Mapping[str, Any]) -> bool:
-    """Return whether X classified the primary playable media as a GIF."""
-    video = payload.get("video")
-    return isinstance(video, Mapping) and str(video.get("mediaType") or "").casefold() == "gif"
-
-
 def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any]]:
     name = str(section.get("authorName") or "Quoted author").strip().lstrip("@")
     handle = _clean_handle(section.get("authorHandle"))

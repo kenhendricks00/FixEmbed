@@ -16,7 +16,7 @@ from collections import deque
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from instagram_embed import fetch_instagram_layout
-from twitter_embed import build_twitter_layout, fetch_twitter_payload, is_animated_gif
+from twitter_embed import build_twitter_layout, fetch_twitter_payload
 from reddit_embed import fetch_reddit_layout
 from threads_embed import fetch_threads_layout
 from bluesky_embed import fetch_bluesky_layout
@@ -1262,11 +1262,8 @@ async def on_message(message):
                         try:
                             fixed_url = build_fixembed_url(item, media_quality)
                             payload = await fetch_twitter_payload(item.canonical_url, item.language, item.mode)
-                            if is_animated_gif(payload):
-                                formatted_links.append(automatic_url)
-                            else:
-                                layout = build_twitter_layout(payload, fixed_url)
-                                component_layouts.append((layout, automatic_url))
+                            layout = build_twitter_layout(payload, fixed_url)
+                            component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"X component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)

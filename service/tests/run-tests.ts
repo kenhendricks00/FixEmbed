@@ -1528,7 +1528,7 @@ const tests: TestCase[] = [
                         variants: [{
                             bitrate: 832000,
                             content_type: 'video/mp4',
-                            url: 'https://video.twimg.com/reaction.mp4',
+                            url: 'https://video.twimg.com/tweet_video/reaction.mp4?tag=12',
                         }],
                     },
                 }],
@@ -1540,8 +1540,44 @@ const tests: TestCase[] = [
                     env,
                 );
 
-                assert.equal(response.data?.video?.url, 'https://video.twimg.com/reaction.mp4');
+                assert.equal(response.data?.video?.url, 'https://gif.fxtwitter.com/tweet_video/reaction.gif');
                 assert.equal(response.data?.video?.mediaType, 'gif');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler does not rewrite animated media from untrusted hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'Untrusted media URL.',
+                user: { name: 'GIF Author', screen_name: 'gifauthor' },
+                mediaDetails: [{
+                    type: 'animated_gif',
+                    media_url_https: 'https://pbs.twimg.com/media/reaction.jpg',
+                    video_info: {
+                        aspect_ratio: [1, 1],
+                        variants: [{
+                            content_type: 'video/mp4',
+                            url: 'https://untrusted.example/tweet_video/reaction.mp4',
+                        }],
+                    },
+                }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/gifauthor/status/1234567890',
+                    env,
+                );
+                assert.equal(
+                    response.data?.video?.url,
+                    'https://untrusted.example/tweet_video/reaction.mp4',
+                );
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -1945,7 +1981,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Discord X animated GIF activity uses the native looping gifv renderer',
+        name: 'Discord X animated GIF activity exposes a real looping GIF image',
         run: async () => {
             const sourceUrl = 'https://x.com/gifauthor/status/1234567890';
             const encoded = encodeActivitySource(sourceUrl);
@@ -1962,7 +1998,7 @@ const tests: TestCase[] = [
                         aspect_ratio: [1, 1],
                         variants: [{
                             content_type: 'video/mp4',
-                            url: 'https://video.twimg.com/reaction.mp4',
+                            url: 'https://video.twimg.com/tweet_video/reaction.mp4',
                         }],
                     },
                 }],
@@ -1971,8 +2007,8 @@ const tests: TestCase[] = [
                 const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
                 assert.equal(response.status, 200);
                 const activity = await response.json() as any;
-                assert.equal(activity.media_attachments[0].type, 'gifv');
-                assert.equal(activity.media_attachments[0].url, 'https://video.twimg.com/reaction.mp4');
+                assert.equal(activity.media_attachments[0].type, 'image');
+                assert.equal(activity.media_attachments[0].url, 'https://gif.fxtwitter.com/tweet_video/reaction.gif');
             } finally {
                 globalThis.fetch = originalFetch;
             }

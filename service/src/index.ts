@@ -501,7 +501,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         const height = embedData.vh || 0;
         mediaAttachments.push({
             id: '1',
-            type: embedData.mt === 'gif' ? 'gifv' : 'video',
+            type: embedData.mt === 'gif' ? 'image' : 'video',
             url: embedData.v,
             preview_url: embedData.vt || embedData.i || null,
             remote_url: null,

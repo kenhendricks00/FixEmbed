@@ -81,7 +81,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
     def test_twitter_uses_components_v2_with_existing_link_fallback(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
-        self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload, is_animated_gif", main_source)
+        self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload", main_source)
         self.assertIn('elif item.service == "Twitter":', main_source)
         self.assertIn(
             "fetch_twitter_payload(item.canonical_url, item.language, item.mode)",
@@ -90,8 +90,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
-        self.assertIn("if is_animated_gif(payload):", main_source)
-        self.assertIn("formatted_links.append(automatic_url)", main_source)
+        self.assertNotIn("if is_animated_gif(payload):", main_source)
 
     def test_reddit_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")

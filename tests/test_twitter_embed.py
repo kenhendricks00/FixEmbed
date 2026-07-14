@@ -1,13 +1,25 @@
 import unittest
 
-from twitter_embed import build_twitter_layout, is_animated_gif
+from twitter_embed import build_twitter_layout
 
 
 class TwitterEmbedTests(unittest.TestCase):
-    def test_animated_gif_detection_only_matches_x_gif_media(self):
-        self.assertTrue(is_animated_gif({"video": {"mediaType": "gif"}}))
-        self.assertFalse(is_animated_gif({"video": {"mediaType": "video"}}))
-        self.assertFalse(is_animated_gif({"image": "https://pbs.twimg.com/photo.jpg"}))
+    def test_components_v2_uses_real_gif_media_without_video_controls(self):
+        payload = {
+            "authorName": "GIF Author",
+            "video": {
+                "url": "https://gif.fxtwitter.com/tweet_video/reaction.gif",
+                "mediaType": "gif",
+            },
+        }
+
+        components = build_twitter_layout(payload).to_components()
+        gallery = components[0]["components"][1]
+
+        self.assertEqual(
+            gallery["items"][0]["media"]["url"],
+            "https://gif.fxtwitter.com/tweet_video/reaction.gif",
+        )
 
     def test_components_v2_layout_preserves_identity_text_video_stats_and_footer(self):
         payload = {

@@ -87,6 +87,22 @@ function highResolutionTwitterAvatar(avatarUrl: string): string {
     }
 }
 
+function animatedGifUrl(mediaUrl: string): string {
+    try {
+        const url = new URL(mediaUrl);
+        if (
+            url.protocol !== 'https:'
+            || url.hostname.toLowerCase() !== 'video.twimg.com'
+            || !/^\/tweet_video\/[^/]+\.mp4$/i.test(url.pathname)
+        ) {
+            return mediaUrl;
+        }
+        return `https://gif.fxtwitter.com${url.pathname.replace(/\.mp4$/i, '.gif')}`;
+    } catch {
+        return mediaUrl;
+    }
+}
+
 function fxTwitterMedia(tweet: FxTwitterTweet): {
     image?: string;
     images?: string[];
@@ -100,13 +116,14 @@ function fxTwitterMedia(tweet: FxTwitterTweet): {
         tweet.media?.videos
         || allMedia.filter((item) => ['video', 'gif', 'animated_gif'].includes(item.type || ''))
     )[0] || tweet.media?.external;
+    const isGif = ['gif', 'animated_gif'].includes(firstVideo?.type || '');
     const video = firstVideo?.url
         ? {
-            url: firstVideo.url,
+            url: isGif ? animatedGifUrl(firstVideo.url) : firstVideo.url,
             width: firstVideo.width || 1280,
             height: firstVideo.height || 720,
             thumbnail: firstVideo.thumbnail_url,
-            mediaType: ['gif', 'animated_gif'].includes(firstVideo.type || '') ? 'gif' as const : 'video' as const,
+            mediaType: isGif ? 'gif' as const : 'video' as const,
         }
         : undefined;
 
@@ -248,7 +265,9 @@ function bestVideoUrl(media: SyndicationMedia): string | null {
 
 function twitterVideoEmbed(media?: SyndicationMedia): VideoEmbed | undefined {
     if (!media || media.type === 'photo') return undefined;
-    const url = bestVideoUrl(media);
+    const sourceUrl = bestVideoUrl(media);
+    const isGif = media.type === 'animated_gif';
+    const url = sourceUrl && isGif ? animatedGifUrl(sourceUrl) : sourceUrl;
     if (!url) return undefined;
     const [widthRatio, heightRatio] = media.video_info?.aspect_ratio || [16, 9];
     const width = 1280;
@@ -257,7 +276,7 @@ function twitterVideoEmbed(media?: SyndicationMedia): VideoEmbed | undefined {
         width,
         height: Math.round(width * (heightRatio / widthRatio)),
         thumbnail: media.media_url_https,
-        mediaType: media.type === 'animated_gif' ? 'gif' : 'video',
+        mediaType: isGif ? 'gif' : 'video',
     };
 }
 
