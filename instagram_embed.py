@@ -14,6 +14,7 @@ import discord
 
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -190,6 +191,7 @@ def build_instagram_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build an Embedded-style Components V2 card with remotely unfurled media."""
     name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
@@ -198,6 +200,7 @@ def build_instagram_layout(
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
 
+    preferences = card_preferences or CardPreferences()
     caption = str(
         payload.get("caption")
         or payload.get("description")
@@ -205,6 +208,7 @@ def build_instagram_layout(
         or ""
     )
     caption = _remove_redundant_identity(caption, name, handle)
+    caption = apply_caption_preferences(caption, preferences)
     if len(caption) > 3500:
         caption = f"{caption[:3497].rstrip()}…"
 
@@ -242,7 +246,7 @@ def build_instagram_layout(
         )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -261,7 +265,7 @@ def build_instagram_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=FIXEMBED_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(FIXEMBED_COLOR)))
     return view
 
 
@@ -291,10 +295,11 @@ async def fetch_instagram_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a playable Components V2 card."""
     return build_instagram_layout(
-        await _fetch_instagram_payload(source_url), converted_url, footer_branding
+        await _fetch_instagram_payload(source_url), converted_url, footer_branding, card_preferences
     )
 
 

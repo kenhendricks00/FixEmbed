@@ -11,6 +11,7 @@ import discord
 
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -49,6 +50,7 @@ def build_reddit_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a Reddit Components V2 card using only remote media URLs."""
     subreddit, post_title = _split_title(payload.get("title"))
@@ -59,7 +61,9 @@ def build_reddit_layout(
 
     author_text = f"[{author}]({author_url})" if author_url else author
     identity = f"**{subreddit}**  ·  Posted by {author_text}"
+    preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()
+    description = apply_caption_preferences(description, preferences)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
     header_text = "\n".join(
@@ -117,7 +121,7 @@ def build_reddit_layout(
         str(payload.get("stats") or "").strip(),
         platform="reddit",
     )
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -136,7 +140,7 @@ def build_reddit_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=REDDIT_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(REDDIT_COLOR)))
     return view
 
 
@@ -157,8 +161,9 @@ async def fetch_reddit_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Reddit Components V2 card."""
     return build_reddit_layout(
-        await _fetch_reddit_payload(source_url), converted_url, footer_branding
+        await _fetch_reddit_payload(source_url), converted_url, footer_branding, card_preferences
     )

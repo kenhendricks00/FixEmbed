@@ -11,6 +11,7 @@ import discord
 
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -33,9 +34,12 @@ def build_youtube_community_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a YouTube community-post Components V2 card from remote media."""
+    preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or "").strip()
+    description = apply_caption_preferences(description, preferences)
     if len(description) > 2500:
         description = f"{description[:2497].rstrip()}…"
 
@@ -87,7 +91,7 @@ def build_youtube_community_layout(
         )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -106,7 +110,7 @@ def build_youtube_community_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=YOUTUBE_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(YOUTUBE_COLOR)))
     return view
 
 
@@ -127,7 +131,8 @@ async def fetch_youtube_community_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch metadata and return a YouTube community-post Components V2 card."""
     payload = await _fetch_youtube_community_payload(source_url)
-    return build_youtube_community_layout(payload, converted_url, footer_branding)
+    return build_youtube_community_layout(payload, converted_url, footer_branding, card_preferences)

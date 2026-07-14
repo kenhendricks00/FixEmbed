@@ -10,6 +10,7 @@ import aiohttp
 import discord
 
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -26,10 +27,13 @@ def build_pinterest_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a Pinterest Components V2 card using remote media URLs."""
     title = str(payload.get("title") or "Pinterest Pin").strip()
+    preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or "").strip()
+    description = apply_caption_preferences(description, preferences)
     if len(description) > 2500:
         description = f"{description[:2497].rstrip()}…"
     source_url = str(payload.get("url") or "").strip()
@@ -96,7 +100,7 @@ def build_pinterest_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=PINTEREST_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(PINTEREST_COLOR)))
     return view
 
 
@@ -116,6 +120,7 @@ async def fetch_pinterest_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     payload = await _fetch_pinterest_payload(source_url)
-    return build_pinterest_layout(payload, converted_url, footer_branding)
+    return build_pinterest_layout(payload, converted_url, footer_branding, card_preferences)

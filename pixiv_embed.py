@@ -13,6 +13,7 @@ import discord
 
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -115,10 +116,13 @@ def build_pixiv_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a Pixiv Components V2 card using proxied remote artwork URLs."""
     title = str(payload.get("title") or "Pixiv Artwork").strip()
+    preferences = card_preferences or CardPreferences()
     description = _clean_description(payload.get("description"))
+    description = apply_caption_preferences(description, preferences)
     if len(description) > 1200:
         description = f"{description[:1197].rstrip()}…"
 
@@ -173,7 +177,7 @@ def build_pixiv_layout(
         )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -192,7 +196,7 @@ def build_pixiv_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=PIXIV_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(PIXIV_COLOR)))
     return view
 
 
@@ -250,8 +254,9 @@ async def fetch_pixiv_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Pixiv Components V2 card."""
     return build_pixiv_layout(
-        await _fetch_pixiv_payload(source_url), converted_url, footer_branding
+        await _fetch_pixiv_payload(source_url), converted_url, footer_branding, card_preferences
     )

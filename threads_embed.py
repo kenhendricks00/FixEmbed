@@ -11,6 +11,7 @@ import discord
 
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -27,6 +28,7 @@ def build_threads_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a modern Components V2 card without uploading Threads media."""
     raw_name = str(payload.get("authorName") or "Threads").strip()
@@ -40,12 +42,14 @@ def build_threads_layout(
     identity = f"@{handle}" if handle else raw_name.lstrip("@")
     author_line = f"**[{identity}]({author_url})**" if author_url else f"**{identity}**"
 
+    preferences = card_preferences or CardPreferences()
     post_text = str(
         payload.get("caption")
         or payload.get("description")
         or payload.get("title")
         or ""
     ).strip()
+    post_text = apply_caption_preferences(post_text, preferences)
     if len(post_text) > 3500:
         post_text = f"{post_text[:3497].rstrip()}…"
     header_text = "\n".join(part for part in (author_line, post_text) if part)
@@ -84,7 +88,7 @@ def build_threads_layout(
         )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -103,7 +107,7 @@ def build_threads_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=FIXEMBED_COLOR))
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(FIXEMBED_COLOR)))
     return view
 
 
@@ -124,8 +128,9 @@ async def fetch_threads_layout(
     source_url: str,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Threads Components V2 card."""
     return build_threads_layout(
-        await _fetch_threads_payload(source_url), converted_url, footer_branding
+        await _fetch_threads_payload(source_url), converted_url, footer_branding, card_preferences
     )

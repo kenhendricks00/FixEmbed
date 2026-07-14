@@ -75,7 +75,11 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.
 
 **Perks include:**
-- 🎨 **Custom Embed Colors** — Set a custom hex color for all FixEmbed messages via `/settings` → Embed Color
+- 🎨 **Custom Social Card Colors** — Apply a custom hex accent to every supported Components V2 social card
+- 🎛️ **Card Style Controls** — Show or hide engagement stats and hashtags, and choose full or compact captions
+- 🌐 **Automatic X Translation** — Choose a default translation language while preserving per-link overrides
+- 🛡️ **Advanced Exclusions** — Leave links from selected members or roles untouched
+- 📈 **Private 30-Day Analytics** — Review aggregate platform usage and fallback reliability without storing links, message text, or member identities
 - 🏷️ **Custom Footer Branding** — Replace the leading FixEmbed footer label with your server name and an optional server emoji while retaining subtle `via FixEmbed` attribution
 - 🤖 **Bot Message Processing** — FixEmbed will process links posted by other bots
 - 🏷️ **No "Sent by" Label** — Clean embeds without the attribution footer

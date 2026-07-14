@@ -12,6 +12,7 @@ import discord
 
 from component_emojis import application_emoji, format_component_stats
 from embed_footer import FooterBranding, build_component_footer
+from card_preferences import CardPreferences, apply_caption_preferences
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -147,6 +148,7 @@ def build_twitter_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a modern Components V2 card without uploading tweet media."""
     name = str(payload.get("authorName") or "X").strip().lstrip("@")
@@ -162,7 +164,9 @@ def build_twitter_layout(
     else:
         identity = f"**{name}**"
 
+    preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()
+    description = apply_caption_preferences(description, preferences)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
     header_text = "\n".join(part for part in (identity, description) if part)
@@ -210,7 +214,7 @@ def build_twitter_layout(
         children.extend(rendered_sections)
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
-    if stats:
+    if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
@@ -229,7 +233,11 @@ def build_twitter_layout(
     )
 
     view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*children, accent_color=FIXEMBED_COLOR))
+    view.add_item(
+        discord.ui.Container(
+            *children, accent_color=preferences.accent_or(FIXEMBED_COLOR)
+        )
+    )
     return view
 
 
@@ -261,7 +269,10 @@ async def fetch_twitter_layout(
     mode: Optional[str] = None,
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return an X Components V2 card."""
     payload = await fetch_twitter_payload(source_url, language, mode)
-    return build_twitter_layout(payload, converted_url, footer_branding)
+    return build_twitter_layout(
+        payload, converted_url, footer_branding, card_preferences
+    )

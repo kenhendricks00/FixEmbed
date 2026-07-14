@@ -77,6 +77,17 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("payload, fixed_url, footer_branding", main_source)
         self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
 
+    def test_premium_card_controls_translation_and_exclusions_are_wired(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("class CardStyleSettingsView(PremiumControlsPage)", main_source)
+        self.assertIn("class TwitterTranslationSettingsView(PremiumControlsPage)", main_source)
+        self.assertIn("class ExclusionSettingsView(PremiumControlsPage)", main_source)
+        self.assertIn("preferences_from_settings(guild_settings, premium=premium)", main_source)
+        self.assertIn("resolve_twitter_language(", main_source)
+        self.assertIn("should_skip_automatic(message, guild_settings, premium=premium)", main_source)
+        self.assertGreaterEqual(main_source.count("footer_branding, card_preferences"), 9)
+
     def test_footer_branding_settings_option_is_visibly_premium(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
@@ -135,7 +146,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload", main_source)
         self.assertIn('elif item.service == "Twitter":', main_source)
         self.assertIn(
-            "fetch_twitter_payload(item.canonical_url, item.language, item.mode)",
+            "item.canonical_url, twitter_language, item.mode",
             main_source,
         )
         self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)

@@ -25,6 +25,16 @@ from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
 from pinterest_embed import fetch_pinterest_layout
 from embed_footer import FooterBranding, escape_component_text
+from card_preferences import preferences_from_settings
+from premium_controls import (
+    fetch_analytics_summary,
+    init_premium_controls,
+    load_premium_controls,
+    record_processing_outcome,
+    resolve_twitter_language,
+    save_premium_controls,
+    should_skip_automatic,
+)
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
 from onboarding import send_onboarding_dm
@@ -511,10 +521,23 @@ async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
     client.db = await init_db()
+    await init_premium_controls(client.db)
     await migrate_youtube_service_default(client.db)
     await migrate_pinterest_service_default(client.db)
     await load_channel_states(client.db)
     await load_settings(client.db)
+    for guild_id, controls in (await load_premium_controls(client.db)).items():
+        bot_settings.setdefault(
+            guild_id,
+            {
+                "enabled_services": DEFAULT_ENABLED_SERVICES.copy(),
+                "mention_users": True,
+                "delete_original": True,
+                "language": "en",
+                "delivery_mode": "suppress",
+                "media_quality": "balanced",
+            },
+        ).update(controls)
     await load_channel_service_rules(client.db)
     if PREMIUM_SKU_ID:
         try:
@@ -786,6 +809,10 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(label=get_text(lang, "language"), description=get_text(lang, "language_desc"), value="Language", emoji="🌐"),
             discord.SelectOption(label=get_text(lang, "debug"), description=get_text(lang, "debug_desc"), value="Debug", emoji="🐞"),
             discord.SelectOption(label=get_text(lang, "embed_color"), description=get_text(lang, "embed_color_desc"), value="Embed Color", emoji="💎"),
+            discord.SelectOption(label="Card Style", description="Customize social cards (Premium)", value="Card Style", emoji="🎛️"),
+            discord.SelectOption(label="X Translation", description="Choose a default language (Premium)", value="X Translation", emoji="🌐"),
+            discord.SelectOption(label="Exclusions", description="Ignore members or roles (Premium)", value="Exclusions", emoji="🛡️"),
+            discord.SelectOption(label="Analytics", description="View private 30-day insights (Premium)", value="Analytics", emoji="📈"),
             discord.SelectOption(
                 label="Footer Branding",
                 description="Use this server's identity in social cards (Premium)",
@@ -804,6 +831,40 @@ class SettingsDropdown(ui.Select):
             premium = await is_guild_premium(interaction.guild.id)
             view = FooterBrandingSettingsView(
                 self.source_interaction, self.settings, premium=premium
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            return
+        premium_pages = {
+            "Card Style": CardStyleSettingsView,
+            "X Translation": TwitterTranslationSettingsView,
+            "Exclusions": ExclusionSettingsView,
+        }
+        if value in premium_pages:
+            premium = await is_guild_premium(interaction.guild.id)
+            view = premium_pages[value](
+                self.source_interaction, self.settings, premium=premium
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            return
+        if value == "Analytics":
+            premium = await is_guild_premium(interaction.guild.id)
+            summary = []
+            if premium:
+                try:
+                    summary = await fetch_analytics_summary(
+                        client.db, interaction.guild.id, days=30
+                    )
+                except Exception as error:
+                    logging.warning(
+                        "Premium analytics lookup failed for guild %s: %s",
+                        interaction.guild.id,
+                        error,
+                    )
+            view = AnalyticsSettingsView(
+                self.source_interaction,
+                self.settings,
+                premium=premium,
+                summary=summary,
             )
             await interaction.response.send_message(view=view, ephemeral=True)
             return
@@ -1168,6 +1229,278 @@ class PremiumSettingsView(SettingsPageView):
         )
 
 
+class PremiumControlsPage(SettingsPageView):
+    """Base page that rechecks entitlement before every Premium mutation."""
+
+    def __init__(self, interaction, settings, *, premium):
+        super().__init__(interaction, settings)
+        self.premium = premium
+
+    async def save_premium(self):
+        await save_premium_controls(
+            client.db, self.interaction.guild.id, self.settings
+        )
+
+    def render_locked(self, *, title, description):
+        controls = ()
+        if PREMIUM_SKU_ID:
+            controls = ((discord.ui.Button(
+                style=discord.ButtonStyle.premium,
+                sku_id=int(PREMIUM_SKU_ID),
+            ),),)
+        self.render_page(
+            title=title,
+            description=description,
+            status="This is a FixEmbed Premium feature.",
+            controls=controls,
+            accent_color=discord.Color.gold(),
+            footer="Premium",
+        )
+
+    async def confirm_premium(self, interaction):
+        self.premium = await is_guild_premium(interaction.guild.id)
+        if self.premium:
+            return True
+        self.render()
+        await interaction.response.edit_message(view=self)
+        return False
+
+
+class CaptionModeSelect(ui.Select):
+    def __init__(self, page):
+        current = page.settings.get("card_caption_mode", "full")
+        super().__init__(
+            placeholder="Choose caption length...",
+            options=[
+                discord.SelectOption(
+                    label="Full captions", value="full", default=current == "full"
+                ),
+                discord.SelectOption(
+                    label="Compact captions",
+                    description="Trim captions after 280 characters",
+                    value="compact",
+                    default=current == "compact",
+                ),
+            ],
+        )
+        self.page = page
+
+    async def callback(self, interaction):
+        if not await self.page.confirm_premium(interaction):
+            return
+        self.page.settings["card_caption_mode"] = self.values[0]
+        await self.page.save_premium()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class CardStyleSettingsView(PremiumControlsPage):
+    def __init__(self, interaction, settings, *, premium):
+        super().__init__(interaction, settings, premium=premium)
+        self.render()
+
+    def render(self):
+        if not self.premium:
+            self.render_locked(
+                title="Social Card Style",
+                description="Control stats, hashtags, caption length, and card color.",
+            )
+            return
+        show_stats = bool(self.settings.get("card_show_stats", True))
+        show_hashtags = bool(self.settings.get("card_show_hashtags", True))
+        stats = discord.ui.Button(
+            label=f"Stats: {'Shown' if show_stats else 'Hidden'}",
+            style=discord.ButtonStyle.green if show_stats else discord.ButtonStyle.secondary,
+        )
+        hashtags = discord.ui.Button(
+            label=f"Hashtags: {'Shown' if show_hashtags else 'Hidden'}",
+            style=discord.ButtonStyle.green if show_hashtags else discord.ButtonStyle.secondary,
+        )
+        stats.callback = self.toggle_stats
+        hashtags.callback = self.toggle_hashtags
+        color = self.settings.get("embed_color") or "Platform default"
+        self.render_page(
+            title="Social Card Style",
+            description="Choose a consistent presentation for every supported Components V2 card.",
+            status=(
+                f"**Accent:** {color}\n"
+                f"**Captions:** {self.settings.get('card_caption_mode', 'full').title()}\n"
+                "-# Media playback and quality are never paywalled."
+            ),
+            controls=((stats, hashtags), (CaptionModeSelect(self),)),
+            accent_color=discord.Color.gold(),
+            footer="Premium card style",
+        )
+
+    async def toggle_stats(self, interaction):
+        if not await self.confirm_premium(interaction):
+            return
+        self.settings["card_show_stats"] = not bool(
+            self.settings.get("card_show_stats", True)
+        )
+        await self.save_premium()
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+    async def toggle_hashtags(self, interaction):
+        if not await self.confirm_premium(interaction):
+            return
+        self.settings["card_show_hashtags"] = not bool(
+            self.settings.get("card_show_hashtags", True)
+        )
+        await self.save_premium()
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+
+class TwitterLanguageSelect(ui.Select):
+    def __init__(self, page):
+        current = page.settings.get("twitter_language")
+        options = [
+            discord.SelectOption(
+                label="Original language", value="none", default=current is None
+            )
+        ]
+        options.extend(
+            discord.SelectOption(
+                label=name,
+                value=code,
+                emoji=LANGUAGE_FLAG_EMOJIS.get(code, "🌐"),
+                default=code == current,
+            )
+            for code, name in LANGUAGE_NAMES.items()
+        )
+        super().__init__(placeholder="Choose the default X language...", options=options)
+        self.page = page
+
+    async def callback(self, interaction):
+        if not await self.page.confirm_premium(interaction):
+            return
+        self.page.settings["twitter_language"] = (
+            None if self.values[0] == "none" else self.values[0]
+        )
+        await self.page.save_premium()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class TwitterTranslationSettingsView(PremiumControlsPage):
+    def __init__(self, interaction, settings, *, premium):
+        super().__init__(interaction, settings, premium=premium)
+        self.render()
+
+    def render(self):
+        if not self.premium:
+            self.render_locked(
+                title="Default X Translation",
+                description="Automatically translate X posts unless a link requests another language.",
+            )
+            return
+        current = self.settings.get("twitter_language")
+        label = LANGUAGE_NAMES.get(current, "Original language")
+        self.render_page(
+            title="Default X Translation",
+            description="Explicit translation options in a posted link always take priority.",
+            status=f"**Default:** {label}",
+            controls=((TwitterLanguageSelect(self),),),
+            accent_color=discord.Color.gold(),
+            footer="Premium translation",
+        )
+
+
+class IgnoredUsersSelect(ui.UserSelect):
+    def __init__(self, page):
+        super().__init__(
+            placeholder="Choose members to ignore...", min_values=0, max_values=25
+        )
+        self.page = page
+
+    async def callback(self, interaction):
+        if not await self.page.confirm_premium(interaction):
+            return
+        self.page.settings["ignored_user_ids"] = [value.id for value in self.values]
+        await self.page.save_premium()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class IgnoredRolesSelect(ui.RoleSelect):
+    def __init__(self, page):
+        super().__init__(
+            placeholder="Choose roles to ignore...", min_values=0, max_values=25
+        )
+        self.page = page
+
+    async def callback(self, interaction):
+        if not await self.page.confirm_premium(interaction):
+            return
+        self.page.settings["ignored_role_ids"] = [value.id for value in self.values]
+        await self.page.save_premium()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class ExclusionSettingsView(PremiumControlsPage):
+    def __init__(self, interaction, settings, *, premium):
+        super().__init__(interaction, settings, premium=premium)
+        self.render()
+
+    def render(self):
+        if not self.premium:
+            self.render_locked(
+                title="Automatic Processing Exclusions",
+                description="Keep selected members or roles out of automatic link processing.",
+            )
+            return
+        user_ids = self.settings.get("ignored_user_ids", [])
+        role_ids = self.settings.get("ignored_role_ids", [])
+        self.render_page(
+            title="Automatic Processing Exclusions",
+            description="Links from selected members, or anyone with a selected role, are left untouched.",
+            status=(
+                f"**Ignored members:** {len(user_ids)}/25\n"
+                f"**Ignored roles:** {len(role_ids)}/25"
+            ),
+            controls=((IgnoredUsersSelect(self),), (IgnoredRolesSelect(self),)),
+            accent_color=discord.Color.gold(),
+            footer="Premium exclusions",
+        )
+
+
+class AnalyticsSettingsView(PremiumControlsPage):
+    def __init__(self, interaction, settings, *, premium, summary):
+        super().__init__(interaction, settings, premium=premium)
+        self.summary = summary
+        self.render()
+
+    def render(self):
+        if not self.premium:
+            self.render_locked(
+                title="Private Analytics",
+                description="See aggregate link-processing outcomes from the last 30 days.",
+            )
+            return
+        total_rich = sum(item["rich_count"] for item in self.summary)
+        total_fallback = sum(item["fallback_count"] for item in self.summary)
+        lines = [
+            f"**{escape_component_text(item['service'])}:** "
+            f"{item['rich_count']} rich · {item['fallback_count']} fallback"
+            for item in self.summary
+        ]
+        status = (
+            f"**Rich cards:** {total_rich}  ·  **Link fallbacks:** {total_fallback}\n\n"
+            + ("\n".join(lines) if lines else "No activity recorded yet.")
+            + "\n\n-# Stores daily counts only—never message text, links, or member identities."
+        )
+        self.render_page(
+            title="Private 30-Day Analytics",
+            description="Understand platform usage and fallback reliability without tracking content.",
+            status=status,
+            accent_color=discord.Color.gold(),
+            footer="Premium analytics · 90-day aggregate retention",
+        )
+
+
 class FooterEmojiSelect(ui.Select):
     def __init__(self, page):
         current_id = page.settings.get("footer_emoji_id")
@@ -1433,7 +1766,11 @@ async def on_message(message):
     delivery_mode = guild_settings.get("delivery_mode", "suppress")
     media_quality = guild_settings.get("media_quality", "balanced")
     premium = await is_guild_premium(guild_id)
+    if should_skip_automatic(message, guild_settings, premium=premium):
+        await client.process_commands(message)
+        return
     footer_branding = get_footer_branding(message.guild, guild_settings, premium)
+    card_preferences = preferences_from_settings(guild_settings, premium=premium)
 
     # Premium perk: skip bot messages only if NOT premium
     if message.author.bot and not premium:
@@ -1457,6 +1794,7 @@ async def on_message(message):
                 recently_processed = (time.time() - cache_time) < DEDUP_WINDOW_SECONDS
 
                 if service_enabled and not recently_processed:
+                    rich_card_built = False
                     automatic_url = build_automatic_url(
                         item,
                         media_quality,
@@ -1465,88 +1803,116 @@ async def on_message(message):
                     if item.service == "Instagram":
                         try:
                             layout = await fetch_instagram_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Instagram component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Twitter":
                         try:
                             fixed_url = build_fixembed_url(item, media_quality)
-                            payload = await fetch_twitter_payload(item.canonical_url, item.language, item.mode)
+                            twitter_language = resolve_twitter_language(
+                                item.language, guild_settings, premium=premium
+                            )
+                            payload = await fetch_twitter_payload(
+                                item.canonical_url, twitter_language, item.mode
+                            )
                             layout = build_twitter_layout(
-                                payload, fixed_url, footer_branding
+                                payload, fixed_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"X component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Reddit":
                         try:
                             layout = await fetch_reddit_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Reddit component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Threads":
                         try:
                             layout = await fetch_threads_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Threads component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Pixiv":
                         try:
                             layout = await fetch_pixiv_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Pixiv component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Bluesky":
                         try:
                             layout = await fetch_bluesky_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Bluesky component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Bilibili":
                         try:
                             layout = await fetch_bilibili_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Bilibili component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "YouTube":
                         try:
                             layout = await fetch_youtube_community_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"YouTube component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Pinterest":
                         try:
                             layout = await fetch_pinterest_layout(
-                                item.canonical_url, automatic_url, footer_branding
+                                item.canonical_url, automatic_url, footer_branding, card_preferences
                             )
                             component_layouts.append((layout, automatic_url))
+                            rich_card_built = True
                         except Exception as error:
                             logging.warning(f"Pinterest component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")
+                    if premium:
+                        try:
+                            await record_processing_outcome(
+                                client.db,
+                                guild_id,
+                                item.service,
+                                rich=rich_card_built,
+                            )
+                        except Exception as error:
+                            logging.warning(
+                                "Premium analytics write failed for guild %s: %s",
+                                guild_id,
+                                error,
+                            )
                     processed_link_cache[dedup_key] = time.time()
                     service_stats = processing_stats["by_service"].setdefault(item.service, {"ok": 0, "fail": 0})
                     service_stats["ok"] += 1

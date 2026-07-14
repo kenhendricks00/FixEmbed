@@ -1,9 +1,36 @@
 import unittest
 
+from card_preferences import CardPreferences
 from twitter_embed import build_twitter_layout
 
 
 class TwitterEmbedTests(unittest.TestCase):
+    def test_premium_card_preferences_change_accent_caption_and_stats(self):
+        payload = {
+            "description": "A long post #announcement",
+            "authorName": "Creator",
+            "stats": "💬 12 ❤️ 34",
+        }
+        preferences = CardPreferences(
+            accent_color=0x123456,
+            show_stats=False,
+            show_hashtags=False,
+        )
+
+        container = build_twitter_layout(
+            payload, card_preferences=preferences
+        ).to_components()[0]
+        text = "\n".join(
+            component.get("content", "")
+            for component in container["components"]
+            if component.get("type") == 10
+        )
+
+        self.assertEqual(container["accent_color"], 0x123456)
+        self.assertNotIn("#announcement", text)
+        self.assertNotIn("12", text)
+        self.assertNotIn("34", text)
+
     def test_components_v2_uses_real_gif_media_without_video_controls(self):
         payload = {
             "authorName": "GIF Author",

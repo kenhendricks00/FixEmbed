@@ -4,6 +4,10 @@
 - Added a restrained native Premium purchase button to `/settings` for non-subscribers while keeping social embed footers promotion-free.
 - Added Premium custom footer branding with the server's live name and an optional server emoji across every Components V2 social card.
 - Preserved a subtle `via FixEmbed` attribution and safely degraded to the standard footer when Premium is inactive.
+- Added global social-card controls for custom accents, engagement stats, hashtags, and compact captions across every Components V2 renderer.
+- Added a default X translation language with explicit per-link overrides taking priority.
+- Added member and role exclusions for automatic processing, rechecking Premium entitlement on every settings mutation.
+- Added private 30-day analytics backed by content-free daily aggregates with 90-day retention.
 
 #### **Server onboarding**
 - Added a one-time Components V2 welcome DM to the server owner when FixEmbed joins a guild.
