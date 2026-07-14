@@ -788,8 +788,9 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(label=get_text(lang, "embed_color"), description=get_text(lang, "embed_color_desc"), value="Embed Color", emoji="💎"),
             discord.SelectOption(
                 label="Footer Branding",
-                description="Use this server's identity in social cards",
+                description="Use this server's identity in social cards (Premium)",
                 value="Footer Branding",
+                emoji="🏷️",
             ),
         ]
         super().__init__(placeholder=get_text(lang, "choose_option"), options=options)

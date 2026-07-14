@@ -77,6 +77,16 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("payload, fixed_url, footer_branding", main_source)
         self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
 
+    def test_footer_branding_settings_option_is_visibly_premium(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn('label="Footer Branding"', main_source)
+        self.assertIn(
+            'description="Use this server\'s identity in social cards (Premium)"',
+            main_source,
+        )
+        self.assertIn('value="Footer Branding",\n                emoji="🏷️"', main_source)
+
     def test_server_settings_require_manage_server_permission(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         settings_decorators = main_source.split(
