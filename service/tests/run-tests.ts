@@ -19,6 +19,7 @@ import {
     indexHtml,
     privacyHtml,
     statusHtml,
+    stylesCss,
     supportHtml,
     tosHtml,
 } from '../src/utils/static_site.ts';
@@ -2457,6 +2458,18 @@ const tests: TestCase[] = [
                 assert.match(page, /Source \(AGPL-3\.0\)/);
                 assert.match(page, /Kenneth Hendricks/);
             }
+        },
+    },
+    {
+        name: 'fallback acknowledgements use a responsive accessible directory',
+        run: () => {
+            assert.match(indexHtml, /class="credits-intro"/);
+            assert.match(indexHtml, /class="credit-name">FxTwitter/);
+            assert.match(indexHtml, /class="credit-purpose">X metadata fallback/);
+            assert.match(indexHtml, /class="credits-note"/);
+            assert.match(indexHtml, /rel="noopener noreferrer"/);
+            assert.match(stylesCss, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+            assert.match(stylesCss, /\.credit-link:focus-visible/);
         },
     },
     {

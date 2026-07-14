@@ -339,16 +339,34 @@ docker run -d kenhendricks00/fixembed</code></pre>
     <section class="credits-section">
         <div class="container">
             <h2>Fallback services &amp; acknowledgements</h2>
-            <p>FixEmbed uses first-party platform data whenever available. When a platform blocks or limits access, it may use:</p>
+            <p class="credits-intro">FixEmbed uses first-party platform data whenever available. When direct access is blocked or limited, these services help keep embeds working.</p>
             <div class="credits-grid">
-                <a href="https://github.com/FxEmbed/FxEmbed" class="credit-link" target="_blank">FxTwitter — X metadata fallback</a>
-                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link" target="_blank">VxInstagram — Instagram fallback</a>
-                <a href="https://kkinstagram.com" class="credit-link" target="_blank">KKInstagram — Instagram media fallback</a>
-                <a href="https://snapsave.app" class="credit-link" target="_blank">SnapSave — Instagram media recovery</a>
-                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">Phixiv — Pixiv fallback</a>
-                <a href="https://github.com/niconi21/vxBilibili" class="credit-link" target="_blank">VxBilibili — Bilibili fallback</a>
+                <a href="https://github.com/FxEmbed/FxEmbed" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">FxTwitter</span><span class="credit-purpose">X metadata fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
+                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">VxInstagram</span><span class="credit-purpose">Instagram fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
+                <a href="https://kkinstagram.com" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">KKInstagram</span><span class="credit-purpose">Instagram media fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
+                <a href="https://snapsave.app" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">SnapSave</span><span class="credit-purpose">Instagram media recovery</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
+                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">Phixiv</span><span class="credit-purpose">Pixiv fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
+                <a href="https://github.com/niconi21/vxBilibili" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">VxBilibili</span><span class="credit-purpose">Bilibili fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
             </div>
-            <p>These services are not affiliated with or endorsed by FixEmbed.</p>
+            <p class="credits-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>These independent services are not affiliated with or endorsed by FixEmbed.</span></p>
         </div>
     </section>
 
@@ -1214,33 +1232,108 @@ code {
    CREDITS SECTION
    =================================== */
 .credits-section {
-    padding: 80px 0;
+    padding: 72px 0;
     background: var(--bg-secondary);
     border-top: 1px solid var(--glass-border);
 }
 
+.credits-section .container {
+    max-width: 1040px;
+}
+
+.credits-section h2 {
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    margin-bottom: 12px;
+}
+
+.credits-intro {
+    max-width: 760px;
+    margin: 0 auto;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    text-align: center;
+}
+
 .credits-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
-    justify-content: center;
-    margin-top: 40px;
+    margin: 36px 0 24px;
 }
 
 .credit-link {
-    background: var(--bg-secondary);
-    padding: 12px 20px;
-    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 0;
+    padding: 16px 18px;
+    background: var(--bg-card);
     border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.credit-link > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.credit-name {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.credit-purpose {
+    overflow: hidden;
     color: var(--text-secondary);
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.credit-link i {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: 0.75rem;
 }
 
 .credit-link:hover {
     border-color: var(--primary-color);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+}
+
+.credit-link:hover i,
+.credit-link:focus-visible i {
     color: var(--primary-light);
-    background: rgba(88, 101, 242, 0.05);
+}
+
+.credit-link:focus-visible {
+    outline: 2px solid var(--primary-light);
+    outline-offset: 3px;
+}
+
+.credits-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px 14px;
+    color: var(--text-muted);
+    background: rgba(13, 17, 23, 0.45);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    text-align: left;
 }
 
 /* ===================================
@@ -1313,6 +1406,10 @@ footer {
     .cta-buttons {
         justify-content: center;
     }
+
+    .credits-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -1378,6 +1475,10 @@ footer {
     .platforms-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .credits-section {
+        padding: 56px 0;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1387,6 +1488,19 @@ footer {
 
     .hosting-text {
         padding: 24px;
+    }
+
+    .credits-grid {
+        grid-template-columns: 1fr;
+        margin-top: 28px;
+    }
+
+    .credit-purpose {
+        white-space: normal;
+    }
+
+    .credits-note {
+        align-items: flex-start;
     }
 }`;
 
