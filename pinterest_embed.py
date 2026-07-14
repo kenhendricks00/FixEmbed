@@ -9,7 +9,7 @@ from urllib.parse import quote
 import aiohttp
 import discord
 
-from embed_footer import build_component_footer
+from embed_footer import FooterBranding, build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -23,7 +23,9 @@ def _delivery_timestamp() -> int:
 
 
 def build_pinterest_layout(
-    payload: Mapping[str, Any], converted_url: Optional[str] = None
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Build a Pinterest Components V2 card using remote media URLs."""
     title = str(payload.get("title") or "Pinterest Pin").strip()
@@ -88,6 +90,7 @@ def build_pinterest_layout(
                 source_url=source_url,
                 converted_url=converted_url,
                 timestamp=_delivery_timestamp(),
+                branding=footer_branding,
             )
         )
     )
@@ -110,7 +113,9 @@ async def _fetch_pinterest_payload(source_url: str) -> Mapping[str, Any]:
 
 
 async def fetch_pinterest_layout(
-    source_url: str, converted_url: Optional[str] = None
+    source_url: str,
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     payload = await _fetch_pinterest_payload(source_url)
-    return build_pinterest_layout(payload, converted_url)
+    return build_pinterest_layout(payload, converted_url, footer_branding)

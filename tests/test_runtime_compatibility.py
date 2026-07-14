@@ -66,6 +66,35 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("premium = await is_guild_premium(guild_id)", settings_section)
         self.assertIn("SettingsView(interaction, guild_settings, premium=premium)", settings_section)
 
+    def test_premium_footer_branding_is_persisted_and_propagated(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("footer_branding_enabled BOOLEAN DEFAULT FALSE", main_source)
+        self.assertIn("footer_emoji_id INTEGER DEFAULT NULL", main_source)
+        self.assertIn("class FooterBrandingSettingsView(SettingsPageView)", main_source)
+        self.assertIn("footer_branding = get_footer_branding(", main_source)
+        self.assertGreaterEqual(main_source.count("automatic_url, footer_branding"), 8)
+        self.assertIn("payload, fixed_url, footer_branding", main_source)
+        self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
+
+    def test_server_settings_require_manage_server_permission(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        settings_decorators = main_source.split(
+            "@client.tree.command(name='settings'", 1
+        )[1].split("async def settings", 1)[0]
+
+        self.assertIn("@app_commands.guild_only()", settings_decorators)
+        self.assertIn("@app_commands.default_permissions(manage_guild=True)", settings_decorators)
+        self.assertIn("@app_commands.checks.has_permissions(manage_guild=True)", settings_decorators)
+
+    def test_new_guilds_receive_owner_onboarding(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        join_section = main_source.split("async def on_guild_join(guild):", 1)[1].split(
+            "# --- Premium Command ---", 1
+        )[0]
+
+        self.assertIn("await send_onboarding_dm(guild)", join_section)
+
     def test_about_and_help_commands_use_components_v2(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         info_commands = main_source.split("@client.tree.command(\n    name='about'", 1)[1].split(
@@ -109,10 +138,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
         self.assertIn('elif item.service == "Reddit":', main_source)
-        self.assertIn(
-            "fetch_reddit_layout(item.canonical_url, automatic_url)",
-            main_source,
-        )
+        self.assertIn("fetch_reddit_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_reddit", main_source)
@@ -122,7 +148,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from threads_embed import fetch_threads_layout", main_source)
         self.assertIn('elif item.service == "Threads":', main_source)
-        self.assertIn("fetch_threads_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_threads_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_threads", main_source)
@@ -132,7 +158,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from bluesky_embed import fetch_bluesky_layout", main_source)
         self.assertIn('elif item.service == "Bluesky":', main_source)
-        self.assertIn("fetch_bluesky_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_bluesky_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_bluesky", main_source)
@@ -142,7 +168,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from pixiv_embed import fetch_pixiv_layout", main_source)
         self.assertIn('elif item.service == "Pixiv":', main_source)
-        self.assertIn("fetch_pixiv_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_pixiv_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_pixiv", main_source)
@@ -152,7 +178,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from bilibili_embed import fetch_bilibili_layout", main_source)
         self.assertIn('elif item.service == "Bilibili":', main_source)
-        self.assertIn("fetch_bilibili_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_bilibili_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_bilibili", main_source)
@@ -162,7 +188,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from youtube_embed import fetch_youtube_community_layout", main_source)
         self.assertIn('elif item.service == "YouTube":', main_source)
-        self.assertIn("fetch_youtube_community_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_youtube_community_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_youtube", main_source)
@@ -172,7 +198,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from pinterest_embed import fetch_pinterest_layout", main_source)
         self.assertIn('elif item.service == "Pinterest":', main_source)
-        self.assertIn("fetch_pinterest_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertIn("fetch_pinterest_layout(", main_source)
         self.assertNotIn("download_pinterest", main_source)
 
     def test_forbidden_channel_errors_keep_discord_context(self):

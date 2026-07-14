@@ -11,7 +11,7 @@ import aiohttp
 import discord
 
 from component_emojis import application_emoji, format_component_stats
-from embed_footer import build_component_footer
+from embed_footer import FooterBranding, build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -146,6 +146,7 @@ def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any
 def build_twitter_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Build a modern Components V2 card without uploading tweet media."""
     name = str(payload.get("authorName") or "X").strip().lstrip("@")
@@ -222,6 +223,7 @@ def build_twitter_layout(
                 source_url=source_url,
                 converted_url=converted_url,
                 timestamp=_post_timestamp(payload.get("timestamp")),
+                branding=footer_branding,
             )
         )
     )
@@ -258,7 +260,8 @@ async def fetch_twitter_layout(
     language: Optional[str] = None,
     mode: Optional[str] = None,
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return an X Components V2 card."""
     payload = await fetch_twitter_payload(source_url, language, mode)
-    return build_twitter_layout(payload, converted_url)
+    return build_twitter_layout(payload, converted_url, footer_branding)

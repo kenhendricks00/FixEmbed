@@ -2,6 +2,12 @@
 
 #### **Premium discovery**
 - Added a restrained native Premium purchase button to `/settings` for non-subscribers while keeping social embed footers promotion-free.
+- Added Premium custom footer branding with the server's live name and an optional server emoji across every Components V2 social card.
+- Preserved a subtle `via FixEmbed` attribution and safely degraded to the standard footer when Premium is inactive.
+
+#### **Server onboarding**
+- Added a one-time Components V2 welcome DM to the server owner when FixEmbed joins a guild.
+- The private card confirms immediate readiness and points owners to `/settings`, `/help`, Debug, and the support server without a sales prompt.
 
 #### **Pinterest and acknowledgements**
 - Added first-party Pinterest Pin metadata, full-size image and playable video cards, and safe `pin.it` short-link resolution.

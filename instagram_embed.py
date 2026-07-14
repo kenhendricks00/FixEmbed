@@ -13,7 +13,7 @@ import aiohttp
 import discord
 
 from component_emojis import format_component_stats
-from embed_footer import build_component_footer
+from embed_footer import FooterBranding, build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -189,6 +189,7 @@ def build_instagram_embed(
 def build_instagram_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Build an Embedded-style Components V2 card with remotely unfurled media."""
     name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
@@ -254,6 +255,7 @@ def build_instagram_layout(
                 source_url=source_url,
                 converted_url=converted_url,
                 timestamp=int(datetime.now(timezone.utc).timestamp()),
+                branding=footer_branding,
             )
         )
     )
@@ -288,9 +290,12 @@ async def fetch_instagram_card(
 async def fetch_instagram_layout(
     source_url: str,
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a playable Components V2 card."""
-    return build_instagram_layout(await _fetch_instagram_payload(source_url), converted_url)
+    return build_instagram_layout(
+        await _fetch_instagram_payload(source_url), converted_url, footer_branding
+    )
 
 
 async def fetch_instagram_embed(

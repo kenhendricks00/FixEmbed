@@ -10,7 +10,7 @@ import aiohttp
 import discord
 
 from component_emojis import format_component_stats
-from embed_footer import build_component_footer
+from embed_footer import FooterBranding, build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -36,6 +36,7 @@ def _post_timestamp(value: Any) -> int:
 def build_bluesky_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Build a Bluesky Components V2 card using remote media URLs."""
     raw_name = str(payload.get("authorName") or "Bluesky").strip()
@@ -110,6 +111,7 @@ def build_bluesky_layout(
                 source_url=source_url,
                 converted_url=converted_url,
                 timestamp=_post_timestamp(payload.get("timestamp")),
+                branding=footer_branding,
             )
         )
     )
@@ -135,6 +137,9 @@ async def _fetch_bluesky_payload(source_url: str) -> Mapping[str, Any]:
 async def fetch_bluesky_layout(
     source_url: str,
     converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Bluesky Components V2 card."""
-    return build_bluesky_layout(await _fetch_bluesky_payload(source_url), converted_url)
+    return build_bluesky_layout(
+        await _fetch_bluesky_payload(source_url), converted_url, footer_branding
+    )

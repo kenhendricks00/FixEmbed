@@ -24,8 +24,10 @@ from pixiv_embed import fetch_pixiv_layout
 from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
 from pinterest_embed import fetch_pinterest_layout
+from embed_footer import FooterBranding, escape_component_text
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
+from onboarding import send_onboarding_dm
 from settings_migrations import migrate_pinterest_service_default, migrate_youtube_service_default
 from premium_roles import (
     reconcile_supporter_roles,
@@ -268,6 +270,22 @@ async def is_guild_premium(guild_id):
         logging.error(f"Error checking premium status: {e}")
         return False
 
+
+def get_footer_branding(guild, settings, premium):
+    """Resolve persisted Premium branding against the current guild."""
+    if not premium or not settings.get("footer_branding_enabled", False):
+        return None
+    emoji = ""
+    emoji_id = settings.get("footer_emoji_id")
+    if emoji_id:
+        try:
+            guild_emoji = discord.utils.get(guild.emojis, id=int(emoji_id))
+        except (TypeError, ValueError):
+            guild_emoji = None
+        if guild_emoji is not None:
+            emoji = str(guild_emoji)
+    return FooterBranding(name=guild.name, emoji=emoji)
+
 def get_premium_color(guild_id):
     """Get custom embed color for a premium guild, or None."""
     color_hex = bot_settings.get(guild_id, {}).get("embed_color")
@@ -303,7 +321,7 @@ async def init_db():
     db = await aiosqlite.connect('fixembed_data.db')
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_states (channel_id INTEGER PRIMARY KEY, state BOOLEAN)''')
     await db.commit()
-    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN, delete_original BOOLEAN DEFAULT TRUE, language TEXT DEFAULT 'en', embed_color TEXT DEFAULT NULL, delivery_mode TEXT DEFAULT 'suppress', media_quality TEXT DEFAULT 'balanced')''')
+    await db.execute('''CREATE TABLE IF NOT EXISTS guild_settings (guild_id INTEGER PRIMARY KEY, enabled_services TEXT, mention_users BOOLEAN, delete_original BOOLEAN DEFAULT TRUE, language TEXT DEFAULT 'en', embed_color TEXT DEFAULT NULL, delivery_mode TEXT DEFAULT 'suppress', media_quality TEXT DEFAULT 'balanced', footer_branding_enabled BOOLEAN DEFAULT FALSE, footer_emoji_id INTEGER DEFAULT NULL)''')
     await db.commit()
     await db.execute('''CREATE TABLE IF NOT EXISTS channel_service_rules (guild_id INTEGER, channel_id INTEGER, service TEXT, action TEXT, PRIMARY KEY (guild_id, channel_id, service))''')
     await db.commit()
@@ -362,6 +380,24 @@ async def init_db():
         else:
             raise
 
+    try:
+        await db.execute("ALTER TABLE guild_settings ADD COLUMN footer_branding_enabled BOOLEAN DEFAULT FALSE")
+        await db.commit()
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e):
+            pass
+        else:
+            raise
+
+    try:
+        await db.execute("ALTER TABLE guild_settings ADD COLUMN footer_emoji_id INTEGER DEFAULT NULL")
+        await db.commit()
+    except sqlite3.OperationalError as e:
+        if 'duplicate column name' in str(e):
+            pass
+        else:
+            raise
+
     return db
 
 async def load_channel_states(db):
@@ -375,7 +411,7 @@ async def load_channel_states(db):
                 channel_states[channel.id] = True
 
 async def load_settings(db):
-    async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original, language, embed_color, delivery_mode, media_quality FROM guild_settings') as cursor:
+    async with db.execute('SELECT guild_id, enabled_services, mention_users, delete_original, language, embed_color, delivery_mode, media_quality, footer_branding_enabled, footer_emoji_id FROM guild_settings') as cursor:
         async for row in cursor:
             guild_id = row[0]
             enabled_services = row[1]
@@ -385,6 +421,8 @@ async def load_settings(db):
             embed_color = row[5] if len(row) > 5 else None
             delivery_mode = row[6] if len(row) > 6 else "suppress"
             media_quality = row[7] if len(row) > 7 else "balanced"
+            footer_branding_enabled = row[8] if len(row) > 8 else False
+            footer_emoji_id = row[9] if len(row) > 9 else None
             enabled_services_list = ast.literal_eval(enabled_services) if enabled_services else DEFAULT_ENABLED_SERVICES          
             bot_settings[guild_id] = {
                 "enabled_services": enabled_services_list,
@@ -393,7 +431,9 @@ async def load_settings(db):
                 "language": language if language else "en",
                 "embed_color": embed_color,
                 "delivery_mode": delivery_mode if delivery_mode else "suppress",
-                "media_quality": media_quality if media_quality else "balanced"
+                "media_quality": media_quality if media_quality else "balanced",
+                "footer_branding_enabled": bool(footer_branding_enabled),
+                "footer_emoji_id": footer_emoji_id,
             }
 
 async def update_channel_state(db, channel_id, state):
@@ -409,11 +449,37 @@ async def update_channel_state(db, channel_id, state):
             else:
                 raise
 
-async def update_setting(db, guild_id, enabled_services, mention_users, delete_original, language="en", embed_color=None, delivery_mode="suppress", media_quality="balanced"):
+async def update_setting(
+    db,
+    guild_id,
+    enabled_services,
+    mention_users,
+    delete_original,
+    language="en",
+    embed_color=None,
+    delivery_mode="suppress",
+    media_quality="balanced",
+    footer_branding_enabled=False,
+    footer_emoji_id=None,
+):
     retries = 5
     for i in range(retries):
         try:
-            await db.execute('INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users, delete_original, language, embed_color, delivery_mode, media_quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (guild_id, repr(enabled_services), mention_users, delete_original, language, embed_color, delivery_mode, media_quality))
+            await db.execute(
+                'INSERT OR REPLACE INTO guild_settings (guild_id, enabled_services, mention_users, delete_original, language, embed_color, delivery_mode, media_quality, footer_branding_enabled, footer_emoji_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    guild_id,
+                    repr(enabled_services),
+                    mention_users,
+                    delete_original,
+                    language,
+                    embed_color,
+                    delivery_mode,
+                    media_quality,
+                    footer_branding_enabled,
+                    footer_emoji_id,
+                ),
+            )
             await db.commit()
             break
         except sqlite3.OperationalError as e:
@@ -671,6 +737,8 @@ class SettingsPageView(ui.LayoutView):
             self.settings.get("embed_color"),
             self.settings.get("delivery_mode", "suppress"),
             self.settings.get("media_quality", "balanced"),
+            self.settings.get("footer_branding_enabled", False),
+            self.settings.get("footer_emoji_id"),
         )
 
     def render_page(self, *, title, description, status=None, controls=(), accent_color=None, footer="Settings"):
@@ -718,6 +786,11 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(label=get_text(lang, "language"), description=get_text(lang, "language_desc"), value="Language", emoji="🌐"),
             discord.SelectOption(label=get_text(lang, "debug"), description=get_text(lang, "debug_desc"), value="Debug", emoji="🐞"),
             discord.SelectOption(label=get_text(lang, "embed_color"), description=get_text(lang, "embed_color_desc"), value="Embed Color", emoji="💎"),
+            discord.SelectOption(
+                label="Footer Branding",
+                description="Use this server's identity in social cards",
+                value="Footer Branding",
+            ),
         ]
         super().__init__(placeholder=get_text(lang, "choose_option"), options=options)
 
@@ -725,6 +798,13 @@ class SettingsDropdown(ui.Select):
         value = self.values[0]
         if value == "Embed Color" and await is_guild_premium(interaction.guild.id):
             await interaction.response.send_modal(EmbedColorModal(self.source_interaction, self.settings))
+            return
+        if value == "Footer Branding":
+            premium = await is_guild_premium(interaction.guild.id)
+            view = FooterBrandingSettingsView(
+                self.source_interaction, self.settings, premium=premium
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
             return
 
         page_types = {
@@ -1087,7 +1167,123 @@ class PremiumSettingsView(SettingsPageView):
         )
 
 
+class FooterEmojiSelect(ui.Select):
+    def __init__(self, page):
+        current_id = page.settings.get("footer_emoji_id")
+        options = [
+            discord.SelectOption(
+                label="No server emoji",
+                value="none",
+                default=current_id is None,
+            )
+        ]
+        options.extend(
+            discord.SelectOption(
+                label=emoji.name[:100],
+                value=str(emoji.id),
+                emoji=emoji,
+                default=str(emoji.id) == str(current_id),
+            )
+            for emoji in page.interaction.guild.emojis[:24]
+        )
+        super().__init__(placeholder="Choose an optional server emoji...", options=options)
+        self.page = page
+
+    async def callback(self, interaction):
+        if not await is_guild_premium(interaction.guild.id):
+            self.page.premium = False
+            self.page.render()
+            await interaction.response.edit_message(view=self.page)
+            return
+        value = self.values[0]
+        if value == "none":
+            emoji_id = None
+        else:
+            try:
+                emoji_id = int(value)
+            except ValueError:
+                emoji_id = None
+            if discord.utils.get(interaction.guild.emojis, id=emoji_id) is None:
+                await interaction.response.send_message(
+                    "That emoji is no longer available in this server.", ephemeral=True
+                )
+                return
+        self.page.settings["footer_emoji_id"] = emoji_id
+        await self.page.save()
+        self.page.render()
+        await interaction.response.edit_message(view=self.page)
+
+
+class FooterBrandingSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings, *, premium):
+        super().__init__(interaction, settings)
+        self.premium = premium
+        self.render()
+
+    def render(self):
+        if not self.premium:
+            controls = ()
+            if PREMIUM_SKU_ID:
+                controls = ((discord.ui.Button(
+                    style=discord.ButtonStyle.premium,
+                    sku_id=int(PREMIUM_SKU_ID),
+                ),),)
+            self.render_page(
+                title="Custom Footer Branding",
+                description="Use your server name and an optional server emoji on social cards.",
+                status="This is a FixEmbed Premium feature.",
+                controls=controls,
+                accent_color=discord.Color.gold(),
+                footer="Premium",
+            )
+            return
+
+        enabled = bool(self.settings.get("footer_branding_enabled", False))
+        selected = discord.utils.get(
+            self.interaction.guild.emojis,
+            id=self.settings.get("footer_emoji_id"),
+        )
+        safe_name = escape_component_text(self.interaction.guild.name)
+        toggle = discord.ui.Button(
+            label="Enabled" if enabled else "Disabled",
+            style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.secondary,
+        )
+        toggle.callback = self.toggle
+        status = (
+            f"**Status:** {'Enabled' if enabled else 'Disabled'}\n"
+            f"**Footer identity:** {str(selected) + ' ' if selected else ''}{safe_name}\n"
+            "-# Social cards retain a subtle via FixEmbed attribution."
+        )
+        controls = [(toggle,)]
+        if self.interaction.guild.emojis:
+            controls.append((FooterEmojiSelect(self),))
+        self.render_page(
+            title="Custom Footer Branding",
+            description="Brand social cards with this server's current name and an optional emoji.",
+            status=status,
+            controls=controls,
+            accent_color=discord.Color.gold(),
+            footer="Premium branding",
+        )
+
+    async def toggle(self, interaction):
+        if not await is_guild_premium(interaction.guild.id):
+            self.premium = False
+            self.render()
+            await interaction.response.edit_message(view=self)
+            return
+        self.settings["footer_branding_enabled"] = not bool(
+            self.settings.get("footer_branding_enabled", False)
+        )
+        await self.save()
+        self.render()
+        await interaction.response.edit_message(view=self)
+
+
 @client.tree.command(name='settings', description="Configure FixEmbed's settings")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
 async def settings(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     guild_settings = bot_settings.get(guild_id, {"enabled_services": DEFAULT_ENABLED_SERVICES, "mention_users": True, "delete_original": True, "delivery_mode": "suppress", "media_quality": "balanced"})
@@ -1120,7 +1316,8 @@ async def delivery(interaction: discord.Interaction, mode: app_commands.Choice[s
     await update_setting(
         client.db, guild_id, settings_obj["enabled_services"], settings_obj["mention_users"],
         settings_obj.get("delete_original", True), settings_obj.get("language", "en"),
-        settings_obj.get("embed_color"), settings_obj["delivery_mode"], settings_obj.get("media_quality", "balanced")
+        settings_obj.get("embed_color"), settings_obj["delivery_mode"], settings_obj.get("media_quality", "balanced"),
+        settings_obj.get("footer_branding_enabled", False), settings_obj.get("footer_emoji_id")
     )
     view = SettingsNoticeView(
         title="Delivery Method",
@@ -1151,7 +1348,8 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
     await update_setting(
         client.db, guild_id, settings_obj["enabled_services"], settings_obj["mention_users"],
         settings_obj.get("delete_original", True), settings_obj.get("language", "en"),
-        settings_obj.get("embed_color"), settings_obj.get("delivery_mode", "suppress"), settings_obj["media_quality"]
+        settings_obj.get("embed_color"), settings_obj.get("delivery_mode", "suppress"), settings_obj["media_quality"],
+        settings_obj.get("footer_branding_enabled", False), settings_obj.get("footer_emoji_id")
     )
     view = SettingsNoticeView(
         title="Media Quality",
@@ -1234,6 +1432,7 @@ async def on_message(message):
     delivery_mode = guild_settings.get("delivery_mode", "suppress")
     media_quality = guild_settings.get("media_quality", "balanced")
     premium = await is_guild_premium(guild_id)
+    footer_branding = get_footer_branding(message.guild, guild_settings, premium)
 
     # Premium perk: skip bot messages only if NOT premium
     if message.author.bot and not premium:
@@ -1264,7 +1463,9 @@ async def on_message(message):
                     )
                     if item.service == "Instagram":
                         try:
-                            layout = await fetch_instagram_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_instagram_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Instagram component build failed; using link fallback: {error}")
@@ -1273,56 +1474,72 @@ async def on_message(message):
                         try:
                             fixed_url = build_fixembed_url(item, media_quality)
                             payload = await fetch_twitter_payload(item.canonical_url, item.language, item.mode)
-                            layout = build_twitter_layout(payload, fixed_url)
+                            layout = build_twitter_layout(
+                                payload, fixed_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"X component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Reddit":
                         try:
-                            layout = await fetch_reddit_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_reddit_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Reddit component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Threads":
                         try:
-                            layout = await fetch_threads_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_threads_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Threads component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Pixiv":
                         try:
-                            layout = await fetch_pixiv_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_pixiv_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Pixiv component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Bluesky":
                         try:
-                            layout = await fetch_bluesky_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_bluesky_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Bluesky component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Bilibili":
                         try:
-                            layout = await fetch_bilibili_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_bilibili_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Bilibili component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "YouTube":
                         try:
-                            layout = await fetch_youtube_community_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_youtube_community_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"YouTube component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     elif item.service == "Pinterest":
                         try:
-                            layout = await fetch_pinterest_layout(item.canonical_url, automatic_url)
+                            layout = await fetch_pinterest_layout(
+                                item.canonical_url, automatic_url, footer_branding
+                            )
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Pinterest component build failed; using link fallback: {error}")
@@ -1407,9 +1624,25 @@ async def on_guild_join(guild):
             "delete_original": True,
             "language": "en",
             "delivery_mode": "suppress",
-            "media_quality": "balanced"
+            "media_quality": "balanced",
+            "footer_branding_enabled": False,
+            "footer_emoji_id": None,
         }
-        await update_setting(client.db, guild_id, bot_settings[guild_id]["enabled_services"], bot_settings[guild_id]["mention_users"], bot_settings[guild_id]["delete_original"], bot_settings[guild_id]["language"], bot_settings[guild_id].get("embed_color"), bot_settings[guild_id].get("delivery_mode", "suppress"), bot_settings[guild_id].get("media_quality", "balanced"))
+        await update_setting(
+            client.db,
+            guild_id,
+            bot_settings[guild_id]["enabled_services"],
+            bot_settings[guild_id]["mention_users"],
+            bot_settings[guild_id]["delete_original"],
+            bot_settings[guild_id]["language"],
+            bot_settings[guild_id].get("embed_color"),
+            bot_settings[guild_id].get("delivery_mode", "suppress"),
+            bot_settings[guild_id].get("media_quality", "balanced"),
+            bot_settings[guild_id].get("footer_branding_enabled", False),
+            bot_settings[guild_id].get("footer_emoji_id"),
+        )
+    if await send_onboarding_dm(guild):
+        logging.info("Sent onboarding DM for guild %s", guild_id)
 
 # --- Premium Command ---
 @client.tree.command(name='premium', description="View FixEmbed Premium subscription info")
@@ -1466,7 +1699,9 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                 self.settings.get("language", "en"),
                 None,
                 self.settings.get("delivery_mode", "suppress"),
-                self.settings.get("media_quality", "balanced"))
+                self.settings.get("media_quality", "balanced"),
+                self.settings.get("footer_branding_enabled", False),
+                self.settings.get("footer_emoji_id"))
             view = SettingsNoticeView(
                 title=get_text(lang, "embed_color_title"),
                 description=get_text(lang, "embed_color_reset"),
@@ -1490,7 +1725,9 @@ class EmbedColorModal(ui.Modal, title="Set Embed Color"):
                         self.settings.get("language", "en"),
                         color_str,
                         self.settings.get("delivery_mode", "suppress"),
-                        self.settings.get("media_quality", "balanced"))
+                        self.settings.get("media_quality", "balanced"),
+                        self.settings.get("footer_branding_enabled", False),
+                        self.settings.get("footer_emoji_id"))
                     view = SettingsNoticeView(
                         title=get_text(lang, "embed_color_title"),
                         description=get_text(lang, "embed_color_set", color=color_str),
