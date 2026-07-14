@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -11,16 +10,13 @@ import discord
 
 from embed_footer import FooterBranding, build_component_footer
 from card_preferences import CardPreferences, apply_caption_preferences
+from timestamp_utils import parse_post_timestamp
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 PINTEREST_COLOR = 0xE60023
 FIXEMBED_EMOJI_ID = 1525580543503106148
 PINTEREST_EMOJI_ID = 1526398381415731240
-
-
-def _delivery_timestamp() -> int:
-    return int(datetime.now(timezone.utc).timestamp())
 
 
 def build_pinterest_layout(
@@ -93,7 +89,7 @@ def build_pinterest_layout(
                 platform_name="Pinterest",
                 source_url=source_url,
                 converted_url=converted_url,
-                timestamp=_delivery_timestamp(),
+                timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
             )
         )

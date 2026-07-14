@@ -185,11 +185,14 @@ class InstagramEmbedTests(unittest.TestCase):
 
         self.assertEqual(embed.description, "Actual caption")
 
-    def test_footer_includes_a_discord_timestamp(self):
-        embed = build_instagram_embed({"authorName": "brooke_annm"})
+    def test_footer_uses_original_post_timestamp(self):
+        embed = build_instagram_embed({
+            "authorName": "brooke_annm",
+            "timestamp": "2026-05-27T21:03:02.000Z",
+        })
 
         self.assertIsNotNone(embed.timestamp)
-        self.assertEqual(embed.timestamp.utcoffset().total_seconds(), 0)
+        self.assertEqual(int(embed.timestamp.timestamp()), 1779915782)
 
     def test_video_card_preserves_the_playable_video_url(self):
         payload = {
@@ -214,6 +217,7 @@ class InstagramEmbedTests(unittest.TestCase):
             "authorHandle": "@brooke_annm",
             "authorUrl": "https://www.instagram.com/brooke_annm/",
             "authorAvatar": "https://cdn.example/avatar.jpg",
+            "timestamp": "2026-05-27T21:03:02.000Z",
             "stats": "💬 133",
             "video": {
                 "url": "https://fixembed.app/video/instagram?url=video",
@@ -246,6 +250,7 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertTrue(footer["content"].startswith("-# "))
         self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
         self.assertIn(f"[Instagram]({payload['url']})", footer["content"])
+        self.assertIn("<t:1779915782:R>", footer["content"])
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
 

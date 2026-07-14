@@ -11,6 +11,7 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { normalizePostTimestamp } from '../utils/timestamp.ts';
 import { parseInstagramUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
@@ -382,6 +383,7 @@ export const instagramHandler: PlatformHandler = {
                         authorUrl: metadata?.authorUrl,
                         authorAvatar: metadata?.authorAvatar,
                         stats: metadata?.stats,
+                        timestamp: metadata?.timestamp,
                         video: {
                             url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
                             width: 720,
@@ -403,6 +405,7 @@ export const instagramHandler: PlatformHandler = {
                 let authorHandle = undefined;
                 let authorUrl = undefined;
                 let authorAvatar = undefined;
+                let timestamp = undefined;
                 try {
                     const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
                     if (embedInfo.success && embedInfo.data) {
@@ -427,6 +430,7 @@ export const instagramHandler: PlatformHandler = {
                         authorHandle = embedInfo.data.authorHandle;
                         authorUrl = embedInfo.data.authorUrl;
                         authorAvatar = embedInfo.data.authorAvatar;
+                        timestamp = embedInfo.data.timestamp;
                     }
                 } catch (e) {
                     console.warn('Failed to fetch carousel metadata:', e);
@@ -477,6 +481,7 @@ export const instagramHandler: PlatformHandler = {
                         authorHandle,
                         authorUrl,
                         authorAvatar,
+                        timestamp,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',
@@ -759,6 +764,17 @@ function decodeInstagramText(value: string): string {
         .replace(/&gt;/g, '>');
 }
 
+function extractInstagramTimestamp(html: string): string | undefined {
+    const numeric = html.match(/"taken_at"\s*:\s*(\d{9,13})/)?.[1]
+        || html.match(/"taken_at_timestamp"\s*:\s*(\d{9,13})/)?.[1];
+    if (numeric) return normalizePostTimestamp(numeric);
+
+    const dateValue = html.match(/<time\b[^>]*\bdatetime=["']([^"']+)["']/i)?.[1]
+        || html.match(/<meta\b[^>]*(?:itemprop|property)=["'](?:datePublished|uploadDate|article:published_time)["'][^>]*\bcontent=["']([^"']+)["']/i)?.[1]
+        || html.match(/<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*(?:itemprop|property)=["'](?:datePublished|uploadDate|article:published_time)["']/i)?.[1];
+    return normalizePostTimestamp(dateValue);
+}
+
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
@@ -775,6 +791,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         }
 
         const html = await response.text();
+        const timestamp = extractInstagramTimestamp(html);
 
         const extractCount = (patterns: RegExp[]): number | undefined => {
             for (const pattern of patterns) {
@@ -948,6 +965,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 color: platformColors.instagram,
                 platform: 'instagram',
                 stats: formatStats({ likes, comments }),
+                timestamp,
             },
         };
 

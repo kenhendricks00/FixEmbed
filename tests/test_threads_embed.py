@@ -12,6 +12,7 @@ class ThreadsEmbedTests(unittest.TestCase):
             "authorHandle": "@creator",
             "authorUrl": "https://www.threads.net/@creator",
             "authorAvatar": "https://cdn.example/avatar.jpg",
+            "timestamp": "2026-07-13T19:00:00.000Z",
             "stats": "💬 34  ❤️ 1.2K",
             "video": {
                 "url": "https://fixembed.app/video/threads?url=video",
@@ -37,6 +38,7 @@ class ThreadsEmbedTests(unittest.TestCase):
         self.assertIn("<:threads:1526267848924725399>", footer["content"])
         self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
         self.assertIn(f"[Threads]({payload['url']})", footer["content"])
+        self.assertIn("<t:1783969200:R>", footer["content"])
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
 

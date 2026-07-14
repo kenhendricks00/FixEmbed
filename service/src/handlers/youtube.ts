@@ -14,6 +14,7 @@
 import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { decodeHtmlEntities, parseYouTubeUrl, truncateText } from '../utils/fetch.ts';
 import { getBrandedSiteName, platformColors } from '../utils/embed.ts';
+import { normalizePostTimestamp } from '../utils/timestamp.ts';
 
 // Invidious API instances
 const INVIDIOUS_INSTANCES = [
@@ -155,6 +156,9 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
     const likes = textFromRuns(renderer?.voteCount);
     const replies = textFromRuns(renderer?.replyCount);
     const stats = [likes && `👍 ${likes}`, replies && `💬 ${replies}`].filter(Boolean).join('  ');
+    const timestamp = normalizePostTimestamp(
+        metadataContent(html, 'datePublished') || metadataContent(html, 'uploadDate'),
+    );
 
     if (!description && !image) return null;
     return {
@@ -169,6 +173,7 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
         color: platformColors.youtube,
         platform: 'youtube',
         stats: stats || undefined,
+        timestamp,
     };
 }
 

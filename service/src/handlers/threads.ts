@@ -8,6 +8,7 @@
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
+import { normalizePostTimestamp } from '../utils/timestamp.ts';
 
 function decodeThreadsHtml(value: string): string {
     return value
@@ -83,6 +84,7 @@ interface ThreadsGraphQLResponse {
                             caption?: {
                                 text?: string;
                             };
+                            taken_at?: number;
                             like_count?: number;
                             text_post_app_info?: {
                                 direct_reply_count?: number;
@@ -123,6 +125,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
     images?: string[];
     videoUrl?: string;
     profilePic?: string;
+    timestamp?: string;
     error?: string;
 }> {
     try {
@@ -239,6 +242,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
             images,
             videoUrl,
             profilePic,
+            timestamp: normalizePostTimestamp(post.taken_at),
         };
     } catch (error) {
         console.error('Threads GraphQL fetch error:', error);
@@ -304,6 +308,7 @@ export const threadsHandler: PlatformHandler = {
                         color: platformColors.threads,
                         platform: 'threads',
                         stats: statsStr, // Stats shown via oEmbed author_name
+                        timestamp: graphqlResult.timestamp,
                     },
                 };
 

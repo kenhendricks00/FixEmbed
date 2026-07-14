@@ -52,7 +52,7 @@ class YouTubeCommunityEmbedTests(unittest.TestCase):
 
         self.assertEqual(container["components"][0]["type"], 10)
         self.assertNotIn(12, [component["type"] for component in container["components"]])
-        self.assertRegex(footer, r"<t:\d+:R>")
+        self.assertNotRegex(footer, r"<t:\d+:R>")
 
     def test_components_v2_layout_keeps_image_only_posts_valid(self):
         payload = {

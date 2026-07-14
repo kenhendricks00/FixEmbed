@@ -1,5 +1,3 @@
-import re
-import time
 import unittest
 
 from pinterest_embed import build_pinterest_layout
@@ -20,9 +18,7 @@ class PinterestEmbedTests(unittest.TestCase):
         }
         converted_url = "https://fixembed.app/embed?url=pinterest-pin"
 
-        before_render = int(time.time())
         container = build_pinterest_layout(payload, converted_url).to_components()[0]
-        after_render = int(time.time())
         header = container["components"][0]
         gallery = container["components"][1]
         footer = container["components"][-1]["content"]
@@ -42,10 +38,7 @@ class PinterestEmbedTests(unittest.TestCase):
         self.assertIn(f"[FixEmbed]({converted_url})", footer)
         self.assertIn(f"[Pinterest]({payload['url']})", footer)
         self.assertIn("<:pinterest:1526398381415731240>", footer)
-        rendered_timestamp = int(re.search(r"<t:(\d+):R>", footer).group(1))
-        self.assertGreaterEqual(rendered_timestamp, before_render)
-        self.assertLessEqual(rendered_timestamp, after_render)
-        self.assertNotIn("<t:1779915782:R>", footer)
+        self.assertIn("<t:1779915782:R>", footer)
 
     def test_components_v2_layout_supports_playable_pin_video(self):
         payload = {

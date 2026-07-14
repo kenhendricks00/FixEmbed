@@ -82,6 +82,7 @@ const tests: TestCase[] = [
                             profile_pic_url: 'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s150x150_tt6&amp;s=signed',
                         },
                         caption: { text: 'A full Threads post that should remain intact.' },
+                        taken_at: 1783969200,
                         like_count: 1200,
                         text_post_app_info: { direct_reply_count: 34 },
                         image_versions2: { candidates: [{ url: 'https://cdn.example/post.jpg' }] },
@@ -98,6 +99,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.caption, 'A full Threads post that should remain intact.');
                 assert.equal(response.data?.authorName, 'creator');
                 assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
                 assert.equal(
                     response.data?.authorAvatar,
                     'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s640x640_tt6&s=signed',
@@ -485,7 +487,7 @@ const tests: TestCase[] = [
     {
         name: 'YouTube community posts render creator text stats and full-size media',
         run: () => {
-            const html = `<script>const preloadNames = ["backstagePostRenderer"];</script><script>var ytInitialData = {
+            const html = `<meta itemprop="datePublished" content="2026-07-13T19:00:00Z"><script>const preloadNames = ["backstagePostRenderer"];</script><script>var ytInitialData = {
                 "contents": {"backstagePostRenderer": {
                     "postId": "UgkxExample123",
                     "authorText": {"runs": [{"text": "Creator Name"}]},
@@ -512,6 +514,7 @@ const tests: TestCase[] = [
             assert.equal(data?.stats, '👍 1.2K  💬 34');
             assert.equal(data?.authorUrl, 'https://www.youtube.com/@creator');
             assert.equal(data?.authorAvatar, 'https://yt3.example/avatar.jpg');
+            assert.equal(data?.timestamp, '2026-07-13T19:00:00.000Z');
             assert.equal(data?.siteName, 'FixEmbed • ▶️ YouTube');
         },
     },
@@ -596,7 +599,7 @@ const tests: TestCase[] = [
             const requested: string[] = [];
             globalThis.fetch = async (input) => {
                 requested.push(String(input));
-                return new Response('<html><script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;amp;y=2","text":"Caption","edge_media_preview_like":{"count":1284},"edge_media_to_parent_comment":{"count":37}}</script></html>', { status: 200 });
+                return new Response('<html><script>{"username":"creator","taken_at":1783969200,"display_url":"https:\\/\\/scontent.example.com\\/photo.jpg?x=1&amp;amp;y=2","text":"Caption","edge_media_preview_like":{"count":1284},"edge_media_to_parent_comment":{"count":37}}</script></html>', { status: 200 });
             };
             try {
                 const response = await instagramHandler.handle('https://www.instagram.com/p/ABC123/', env);
@@ -608,6 +611,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.description, '');
                 assert.match(response.data?.stats || '', /1\.3K/);
                 assert.match(response.data?.stats || '', /37/);
+                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },

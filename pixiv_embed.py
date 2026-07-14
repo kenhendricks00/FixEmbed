@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import html
 import re
 from typing import Any, Mapping, Optional
@@ -14,6 +13,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
 from card_preferences import CardPreferences, apply_caption_preferences
+from timestamp_utils import parse_post_timestamp
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -30,16 +30,6 @@ def _clean_handle(value: Any) -> str:
 
 def _escape_markdown(value: str) -> str:
     return re.sub(r"([\\`*_{}\[\]()<>#+\-.!|])", r"\\\1", value)
-
-
-def _artwork_timestamp(value: Any) -> int:
-    raw = str(value or "").strip()
-    if raw:
-        try:
-            return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
-        except ValueError:
-            pass
-    return int(datetime.now(timezone.utc).timestamp())
 
 
 def _clean_description(value: Any) -> str:
@@ -189,7 +179,7 @@ def build_pixiv_layout(
                 platform_name="Pixiv",
                 source_url=source_url,
                 converted_url=converted_url,
-                timestamp=_artwork_timestamp(payload.get("timestamp")),
+                timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
             )
         )

@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Original post times**
+- Standardized every social card footer to use the platform's original publication time instead of the time FixEmbed converted the link.
+- Omit the time when upstream metadata does not provide a valid publication timestamp rather than displaying a misleading conversion time.
+
 #### **Premium discovery**
 - Added a restrained native Premium purchase button to `/settings` for non-subscribers while keeping social embed footers promotion-free.
 - Added Premium custom footer branding with the server's live name and an optional server emoji across every Components V2 social card.

@@ -3,6 +3,7 @@
  * Short links are resolved manually so redirects remain on Pinterest hosts.
  */
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import { normalizePostTimestamp } from '../utils/timestamp.ts';
 import { getBrandedSiteName, platformColors } from '../utils/embed.ts';
 import { decodeHtmlEntities, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 
@@ -271,7 +272,7 @@ export const pinterestHandler: PlatformHandler = {
                         height: dimension(metaContent(html, 'og:video:height'), 1280),
                         thumbnail: image,
                     } : undefined,
-                    timestamp: timestamp && !Number.isNaN(Date.parse(timestamp)) ? timestamp : undefined,
+                    timestamp: normalizePostTimestamp(timestamp),
                     color: platformColors.pinterest,
                     platform: 'pinterest',
                 },

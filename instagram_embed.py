@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from urllib.parse import quote, urlsplit
 
@@ -15,6 +14,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
 from card_preferences import CardPreferences, apply_caption_preferences
+from timestamp_utils import parse_post_datetime, parse_post_timestamp
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -157,7 +157,7 @@ def build_instagram_card(
         description=description or None,
         url=str(payload.get("url") or "") or None,
         color=INSTAGRAM_COLOR,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=parse_post_datetime(payload.get("timestamp")),
     )
     embed.set_author(
         name=author_text,
@@ -258,7 +258,7 @@ def build_instagram_layout(
                 platform_name="Instagram",
                 source_url=source_url,
                 converted_url=converted_url,
-                timestamp=int(datetime.now(timezone.utc).timestamp()),
+                timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
             )
         )

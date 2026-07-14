@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -12,22 +11,13 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
 from card_preferences import CardPreferences, apply_caption_preferences
+from timestamp_utils import parse_post_timestamp
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
 YOUTUBE_COLOR = 0xFF0033
 FIXEMBED_EMOJI_ID = 1525580543503106148
 YOUTUBE_EMOJI_ID = 1526267390592290926
-
-
-def _post_timestamp(value: Any) -> int:
-    raw = str(value or "").strip()
-    if raw:
-        try:
-            return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
-        except ValueError:
-            pass
-    return int(datetime.now(timezone.utc).timestamp())
 
 
 def build_youtube_community_layout(
@@ -103,7 +93,7 @@ def build_youtube_community_layout(
                 platform_name="YouTube",
                 source_url=source_url,
                 converted_url=converted_url,
-                timestamp=_post_timestamp(payload.get("timestamp")),
+                timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
             )
         )
