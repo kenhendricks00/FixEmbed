@@ -305,6 +305,7 @@ const tests: TestCase[] = [
                     <meta property="og:image:width" content="736">
                     <meta property="og:image:height" content="981">
                     <meta property="og:updated_time" content="2026-05-27T21:03:02.000Z">
+                    <script>{"nativeCreator":{"fullName":"christinabrautaset","username":"christinaebrautaset","profileUrl":"https://www.pinterest.com/christinaebrautaset/","imageLargeUrl":"https://i.pinimg.com/140x140_RS/ba/ab/af/avatar.jpg"}}</script>
                 </head></html>`, { status: 200, headers: { 'Content-Type': 'text/html' } });
             };
             try {
@@ -318,7 +319,13 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://i.pinimg.com/736x/example.jpg');
                 assert.equal(response.data?.url, 'https://www.pinterest.com/pin/424605071145119869/');
                 assert.equal(response.data?.timestamp, '2026-05-27T21:03:02.000Z');
-                assert.equal(response.data?.authorName, undefined);
+                assert.equal(response.data?.authorName, 'christinabrautaset');
+                assert.equal(response.data?.authorHandle, '@christinaebrautaset');
+                assert.equal(response.data?.authorUrl, 'https://www.pinterest.com/christinaebrautaset/');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://i.pinimg.com/originals/ba/ab/af/avatar.jpg',
+                );
             } finally { globalThis.fetch = originalFetch; }
         },
     },

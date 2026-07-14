@@ -34,6 +34,92 @@ function trustedMediaUrl(value: string | undefined): string | undefined {
     }
 }
 
+function originalPinterestAvatar(value: string | undefined): string | undefined {
+    const trusted = trustedMediaUrl(value);
+    if (!trusted) return undefined;
+    const parsed = new URL(trusted);
+    parsed.pathname = parsed.pathname.replace(
+        /^\/(?:30x30_RS|75x75_RS|140x140_RS|280x280_RS)\//i,
+        '/originals/',
+    );
+    return parsed.toString();
+}
+
+function embeddedObject(html: string, key: string): Record<string, unknown> | undefined {
+    const marker = `"${key}":`;
+    let searchFrom = 0;
+    while (searchFrom < html.length) {
+        const markerIndex = html.indexOf(marker, searchFrom);
+        if (markerIndex < 0) return undefined;
+        let start = markerIndex + marker.length;
+        while (/\s/.test(html[start] || '')) start += 1;
+        if (html[start] !== '{') {
+            searchFrom = start;
+            continue;
+        }
+
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let index = start; index < html.length; index += 1) {
+            const character = html[index];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (character === '\\') escaped = true;
+                else if (character === '"') inString = false;
+                continue;
+            }
+            if (character === '"') inString = true;
+            else if (character === '{') depth += 1;
+            else if (character === '}' && --depth === 0) {
+                try {
+                    const parsed: unknown = JSON.parse(html.slice(start, index + 1));
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        return parsed as Record<string, unknown>;
+                    }
+                } catch {
+                    break;
+                }
+            }
+        }
+        searchFrom = start + 1;
+    }
+    return undefined;
+}
+
+function creatorMetadata(html: string): {
+    authorName?: string;
+    authorHandle?: string;
+    authorUrl?: string;
+    authorAvatar?: string;
+} {
+    const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+    for (const key of ['nativeCreator', 'closeupUnifiedAttribution', 'originPinner', 'pinner']) {
+        const creator = embeddedObject(html, key);
+        if (!creator) continue;
+        const username = text(creator.username).replace(/^@/, '');
+        const authorName = truncateText(
+            text(creator.fullName) || text(creator.firstName) || username,
+            100,
+        );
+        if (!authorName && !username) continue;
+        const safeUsername = /^[A-Za-z0-9_.-]+$/.test(username) ? username : '';
+        return {
+            authorName: authorName || safeUsername,
+            authorHandle: safeUsername ? `@${safeUsername}` : undefined,
+            authorUrl: safeUsername
+                ? `https://www.pinterest.com/${safeUsername}/`
+                : undefined,
+            authorAvatar: originalPinterestAvatar(
+                text(creator.imageLargeUrl)
+                || text(creator.imageMediumUrl)
+                || text(creator.imageSmallUrl),
+            ),
+        };
+    }
+    return {};
+}
+
 function pinIdFromUrl(value: string): string | undefined {
     try {
         return new URL(value).pathname.match(/\/pin\/(?:[^/]*--)?(\d+)(?:\/|$)/i)?.[1];
@@ -133,6 +219,7 @@ export const pinterestHandler: PlatformHandler = {
             const image = trustedMediaUrl(metaContent(html, 'og:image'));
             const videoUrl = trustedMediaUrl(metaContent(html, 'og:video:secure_url') || metaContent(html, 'og:video'));
             const timestamp = metaContent(html, 'og:updated_time');
+            const creator = creatorMetadata(html);
             if (!image && !videoUrl && title === 'Pinterest Pin' && !description) {
                 return { success: false, error: 'Pinterest metadata unavailable', redirect: canonicalUrl };
             }
@@ -144,6 +231,7 @@ export const pinterestHandler: PlatformHandler = {
                     description,
                     url: canonicalUrl,
                     siteName: getBrandedSiteName('pinterest'),
+                    ...creator,
                     image,
                     video: videoUrl ? {
                         url: videoUrl,

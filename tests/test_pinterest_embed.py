@@ -1,3 +1,5 @@
+import re
+import time
 import unittest
 
 from pinterest_embed import build_pinterest_layout
@@ -11,23 +13,39 @@ class PinterestEmbedTests(unittest.TestCase):
             "url": "https://www.pinterest.com/pin/424605071145119869/",
             "image": "https://i.pinimg.com/736x/example.jpg",
             "timestamp": "2026-05-27T21:03:02.000Z",
+            "authorName": "christinabrautaset",
+            "authorHandle": "@christinaebrautaset",
+            "authorUrl": "https://www.pinterest.com/christinaebrautaset/",
+            "authorAvatar": "https://i.pinimg.com/originals/ba/ab/af/avatar.jpg",
         }
         converted_url = "https://fixembed.app/embed?url=pinterest-pin"
 
+        before_render = int(time.time())
         container = build_pinterest_layout(payload, converted_url).to_components()[0]
+        after_render = int(time.time())
         header = container["components"][0]
         gallery = container["components"][1]
         footer = container["components"][-1]["content"]
 
         self.assertEqual(container["type"], 17)
         self.assertEqual(container["accent_color"], 0xE60023)
-        self.assertIn("**[Summer trip ideas]", header["content"])
-        self.assertIn("Mallorca with friends", header["content"])
+        header_text = header["components"][0]["content"]
+        self.assertTrue(header_text.startswith("**christinabrautaset**"))
+        self.assertIn("[@christinaebrautaset]", header_text)
+        self.assertIn("**[Summer trip ideas]", header_text)
+        self.assertIn("Mallorca with friends", header_text)
+        self.assertEqual(
+            header["accessory"]["media"]["url"],
+            payload["authorAvatar"],
+        )
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["image"])
         self.assertIn(f"[FixEmbed]({converted_url})", footer)
         self.assertIn(f"[Pinterest]({payload['url']})", footer)
         self.assertIn("<:pinterest:1526398381415731240>", footer)
-        self.assertIn("<t:1779915782:R>", footer)
+        rendered_timestamp = int(re.search(r"<t:(\d+):R>", footer).group(1))
+        self.assertGreaterEqual(rendered_timestamp, before_render)
+        self.assertLessEqual(rendered_timestamp, after_render)
+        self.assertNotIn("<t:1779915782:R>", footer)
 
     def test_components_v2_layout_supports_playable_pin_video(self):
         payload = {

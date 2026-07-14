@@ -18,13 +18,7 @@ FIXEMBED_EMOJI_ID = 1525580543503106148
 PINTEREST_EMOJI_ID = 1526398381415731240
 
 
-def _pin_timestamp(value: Any) -> int:
-    raw = str(value or "").strip()
-    if raw:
-        try:
-            return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
-        except ValueError:
-            pass
+def _delivery_timestamp() -> int:
     return int(datetime.now(timezone.utc).timestamp())
 
 
@@ -38,12 +32,18 @@ def build_pinterest_layout(
         description = f"{description[:2497].rstrip()}…"
     source_url = str(payload.get("url") or "").strip()
     author_name = str(payload.get("authorName") or "").strip()
+    author_handle = str(payload.get("authorHandle") or "").strip().lstrip("@")
     author_url = str(payload.get("authorUrl") or "").strip()
     author_avatar = str(payload.get("authorAvatar") or "").strip()
 
     title_line = f"**[{title}]({source_url})**" if source_url else f"**{title}**"
-    author_line = f"[{author_name}]({author_url})" if author_name and author_url else author_name
-    header_text = "\n".join(part for part in (title_line, author_line, description) if part)
+    if author_name and author_handle and author_url:
+        author_line = f"**{author_name}** ([@{author_handle}]({author_url}))"
+    elif author_name and author_url:
+        author_line = f"**[{author_name}]({author_url})**"
+    else:
+        author_line = f"**{author_name}**" if author_name else ""
+    header_text = "\n".join(part for part in (author_line, title_line, description) if part)
 
     children: list[discord.ui.Item[Any]] = []
     if author_avatar:
@@ -87,7 +87,7 @@ def build_pinterest_layout(
                 platform_name="Pinterest",
                 source_url=source_url,
                 converted_url=converted_url,
-                timestamp=_pin_timestamp(payload.get("timestamp")),
+                timestamp=_delivery_timestamp(),
             )
         )
     )
