@@ -50,6 +50,7 @@ interface ActivityEmbedData {
     vt?: string;
     vw?: number;
     vh?: number;
+    mt?: 'video' | 'gif';
     p?: string;
     a?: string;
     h?: string;
@@ -81,7 +82,7 @@ function decodeActivitySource(encodedData: string): ActivityEmbedData {
 
 interface MastodonMediaAttachment {
     id: string;
-    type: 'video' | 'image';
+    type: 'video' | 'gifv' | 'image';
     url: string;
     preview_url: string | null;
     remote_url: null;
@@ -476,6 +477,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             vt: source.video?.thumbnail,
             vw: source.video?.width,
             vh: source.video?.height,
+            mt: source.video?.mediaType,
             p: source.platform,
             a: creatorName,
             h: creatorHandle,
@@ -499,7 +501,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         const height = embedData.vh || 0;
         mediaAttachments.push({
             id: '1',
-            type: 'video',
+            type: embedData.mt === 'gif' ? 'gifv' : 'video',
             url: embedData.v,
             preview_url: embedData.vt || embedData.i || null,
             remote_url: null,

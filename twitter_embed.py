@@ -79,6 +79,12 @@ def _media_urls(data: Mapping[str, Any]) -> list[tuple[str, Optional[str]]]:
     return media[:10]
 
 
+def is_animated_gif(payload: Mapping[str, Any]) -> bool:
+    """Return whether X classified the primary playable media as a GIF."""
+    video = payload.get("video")
+    return isinstance(video, Mapping) and str(video.get("mediaType") or "").casefold() == "gif"
+
+
 def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any]]:
     name = str(section.get("authorName") or "Quoted author").strip().lstrip("@")
     handle = _clean_handle(section.get("authorHandle"))
@@ -219,7 +225,7 @@ def build_twitter_layout(
     return view
 
 
-async def _fetch_twitter_payload(
+async def fetch_twitter_payload(
     source_url: str,
     language: Optional[str] = None,
     mode: Optional[str] = None,
@@ -248,5 +254,5 @@ async def fetch_twitter_layout(
     converted_url: Optional[str] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return an X Components V2 card."""
-    payload = await _fetch_twitter_payload(source_url, language, mode)
+    payload = await fetch_twitter_payload(source_url, language, mode)
     return build_twitter_layout(payload, converted_url)

@@ -1945,6 +1945,40 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'Discord X animated GIF activity uses the native looping gifv renderer',
+        run: async () => {
+            const sourceUrl = 'https://x.com/gifauthor/status/1234567890';
+            const encoded = encodeActivitySource(sourceUrl);
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'An animated reaction',
+                user: { name: 'GIF Author', screen_name: 'gifauthor' },
+                mediaDetails: [{
+                    type: 'animated_gif',
+                    media_url_https: 'https://pbs.twimg.com/reaction.jpg',
+                    video_info: {
+                        aspect_ratio: [1, 1],
+                        variants: [{
+                            content_type: 'video/mp4',
+                            url: 'https://video.twimg.com/reaction.mp4',
+                        }],
+                    },
+                }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            try {
+                const response = await app.request('/api/v1/statuses/' + encoded, {}, env);
+                assert.equal(response.status, 200);
+                const activity = await response.json() as any;
+                assert.equal(activity.media_attachments[0].type, 'gifv');
+                assert.equal(activity.media_attachments[0].url, 'https://video.twimg.com/reaction.mp4');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'Mastodon activity API rebuilds a branded non-X image card',
         run: async () => {
             const html = generateEmbedHTML({

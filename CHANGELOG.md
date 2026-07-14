@@ -16,7 +16,8 @@
 - **`Richer First-Party X Embeds`**
   - Preserve every photo in X/Twitter carousel posts.
   - Render quoted posts as distinct nested cards with their author, avatar, linked handle, text, and media.
-  - Preserve playable GIF identity and mixed photo/video media in Components V2 cards.
+  - Route animated GIF posts through Discord's native `gifv` unfurl so they autoplay and loop when the viewer's client settings allow it.
+  - Preserve mixed photo/video media in Components V2 cards while keeping ordinary videos under playback controls.
   - Keep polls, quotes, translations, GIFs, and external video metadata when the fxTwitter recovery path is used.
   - Support opt-in translated posts by appending a two-letter language code to the status URL.
   - Render polls, quotes, Community Notes, long-form notes, X Articles, and website cards inline.
