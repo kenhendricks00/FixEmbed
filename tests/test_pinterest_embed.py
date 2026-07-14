@@ -26,7 +26,7 @@ class PinterestEmbedTests(unittest.TestCase):
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["image"])
         self.assertIn(f"[FixEmbed]({converted_url})", footer)
         self.assertIn(f"[Pinterest]({payload['url']})", footer)
-        self.assertIn("📌", footer)
+        self.assertIn("<:pinterest:1526398381415731240>", footer)
         self.assertIn("<t:1779915782:R>", footer)
 
     def test_components_v2_layout_supports_playable_pin_video(self):

@@ -15,6 +15,7 @@ from embed_footer import build_component_footer
 FIXEMBED_API = "https://fixembed.app/api/embed"
 PINTEREST_COLOR = 0xE60023
 FIXEMBED_EMOJI_ID = 1525580543503106148
+PINTEREST_EMOJI_ID = 1526398381415731240
 
 
 def _pin_timestamp(value: Any) -> int:
@@ -82,7 +83,7 @@ def build_pinterest_layout(
         discord.ui.TextDisplay(
             build_component_footer(
                 fixembed_emoji=f"<:fixembed:{FIXEMBED_EMOJI_ID}>",
-                platform_emoji="📌",
+                platform_emoji=f"<:pinterest:{PINTEREST_EMOJI_ID}>",
                 platform_name="Pinterest",
                 source_url=source_url,
                 converted_url=converted_url,
