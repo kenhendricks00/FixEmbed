@@ -145,7 +145,13 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const escape = escapeHtml;
 
     const sectionText = (embed.sections || [])
-        .map((section) => `**${section.title}**\n${section.body}${section.url ? `\n${section.url}` : ''}`)
+        .map((section) => {
+            const identity = section.authorName
+                ? `${section.authorName}${section.authorHandle ? ` (${section.authorHandle})` : ''}`
+                : '';
+            const body = [identity, section.body].filter(Boolean).join('\n');
+            return `**${section.title}**\n${body}${section.url ? `\n${section.url}` : ''}`;
+        })
         .join('\n\n');
     const renderedDescription = [embed.description, sectionText].filter(Boolean).join('\n\n').slice(0, 4000);
 

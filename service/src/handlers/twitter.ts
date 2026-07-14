@@ -3,7 +3,14 @@
  * Uses Twitter's public Syndication API, with FxTwitter as an emergency fallback.
  */
 
-import type { Env, HandlerOptions, HandlerResponse, PlatformHandler } from '../types.ts';
+import type {
+    EmbedSection,
+    Env,
+    HandlerOptions,
+    HandlerResponse,
+    PlatformHandler,
+    VideoEmbed,
+} from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
 import {
@@ -30,7 +37,16 @@ interface FxTwitterMedia {
     height?: number;
 }
 
+interface FxTwitterPoll {
+    choices?: Array<{ label?: string; count?: number; percentage?: number }>;
+    total_votes?: number;
+    ends_at?: string;
+    time_left_en?: string;
+}
+
 interface FxTwitterTweet {
+    id?: string;
+    url?: string;
     text?: string;
     author?: {
         name?: string;
@@ -42,10 +58,18 @@ interface FxTwitterTweet {
     likes?: number;
     views?: number;
     created_at?: string;
+    translation?: {
+        text?: string;
+        source_lang?: string;
+        target_lang?: string;
+    };
+    poll?: FxTwitterPoll;
+    quote?: FxTwitterTweet;
     media?: {
         all?: FxTwitterMedia[];
         photos?: FxTwitterMedia[];
         videos?: FxTwitterMedia[];
+        external?: FxTwitterMedia;
     };
 }
 
@@ -63,6 +87,74 @@ function highResolutionTwitterAvatar(avatarUrl: string): string {
     }
 }
 
+function fxTwitterMedia(tweet: FxTwitterTweet): {
+    image?: string;
+    images?: string[];
+    video?: VideoEmbed;
+} {
+    const allMedia = tweet.media?.all || [];
+    const photos = (tweet.media?.photos || allMedia.filter((item) => item.type === 'photo'))
+        .map((item) => item.url)
+        .filter((url): url is string => typeof url === 'string' && Boolean(url));
+    const firstVideo = (
+        tweet.media?.videos
+        || allMedia.filter((item) => ['video', 'gif', 'animated_gif'].includes(item.type || ''))
+    )[0] || tweet.media?.external;
+    const video = firstVideo?.url
+        ? {
+            url: firstVideo.url,
+            width: firstVideo.width || 1280,
+            height: firstVideo.height || 720,
+            thumbnail: firstVideo.thumbnail_url,
+            mediaType: ['gif', 'animated_gif'].includes(firstVideo.type || '') ? 'gif' as const : 'video' as const,
+        }
+        : undefined;
+
+    return {
+        image: photos.length === 1 && !video ? photos[0] : undefined,
+        images: photos.length > 1 || (photos.length === 1 && video) ? photos.slice(0, 4) : undefined,
+        video,
+    };
+}
+
+function fxTwitterQuoteSection(tweet: FxTwitterTweet): EmbedSection | undefined {
+    const quote = tweet.quote;
+    const author = quote?.author;
+    if (!quote || !author?.screen_name || !author.name) return undefined;
+    const quoteMedia = fxTwitterMedia(quote);
+    const quoteUrl = quote.url || (quote.id
+        ? `https://x.com/${author.screen_name}/status/${quote.id}`
+        : `https://x.com/${author.screen_name}`);
+    return {
+        kind: 'quote',
+        title: 'Quoted post',
+        body: truncateText(quote.text?.replace(/https?:\/\/t\.co\/\w+/g, '').trim() || '', 900),
+        url: quoteUrl,
+        authorName: author.name,
+        authorHandle: `@${author.screen_name}`,
+        authorUrl: `https://x.com/${author.screen_name}`,
+        authorAvatar: author.avatar_url ? highResolutionTwitterAvatar(author.avatar_url) : undefined,
+        images: quoteMedia.images || (quoteMedia.image ? [quoteMedia.image] : undefined),
+        video: quoteMedia.video,
+    };
+}
+
+function fxTwitterPollSection(poll?: FxTwitterPoll): EmbedSection | undefined {
+    const choices = (poll?.choices || []).filter((choice) => typeof choice.label === 'string');
+    if (choices.length < 2) return undefined;
+    const body = choices.map((choice) => {
+        const percentage = Number(choice.percentage) || 0;
+        const bar = '█'.repeat(Math.max(1, Math.round(percentage / 10)));
+        return `${bar} ${choice.label} — ${percentage}% (${Number(choice.count) || 0})`;
+    });
+    const state = poll?.time_left_en || (poll?.ends_at ? `Ends ${poll.ends_at}` : 'Results');
+    return {
+        kind: 'poll',
+        title: 'Poll',
+        body: `${body.join('\n')}\n${Number(poll?.total_votes) || 0} votes · ${state}`,
+    };
+}
+
 async function fetchFxTwitterFallback(
     username: string,
     tweetId: string,
@@ -70,8 +162,12 @@ async function fetchFxTwitterFallback(
     firstPartyError: string,
 ): Promise<HandlerResponse> {
     try {
+        const language = options.language?.toLowerCase();
+        const translationPath = language && /^[a-z]{2}$/.test(language)
+            ? `/${language}`
+            : '';
         const response = await fetchWithTimeout(
-            `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}`,
+            `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}${translationPath}`,
             { headers: { 'Accept': 'application/json', 'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)' } },
             5000,
         );
@@ -84,40 +180,46 @@ async function fetchFxTwitterFallback(
             return fallbackResponse(username, tweetId, firstPartyError);
         }
 
-        const allMedia = tweet.media?.all || [];
-        const photos = (tweet.media?.photos || allMedia.filter((item) => item.type === 'photo'))
-            .map((item) => item.url)
-            .filter((url): url is string => typeof url === 'string');
-        const firstVideo = (tweet.media?.videos || allMedia.filter((item) => item.type === 'video'))[0];
+        const media = fxTwitterMedia(tweet);
         const canonicalUrl = `https://x.com/${author.screen_name}/status/${tweetId}`;
         const galleryMode = options.mode === 'gallery';
-        let image: string | undefined;
-        let images: string[] | undefined;
-        if (photos.length === 1) [image] = photos;
-        if (photos.length > 1) images = photos.slice(0, 4);
+        const originalText = truncateText(tweet.text?.trim() || '', 3000);
+        const translatedText = tweet.translation?.text?.trim();
+        const translatedLanguage = (tweet.translation?.target_lang || language || '').toUpperCase();
+        const description = translatedText
+            ? truncateText(`${originalText}\n\n🌐 Translation (${translatedLanguage}): ${translatedText}`, 3000)
+            : originalText;
+        const sections = [
+            fxTwitterPollSection(tweet.poll),
+            fxTwitterQuoteSection(tweet),
+        ].filter((section): section is EmbedSection => Boolean(section));
+        const quoteSection = sections.find((section) => section.kind === 'quote');
+        let image = media.image;
+        let images = media.images;
+        let video = media.video;
+        let mediaOrigin: 'quote' | undefined;
+        if (!image && !images && !video && quoteSection) {
+            video = quoteSection.video;
+            if (quoteSection.images?.length === 1 && !video) [image] = quoteSection.images;
+            else if (quoteSection.images?.length) images = quoteSection.images;
+            if (image || images || video) mediaOrigin = 'quote';
+        }
 
         return {
             success: true,
             source: 'fallback',
             data: {
                 title: `@${author.screen_name}`,
-                description: galleryMode ? '' : truncateText(tweet.text?.trim() || '', 3000),
+                description: galleryMode ? '' : description,
                 url: canonicalUrl,
                 siteName: getBrandedSiteName('twitter'),
                 authorName: author.name,
                 authorHandle: `@${author.screen_name}`,
                 authorUrl: `https://x.com/${author.screen_name}`,
                 authorAvatar: highResolutionTwitterAvatar(author.avatar_url),
-                image: image || firstVideo?.thumbnail_url,
+                image: image || video?.thumbnail,
                 images,
-                video: firstVideo?.url
-                    ? {
-                        url: firstVideo.url,
-                        width: firstVideo.width || 1280,
-                        height: firstVideo.height || 720,
-                        thumbnail: firstVideo.thumbnail_url,
-                    }
-                    : undefined,
+                video,
                 color: platformColors.twitter,
                 platform: 'twitter',
                 timestamp: tweet.created_at,
@@ -127,8 +229,9 @@ async function fetchFxTwitterFallback(
                     likes: Number(tweet.likes) || undefined,
                     views: Number(tweet.views) || undefined,
                 }),
-                sections: [],
+                sections: galleryMode ? [] : sections,
                 mode: options.mode,
+                mediaOrigin,
             },
         };
     } catch {
@@ -141,6 +244,21 @@ function bestVideoUrl(media: SyndicationMedia): string | null {
         .filter((variant) => variant.content_type === 'video/mp4')
         .sort((left, right) => (right.bitrate || 0) - (left.bitrate || 0));
     return variants[0]?.url || null;
+}
+
+function twitterVideoEmbed(media?: SyndicationMedia): VideoEmbed | undefined {
+    if (!media || media.type === 'photo') return undefined;
+    const url = bestVideoUrl(media);
+    if (!url) return undefined;
+    const [widthRatio, heightRatio] = media.video_info?.aspect_ratio || [16, 9];
+    const width = 1280;
+    return {
+        url,
+        width,
+        height: Math.round(width * (heightRatio / widthRatio)),
+        thumbnail: media.media_url_https,
+        mediaType: media.type === 'animated_gif' ? 'gif' : 'video',
+    };
 }
 
 export const twitterHandler: PlatformHandler = {
@@ -222,25 +340,18 @@ export const twitterHandler: PlatformHandler = {
             const firstVideo = media.find((item) => item.type !== 'photo');
             let image: string | undefined;
             let images: string[] | undefined;
-            let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
+            let video: VideoEmbed | undefined;
+            let mediaOrigin: 'quote' | undefined;
 
-            if (photos.length === 1) {
+            if (photos.length === 1 && !firstVideo) {
                 [image] = photos;
-            } else if (photos.length > 1) {
+            } else if (photos.length > 1 || (photos.length === 1 && firstVideo)) {
                 images = photos;
             }
 
             if (firstVideo) {
-                const videoUrl = bestVideoUrl(firstVideo);
-                if (videoUrl) {
-                    const [widthRatio, heightRatio] = firstVideo.video_info?.aspect_ratio || [16, 9];
-                    const width = 1280;
-                    video = {
-                        url: videoUrl,
-                        width,
-                        height: Math.round(width * (heightRatio / widthRatio)),
-                        thumbnail: firstVideo.media_url_https,
-                    };
+                video = twitterVideoEmbed(firstVideo);
+                if (video) {
                     image ||= firstVideo.media_url_https;
                 }
             }
@@ -260,18 +371,33 @@ export const twitterHandler: PlatformHandler = {
             }
             if (tweet.quote) {
                 if (tweet.quote.user && tweet.quote.text) {
+                    const quoteHandle = tweet.quote.user.screen_name;
+                    const quoteMedia = tweet.quote.mediaDetails || [];
+                    const quotePhotos = quoteMedia
+                        .filter((item) => item.type === 'photo')
+                        .map((item) => item.media_url_https);
+                    const quoteVideo = twitterVideoEmbed(
+                        quoteMedia.find((item) => item.type !== 'photo'),
+                    );
                     sections?.push({
                         kind: 'quote',
-                        title: `Quoted @${tweet.quote.user.screen_name}`,
-                        body: tweet.quote.text,
+                        title: 'Quoted post',
+                        body: truncateText(
+                            tweet.quote.text.replace(/https?:\/\/t\.co\/\w+/g, '').trim(),
+                            900,
+                        ),
+                        url: tweet.quote.id_str
+                            ? `https://x.com/${quoteHandle}/status/${tweet.quote.id_str}`
+                            : `https://x.com/${quoteHandle}`,
+                        authorName: tweet.quote.user.name,
+                        authorHandle: `@${quoteHandle}`,
+                        authorUrl: `https://x.com/${quoteHandle}`,
+                        authorAvatar: highResolutionTwitterAvatar(
+                            tweet.quote.user.profile_image_url_https,
+                        ),
+                        images: quotePhotos.length ? quotePhotos : undefined,
+                        video: quoteVideo,
                     });
-                    if (!media.length && tweet.quote.mediaDetails?.length) {
-                        const quotePhotos = tweet.quote.mediaDetails
-                            .filter((item) => item.type === 'photo')
-                            .map((item) => item.media_url_https);
-                        if (quotePhotos.length === 1) [image] = quotePhotos;
-                        if (quotePhotos.length > 1) images = quotePhotos;
-                    }
                 } else {
                     sections?.push({
                         kind: 'tombstone',
@@ -305,6 +431,13 @@ export const twitterHandler: PlatformHandler = {
                 });
                 if (!image && !images && !video && tweet.linkCard.image) image = tweet.linkCard.image;
             }
+            const quoteSection = sections?.find((section) => section.kind === 'quote');
+            if (!image && !images && !video && quoteSection) {
+                video = quoteSection.video;
+                if (quoteSection.images?.length === 1 && !video) [image] = quoteSection.images;
+                else if (quoteSection.images?.length) images = quoteSection.images;
+                if (image || images || video) mediaOrigin = 'quote';
+            }
 
             return {
                 success: true,
@@ -332,6 +465,7 @@ export const twitterHandler: PlatformHandler = {
                     }),
                     sections: options.mode === 'gallery' ? [] : sections,
                     mode: options.mode,
+                    mediaOrigin,
                 },
             };
         } catch (error) {

@@ -113,6 +113,13 @@ class TwitterEmbedTests(unittest.TestCase):
             "description": "Main post context.",
             "authorName": "Primary Author",
             "authorHandle": "@primary",
+            "mediaOrigin": "quote",
+            "images": ["https://pbs.twimg.com/quoted-one.jpg"],
+            "video": {
+                "url": "https://video.twimg.com/quoted-gif.mp4",
+                "thumbnail": "https://pbs.twimg.com/quoted-gif.jpg",
+                "mediaType": "gif",
+            },
             "sections": [
                 {
                     "kind": "quote",

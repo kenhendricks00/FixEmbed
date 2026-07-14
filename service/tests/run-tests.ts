@@ -1301,6 +1301,18 @@ const tests: TestCase[] = [
                                             full_text: 'Quoted post body',
                                             created_at: 'Sat Jul 11 00:00:00 +0000 2026',
                                             entities: { urls: [], media: [] },
+                                            extended_entities: { media: [{
+                                                type: 'animated_gif',
+                                                media_url_https: 'https://pbs.twimg.com/media/quoted-gif.jpg',
+                                                video_info: {
+                                                    aspect_ratio: [1, 1],
+                                                    variants: [{
+                                                        bitrate: 832000,
+                                                        content_type: 'video/mp4',
+                                                        url: 'https://video.twimg.com/quoted-gif.mp4',
+                                                    }],
+                                                },
+                                            }] },
                                         },
                                     } },
                                     birdwatch_pivot: {
@@ -1339,12 +1351,31 @@ const tests: TestCase[] = [
                 assert.deepEqual(response.data?.sections?.map((section) => section.kind), [
                     'poll', 'quote', 'community-note', 'article',
                 ]);
+                const quote = response.data?.sections?.find((section) => section.kind === 'quote');
+                assert.deepEqual(quote, {
+                    kind: 'quote',
+                    title: 'Quoted post',
+                    body: 'Quoted post body',
+                    url: 'https://x.com/quoted/status/1999999999999999999',
+                    authorName: 'Quoted Author',
+                    authorHandle: '@quoted',
+                    authorUrl: 'https://x.com/quoted',
+                    authorAvatar: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                    images: undefined,
+                    video: {
+                        url: 'https://video.twimg.com/quoted-gif.mp4',
+                        width: 1280,
+                        height: 1280,
+                        thumbnail: 'https://pbs.twimg.com/media/quoted-gif.jpg',
+                        mediaType: 'gif',
+                    },
+                });
                 assert.match(response.data?.stats || '', /20/);
                 assert.doesNotMatch(response.data?.stats || '', /25/);
 
                 const html = generateEmbedHTML(response.data!, 'Discordbot/2.0');
                 assert.match(html, /Yes.*75%/s);
-                assert.match(html, /Quoted @quoted.*Quoted post body/s);
+                assert.match(html, /Quoted post.*Quoted Author \(@quoted\).*Quoted post body/s);
                 assert.match(html, /Readers added important context/);
                 assert.match(html, /A full X Article.*Article preview text/s);
             } finally {
@@ -1385,6 +1416,91 @@ const tests: TestCase[] = [
                     'https://pbs.twimg.com/media/gallery-one.jpg',
                     'https://pbs.twimg.com/media/gallery-two.jpg',
                 ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler preserves animated GIF identity and playable media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'An animated reaction.',
+                user: {
+                    name: 'GIF Author',
+                    screen_name: 'gifauthor',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/gifauthor.jpg',
+                },
+                created_at: '2026-07-12T00:00:00.000Z',
+                mediaDetails: [{
+                    type: 'animated_gif',
+                    media_url_https: 'https://pbs.twimg.com/media/reaction.jpg',
+                    video_info: {
+                        aspect_ratio: [16, 9],
+                        variants: [{
+                            bitrate: 832000,
+                            content_type: 'video/mp4',
+                            url: 'https://video.twimg.com/reaction.mp4',
+                        }],
+                    },
+                }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/gifauthor/status/1234567890',
+                    env,
+                );
+
+                assert.equal(response.data?.video?.url, 'https://video.twimg.com/reaction.mp4');
+                assert.equal(response.data?.video?.mediaType, 'gif');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler promotes quote media for shareable links without losing provenance',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify({
+                __typename: 'Tweet',
+                id_str: '1234567890',
+                text: 'Main post without media.',
+                user: {
+                    name: 'Primary Author',
+                    screen_name: 'primary',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/primary.jpg',
+                },
+                created_at: '2026-07-12T00:00:00.000Z',
+                quote: {
+                    id_str: '9876543210',
+                    text: 'Quoted post with media.',
+                    user: {
+                        name: 'Quoted Author',
+                        screen_name: 'quoted',
+                        profile_image_url_https: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                    },
+                    mediaDetails: [{
+                        type: 'photo',
+                        media_url_https: 'https://pbs.twimg.com/media/quoted.jpg',
+                    }],
+                },
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/primary/status/1234567890',
+                    env,
+                );
+                const quote = response.data?.sections?.find((section) => section.kind === 'quote');
+
+                assert.equal(response.data?.image, 'https://pbs.twimg.com/media/quoted.jpg');
+                assert.equal(response.data?.mediaOrigin, 'quote');
+                assert.deepEqual(quote?.images, ['https://pbs.twimg.com/media/quoted.jpg']);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -1875,6 +1991,11 @@ const tests: TestCase[] = [
                             url: 'https://x.com/kuriimu0203/status/2022261416439525543',
                             id: '2022261416439525543',
                             text: 'Fallback post text',
+                            translation: {
+                                text: 'Texto traducido',
+                                source_lang: 'en',
+                                target_lang: 'es',
+                            },
                             author: {
                                 name: 'Kuriimu',
                                 screen_name: 'kuriimu0203',
@@ -1893,12 +2014,39 @@ const tests: TestCase[] = [
                                     height: 2048,
                                 }],
                                 videos: [{
-                                    type: 'video',
+                                    type: 'gif',
                                     url: 'https://video.twimg.com/video.mp4',
                                     thumbnail_url: 'https://pbs.twimg.com/media/video.jpg',
                                     width: 1280,
                                     height: 720,
                                 }],
+                            },
+                            poll: {
+                                choices: [
+                                    { label: 'Yes', count: 75, percentage: 75 },
+                                    { label: 'No', count: 25, percentage: 25 },
+                                ],
+                                total_votes: 100,
+                                ends_at: '2026-07-14T00:00:00Z',
+                                time_left_en: 'Final results',
+                            },
+                            quote: {
+                                id: '1999999999999999999',
+                                url: 'https://x.com/quoted/status/1999999999999999999',
+                                text: 'Fallback quoted post',
+                                author: {
+                                    name: 'Quoted Author',
+                                    screen_name: 'quoted',
+                                    avatar_url: 'https://pbs.twimg.com/profile_images/quoted_normal.jpg',
+                                },
+                                media: {
+                                    photos: [{
+                                        type: 'photo',
+                                        url: 'https://pbs.twimg.com/media/quoted.jpg',
+                                        width: 1200,
+                                        height: 800,
+                                    }],
+                                },
                             },
                         },
                     });
@@ -1910,7 +2058,7 @@ const tests: TestCase[] = [
                 const source = encodeURIComponent(
                     'https://x.com/kuriimu0203/status/2022261416439525543',
                 );
-                const response = await app.request(`/api/embed?url=${source}`, {}, env);
+                const response = await app.request(`/api/embed?url=${source}&lang=es`, {}, env);
                 const body = await response.json() as any;
 
                 assert.equal(response.status, 200);
@@ -1920,9 +2068,13 @@ const tests: TestCase[] = [
                     body.data.authorAvatar,
                     'https://pbs.twimg.com/profile_images/avatar.jpg',
                 );
-                assert.equal(body.data.description, 'Fallback post text');
-                assert.equal(body.data.image, 'https://pbs.twimg.com/media/photo.jpg?name=orig');
+                assert.equal(body.data.description, 'Fallback post text\n\n🌐 Translation (ES): Texto traducido');
+                assert.equal(body.data.image, 'https://pbs.twimg.com/media/video.jpg');
+                assert.deepEqual(body.data.images, ['https://pbs.twimg.com/media/photo.jpg?name=orig']);
                 assert.equal(body.data.video.url, 'https://video.twimg.com/video.mp4');
+                assert.equal(body.data.video.mediaType, 'gif');
+                assert.deepEqual(body.data.sections.map((section: any) => section.kind), ['poll', 'quote']);
+                assert.deepEqual(body.data.sections[1].images, ['https://pbs.twimg.com/media/quoted.jpg']);
                 assert.match(body.data.stats, /56/);
             } finally {
                 globalThis.fetch = originalFetch;

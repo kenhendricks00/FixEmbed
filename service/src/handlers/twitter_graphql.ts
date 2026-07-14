@@ -64,6 +64,7 @@ export interface TwitterPoll {
 }
 
 export interface TwitterQuote {
+    id_str?: string;
     text?: string;
     user?: TwitterTweetData['user'];
     mediaDetails?: TwitterMedia[];
@@ -215,6 +216,7 @@ function normalizeQuote(value: unknown): TwitterQuote | undefined {
     const legacy = record(quote.legacy);
     if (!user || typeof legacy.full_text !== 'string') return { unavailableReason: 'Unavailable' };
     return {
+        id_str: String(quote.rest_id ?? legacy.id_str ?? ''),
         text: quote.note_tweet?.note_tweet_results?.result?.text ?? legacy.full_text,
         user,
         mediaDetails: normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media),

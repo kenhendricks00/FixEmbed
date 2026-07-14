@@ -57,6 +57,7 @@ export interface EmbedData {
     stats?: string;
     sections?: EmbedSection[];
     mode?: 'gallery' | 'mosaic';
+    mediaOrigin?: 'post' | 'quote';
 }
 
 export interface EmbedSection {
@@ -64,6 +65,12 @@ export interface EmbedSection {
     title: string;
     body: string;
     url?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorUrl?: string;
+    authorAvatar?: string;
+    images?: string[];
+    video?: VideoEmbed;
 }
 
 export interface VideoEmbed {
@@ -71,6 +78,7 @@ export interface VideoEmbed {
     width: number;
     height: number;
     thumbnail?: string;
+    mediaType?: 'video' | 'gif';
 }
 
 // Handler response

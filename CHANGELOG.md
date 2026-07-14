@@ -10,6 +10,9 @@
   - Keep every localized help surface aligned with the complete supported-service list, including YouTube community posts.
 - **`Richer First-Party X Embeds`**
   - Preserve every photo in X/Twitter carousel posts.
+  - Render quoted posts as distinct nested cards with their author, avatar, linked handle, text, and media.
+  - Preserve playable GIF identity and mixed photo/video media in Components V2 cards.
+  - Keep polls, quotes, translations, GIFs, and external video metadata when the fxTwitter recovery path is used.
   - Support opt-in translated posts by appending a two-letter language code to the status URL.
   - Render polls, quotes, Community Notes, long-form notes, X Articles, and website cards inline.
   - Add gallery and native multi-image mosaic URL modifiers.

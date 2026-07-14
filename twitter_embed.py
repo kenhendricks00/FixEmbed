@@ -167,7 +167,7 @@ def build_twitter_layout(
     else:
         children.append(discord.ui.TextDisplay(header_text))
 
-    media = _media_urls(payload)
+    media = [] if payload.get("mediaOrigin") == "quote" else _media_urls(payload)
 
     if media:
         media_description = description[:1024] or None
