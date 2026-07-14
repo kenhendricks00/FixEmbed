@@ -779,6 +779,12 @@ const tests: TestCase[] = [
                         },
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
                 }
+                if (url.includes('/oembed?')) {
+                    return new Response(JSON.stringify({
+                        title: 'usage limits reset for the 5th time today',
+                        author_name: 'Distinct_Ingenuity21',
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                }
                 if (url.startsWith('https://embed.reddit.com/')) {
                     return new Response(`
                         <a href="https://www.reddit.com/r/codex/">
