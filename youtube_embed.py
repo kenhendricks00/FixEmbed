@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -19,14 +19,14 @@ FIXEMBED_EMOJI_ID = 1525580543503106148
 YOUTUBE_EMOJI_ID = 1526267390592290926
 
 
-def _post_timestamp(value: Any) -> Optional[int]:
+def _post_timestamp(value: Any) -> int:
     raw = str(value or "").strip()
-    if not raw:
-        return None
-    try:
-        return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
-    except ValueError:
-        return None
+    if raw:
+        try:
+            return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            pass
+    return int(datetime.now(timezone.utc).timestamp())
 
 
 def build_youtube_community_layout(
