@@ -838,10 +838,11 @@ app.get('/proxy/bilibili', async (c) => {
         }
     };
 
-    let videoUrl = trustedVideoUrl(rawVideoUrl);
-    if (!videoUrl) {
+    const initialVideoUrl = trustedVideoUrl(rawVideoUrl);
+    if (!initialVideoUrl) {
         return c.json({ error: 'Invalid Bilibili video URL' }, 400);
     }
+    let videoUrl: string = initialVideoUrl;
 
     try {
         const requestHeaders = {
