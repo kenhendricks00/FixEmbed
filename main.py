@@ -23,9 +23,10 @@ from bluesky_embed import fetch_bluesky_layout
 from pixiv_embed import fetch_pixiv_layout
 from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
+from pinterest_embed import fetch_pinterest_layout
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
-from settings_migrations import migrate_youtube_service_default
+from settings_migrations import migrate_pinterest_service_default, migrate_youtube_service_default
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -77,6 +78,11 @@ SERVICES = {
         "patterns": [r"youtube\.com/post/([\w-]+)"],
         "base_url": "fixembed.app",
         "display_format": "YouTube • Community Post"
+    },
+    "Pinterest": {
+        "patterns": [r"pinterest\.com/pin/[\w-]+", r"pin\.it/[\w-]+"],
+        "base_url": "fixembed.app",
+        "display_format": "Pinterest • {0}"
     }
 }
 
@@ -91,6 +97,7 @@ SERVICE_EMOJI_FALLBACKS = {
     "Bluesky": "🦋",
     "Bilibili": "📺",
     "YouTube": "▶️",
+    "Pinterest": "📌",
 }
 SERVICE_EMOJI_IDS = {
     "YouTube": 1526267390592290926,
@@ -438,6 +445,7 @@ async def on_ready():
     logging.info(f'Logged in as {client.user}')
     client.db = await init_db()
     await migrate_youtube_service_default(client.db)
+    await migrate_pinterest_service_default(client.db)
     await load_channel_states(client.db)
     await load_settings(client.db)
     await load_channel_service_rules(client.db)
@@ -463,7 +471,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Bilibili links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Bilibili links", "for YouTube links", "for Pinterest links"
 ])
 
 @tasks.loop(seconds=60)
@@ -536,11 +544,15 @@ async def about(interaction: discord.Interaction):
                 "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)",
             ),
             (
-                get_text(lang, "credits"),
-                "- [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram), created by Lainmode\n"
-                "- [Snapsave](https://snapsave.app)\n"
-                "- [Phixiv](https://github.com/thelaao/phixiv), created by thelaao\n"
-                "- [VxBilibili](https://github.com/niconi21/vxBilibili), created by niconi21",
+                "Fallback services & acknowledgements",
+                "FixEmbed uses first-party platform data whenever available. When a platform blocks or limits access, it may use:\n\n"
+                "- [FxTwitter](https://github.com/FxEmbed/FxEmbed) — X metadata fallback\n"
+                "- [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram) — Instagram fallback\n"
+                "- [KKInstagram](https://kkinstagram.com) — Instagram media fallback\n"
+                "- [SnapSave](https://snapsave.app) — Instagram media recovery\n"
+                "- [Phixiv](https://github.com/thelaao/phixiv) — Pixiv fallback\n"
+                "- [VxBilibili](https://github.com/niconi21/vxBilibili) — Bilibili fallback\n\n"
+                "These services are not affiliated with or endorsed by FixEmbed.",
             ),
             (
                 "License & Attribution",
@@ -1148,6 +1160,8 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
     app_commands.Choice(name="Pixiv", value="Pixiv"),
     app_commands.Choice(name="Bluesky", value="Bluesky"),
     app_commands.Choice(name="Bilibili", value="Bilibili"),
+    app_commands.Choice(name="YouTube", value="YouTube"),
+    app_commands.Choice(name="Pinterest", value="Pinterest"),
 ], action=[
     app_commands.Choice(name="force on", value="on"),
     app_commands.Choice(name="force off", value="off"),
@@ -1293,6 +1307,13 @@ async def on_message(message):
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"YouTube component build failed; using link fallback: {error}")
+                            formatted_links.append(automatic_url)
+                    elif item.service == "Pinterest":
+                        try:
+                            layout = await fetch_pinterest_layout(item.canonical_url, automatic_url)
+                            component_layouts.append((layout, automatic_url))
+                        except Exception as error:
+                            logging.warning(f"Pinterest component build failed; using link fallback: {error}")
                             formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(f"[{item.display_text}]({automatic_url})")

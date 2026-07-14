@@ -11,6 +11,7 @@ export { threadsHandler } from './threads.ts';
 export { pixivHandler } from './pixiv.ts';
 export { bilibiliHandler } from './bilibili.ts';
 export { youtubeHandler } from './youtube.ts';
+export { pinterestHandler } from './pinterest.ts';
 
 import { twitterHandler } from './twitter.ts';
 import { redditHandler } from './reddit.ts';
@@ -20,6 +21,7 @@ import { threadsHandler } from './threads.ts';
 import { pixivHandler } from './pixiv.ts';
 import { bilibiliHandler } from './bilibili.ts';
 import { youtubeHandler } from './youtube.ts';
+import { pinterestHandler } from './pinterest.ts';
 import type { PlatformHandler } from '../types.ts';
 
 // All handlers in priority order
@@ -32,6 +34,7 @@ export const handlers: PlatformHandler[] = [
     pixivHandler,
     bilibiliHandler,
     youtubeHandler,
+    pinterestHandler,
 ];
 
 /**

@@ -5,6 +5,7 @@ import logging
 
 
 YOUTUBE_DEFAULT_MIGRATION = "enable_youtube_community_posts_v1"
+PINTEREST_DEFAULT_MIGRATION = "enable_pinterest_pins_v1"
 
 
 def add_service_to_serialized_settings(serialized: str, service: str) -> tuple[str, bool]:
@@ -21,15 +22,15 @@ def add_service_to_serialized_settings(serialized: str, service: str) -> tuple[s
     return repr(enabled_services), True
 
 
-async def migrate_youtube_service_default(db) -> None:
-    """Enable YouTube once for guilds saved before community-post support existed."""
+async def migrate_service_default(db, service: str, migration_name: str) -> None:
+    """Enable one newly supported service for guilds with persisted settings."""
     await db.execute(
         "CREATE TABLE IF NOT EXISTS app_migrations "
         "(name TEXT PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
     )
     async with db.execute(
         "SELECT 1 FROM app_migrations WHERE name = ?",
-        (YOUTUBE_DEFAULT_MIGRATION,),
+        (migration_name,),
     ) as cursor:
         if await cursor.fetchone():
             return
@@ -40,7 +41,7 @@ async def migrate_youtube_service_default(db) -> None:
         rows = await cursor.fetchall()
 
     for guild_id, serialized in rows:
-        updated, changed = add_service_to_serialized_settings(serialized, "YouTube")
+        updated, changed = add_service_to_serialized_settings(serialized, service)
         if changed:
             await db.execute(
                 "UPDATE guild_settings SET enabled_services = ? WHERE guild_id = ?",
@@ -49,6 +50,16 @@ async def migrate_youtube_service_default(db) -> None:
 
     await db.execute(
         "INSERT INTO app_migrations (name) VALUES (?)",
-        (YOUTUBE_DEFAULT_MIGRATION,),
+        (migration_name,),
     )
     await db.commit()
+
+
+async def migrate_youtube_service_default(db) -> None:
+    """Enable YouTube once for guilds saved before community-post support existed."""
+    await migrate_service_default(db, "YouTube", YOUTUBE_DEFAULT_MIGRATION)
+
+
+async def migrate_pinterest_service_default(db) -> None:
+    """Enable Pinterest once for guilds saved before Pin support existed."""
+    await migrate_service_default(db, "Pinterest", PINTEREST_DEFAULT_MIGRATION)

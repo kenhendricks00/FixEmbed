@@ -2,7 +2,7 @@
  * FixEmbed Service - Main Entry Point
  * 
  * A unified embed service for Discord supporting:
- * Twitter/X, Reddit, YouTube, Bluesky, Instagram, Threads, Pixiv, Bilibili
+ * Twitter/X, Reddit, YouTube, Bluesky, Instagram, Threads, Pixiv, Bilibili, Pinterest
  * 
  * Built with Hono + Cloudflare Workers
  */
@@ -143,6 +143,7 @@ const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Pixiv', sampleUrl: 'https://www.pixiv.net/en/artworks/101844438' },
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1nhZ2YHEtL' },
     { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+    { platform: 'Pinterest', sampleUrl: 'https://www.pinterest.com/pin/424605071145119869/' },
 ];
 
 async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformStatusRow> {
@@ -1478,6 +1479,8 @@ app.get('/:platform/*', async (c) => {
         pixiv: 'pixiv.net',
         bilibili: 'bilibili.com',
         b23: 'bilibili.com',
+        pinterest: 'pinterest.com',
+        pin: 'pinterest.com',
     };
 
     const domain = platformDomains[platform.toLowerCase()];

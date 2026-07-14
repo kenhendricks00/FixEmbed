@@ -27,7 +27,8 @@ export type Platform =
     | 'pixiv'
     | 'bluesky'
     | 'youtube'
-    | 'bilibili';
+    | 'bilibili'
+    | 'pinterest';
 
 // Embed data returned by handlers
 export interface EmbedData {

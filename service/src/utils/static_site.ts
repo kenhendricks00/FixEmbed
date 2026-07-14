@@ -7,13 +7,13 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FixEmbed - Fix Discord Embeds for Social Media</title>
     <meta name="description"
-        content="FixEmbed is a Discord bot that fixes embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts.">
+        content="FixEmbed is a Discord bot that fixes embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins.">
 
     <!-- Open Graph / Discord Embed -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta property="og:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts. Get rich previews directly in Discord!">
+        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins. Get rich previews directly in Discord!">
     <meta property="og:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
     <meta property="og:url" content="https://fixembed.app">
@@ -24,7 +24,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube community posts.">
+        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins.">
     <meta name="twitter:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 
@@ -134,8 +134,8 @@ export const indexHtml = `<!DOCTYPE html>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
                     <h3>Multi-Platform Support</h3>
-                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube
-                        community posts.</p>
+                    <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube
+                        community posts, and Pinterest Pins.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-user"></i></div>
@@ -178,7 +178,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Share social media links</h3>
-                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, or YouTube community posts.
+                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, or Pinterest Pins.
                         </p>
                     </div>
                 </div>
@@ -239,6 +239,11 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="platform-icon"><i class="fab fa-youtube"></i></div>
                     <h3>YouTube</h3>
                     <p>Displays community posts with creator details, engagement stats, and full-size media.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fab fa-pinterest"></i></div>
+                    <h3>Pinterest</h3>
+                    <p>Displays Pins with full-size images and playable video.</p>
                 </div>
             </div>
         </div>
@@ -333,14 +338,17 @@ docker run -d kenhendricks00/fixembed</code></pre>
 
     <section class="credits-section">
         <div class="container">
-            <h2>Credits</h2>
-            <p>FixEmbed relies on these amazing services:</p>
+            <h2>Fallback services &amp; acknowledgements</h2>
+            <p>FixEmbed uses first-party platform data whenever available. When a platform blocks or limits access, it may use:</p>
             <div class="credits-grid">
-                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link" target="_blank">VxInstagram by Lainmode</a>
-                <a href="https://snapsave.app" class="credit-link" target="_blank">Snapsave</a>
-                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">Phixiv by thelaao</a>
-                <a href="https://github.com/niconi21/vxBilibili" class="credit-link" target="_blank">VxBilibili by niconi21</a>
+                <a href="https://github.com/FxEmbed/FxEmbed" class="credit-link" target="_blank">FxTwitter — X metadata fallback</a>
+                <a href="https://github.com/Lainmode/InstagramEmbed-vxinstagram" class="credit-link" target="_blank">VxInstagram — Instagram fallback</a>
+                <a href="https://kkinstagram.com" class="credit-link" target="_blank">KKInstagram — Instagram media fallback</a>
+                <a href="https://snapsave.app" class="credit-link" target="_blank">SnapSave — Instagram media recovery</a>
+                <a href="https://github.com/thelaao/phixiv" class="credit-link" target="_blank">Phixiv — Pixiv fallback</a>
+                <a href="https://github.com/niconi21/vxBilibili" class="credit-link" target="_blank">VxBilibili — Bilibili fallback</a>
             </div>
+            <p>These services are not affiliated with or endorsed by FixEmbed.</p>
         </div>
     </section>
 
@@ -1960,6 +1968,7 @@ export const docsHtml = `<!DOCTYPE html>
 
                             <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
                             <tr><td>YouTube Community Posts</td><td>youtube.com/post</td></tr>
+                            <tr><td>Pinterest Pins</td><td>pinterest.com/pin, pin.it</td></tr>
                         </tbody>
                     </table>
                 </div>

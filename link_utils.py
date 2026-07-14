@@ -52,6 +52,8 @@ def social_service(url: str) -> Optional[str]:
         "bilibili.com": "Bilibili",
         "b23.tv": "Bilibili",
         "youtube.com": "YouTube",
+        "pinterest.com": "Pinterest",
+        "pin.it": "Pinterest",
     }
     return hosts.get(hostname)
 
@@ -111,6 +113,16 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     if host == "youtube.com" and len(segments) >= 2 and segments[0].lower() == "post":
         post_id = segments[1]
         return "YouTube", f"https://www.youtube.com/post/{post_id}", "YouTube • Community Post"
+
+    if host == "pinterest.com" and len(segments) >= 2 and segments[0].lower() == "pin":
+        pin_id_match = re.search(r"(\d+)$", segments[1])
+        if pin_id_match:
+            pin_id = pin_id_match.group(1)
+            return "Pinterest", f"https://www.pinterest.com/pin/{pin_id}/", f"Pinterest • {pin_id}"
+
+    if host == "pin.it" and segments and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0]):
+        token = segments[0]
+        return "Pinterest", f"https://pin.it/{token}", f"Pinterest • {token}"
 
     return None
 

@@ -63,6 +63,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertNotIn("discord.Embed(", info_commands)
         self.assertGreaterEqual(info_commands.count("CommandInfoView("), 2)
         self.assertGreaterEqual(info_commands.count("interaction.response.send_message(view=view)"), 2)
+        self.assertIn("Fallback services & acknowledgements", info_commands)
+        self.assertIn("These services are not affiliated with or endorsed by FixEmbed.", info_commands)
 
     def test_instagram_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
@@ -151,6 +153,14 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_youtube", main_source)
+
+    def test_pinterest_pins_use_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from pinterest_embed import fetch_pinterest_layout", main_source)
+        self.assertIn('elif item.service == "Pinterest":', main_source)
+        self.assertIn("fetch_pinterest_layout(item.canonical_url, automatic_url)", main_source)
+        self.assertNotIn("download_pinterest", main_source)
 
     def test_forbidden_channel_errors_keep_discord_context(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")

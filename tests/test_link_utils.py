@@ -39,6 +39,19 @@ class SocialServiceTests(unittest.TestCase):
             "https://www.youtube.com/post/UgkxExample123",
         )
 
+    def test_pinterest_pin_and_short_link_are_supported(self):
+        links = extract_supported_links(
+            "https://www.pinterest.com/pin/424605071145119869/?utm_source=test "
+            "https://pin.it/CjGnCP20L"
+        )
+
+        self.assertEqual([link.service for link in links], ["Pinterest", "Pinterest"])
+        self.assertEqual(
+            links[0].canonical_url,
+            "https://www.pinterest.com/pin/424605071145119869/",
+        )
+        self.assertEqual(links[1].canonical_url, "https://pin.it/CjGnCP20L")
+
     def test_extract_supported_links_preserves_order_and_metadata(self):
         links = extract_supported_links(
             "first https://x.com/openai/status/123 then "

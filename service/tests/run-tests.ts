@@ -9,6 +9,7 @@ import { redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
+import { pinterestHandler } from '../src/handlers/pinterest.ts';
 import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
@@ -273,6 +274,90 @@ const tests: TestCase[] = [
             assert.equal(findHandler('https://www.pixiv.net/en/artworks/101844438')?.name, 'pixiv');
             assert.equal(findHandler('https://www.bilibili.com/video/BV1xx411c7mD')?.name, 'bilibili');
             assert.equal(findHandler('https://www.youtube.com/watch?v=dQw4w9WgXcQ')?.name, 'youtube');
+            assert.equal(findHandler('https://pin.it/CjGnCP20L')?.name, 'pinterest');
+            assert.equal(findHandler('https://www.pinterest.com/pin/424605071145119869/')?.name, 'pinterest');
+        },
+    },
+    {
+        name: 'pinterestHandler safely resolves short links and preserves full-size Pin metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url === 'https://pin.it/CjGnCP20L') {
+                    return new Response(null, {
+                        status: 308,
+                        headers: { Location: 'https://api.pinterest.com/url_shortener/CjGnCP20L/redirect/' },
+                    });
+                }
+                if (url.includes('/url_shortener/')) {
+                    return new Response(null, {
+                        status: 302,
+                        headers: { Location: 'https://www.pinterest.com/pin/424605071145119869/sent/?invite_code=test' },
+                    });
+                }
+                return new Response(`<!doctype html><html><head>
+                    <meta property="og:title" content="Summer trip ideas">
+                    <meta property="og:description" content="Mallorca with friends">
+                    <meta property="og:image" content="https://i.pinimg.com/736x/example.jpg">
+                    <meta property="og:image:width" content="736">
+                    <meta property="og:image:height" content="981">
+                    <meta property="og:updated_time" content="2026-05-27T21:03:02.000Z">
+                </head></html>`, { status: 200, headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await pinterestHandler.handle('https://pin.it/CjGnCP20L', env);
+                assert.equal(requested.length, 3);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.platform, 'pinterest');
+                assert.equal(response.data?.title, 'Summer trip ideas');
+                assert.equal(response.data?.description, 'Mallorca with friends');
+                assert.equal(response.data?.image, 'https://i.pinimg.com/736x/example.jpg');
+                assert.equal(response.data?.url, 'https://www.pinterest.com/pin/424605071145119869/');
+                assert.equal(response.data?.timestamp, '2026-05-27T21:03:02.000Z');
+                assert.equal(response.data?.authorName, undefined);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pinterestHandler rejects short-link redirects outside Pinterest',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: 'https://example.com/private-target' },
+                });
+            };
+            try {
+                const response = await pinterestHandler.handle('https://pin.it/unsafe', env);
+                assert.equal(requests, 1);
+                assert.equal(response.success, false);
+                assert.match(response.error || '', /unsafe pinterest redirect/i);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pinterestHandler rejects oversized Pin pages before parsing them',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response('<html></html>', {
+                status: 200,
+                headers: { 'Content-Length': '5000001' },
+            });
+            try {
+                const response = await pinterestHandler.handle(
+                    'https://www.pinterest.com/pin/424605071145119869/',
+                    env,
+                );
+                assert.equal(response.success, false);
+                assert.match(response.error || '', /response too large/i);
+            } finally { globalThis.fetch = originalFetch; }
         },
     },
     {
@@ -2262,12 +2347,16 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'public website advertises YouTube community post support',
+        name: 'public website advertises YouTube and Pinterest support',
         run: () => {
             assert.match(indexHtml, /<h3>YouTube<\/h3>/);
             assert.match(indexHtml, /YouTube community posts/i);
             assert.match(docsHtml, /YouTube Community Posts/);
             assert.match(docsHtml, /youtube\.com\/post/);
+            assert.match(indexHtml, /<h3>Pinterest<\/h3>/);
+            assert.match(indexHtml, /full-size images and playable video/i);
+            assert.match(docsHtml, /Pinterest Pins/);
+            assert.match(docsHtml, /pin\.it/);
         },
     },
     {

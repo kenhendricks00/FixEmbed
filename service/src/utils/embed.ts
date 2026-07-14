@@ -299,6 +299,7 @@ export const platformColors: Record<string, string> = {
     pixiv: '#0096FA',
     bluesky: '#1185FE',
     bilibili: '#00A1D6',
+    pinterest: '#E60023',
 };
 
 /**
@@ -313,6 +314,7 @@ export const platformNames: Record<string, string> = {
     bluesky: '🦋 Bluesky',
     bilibili: '📺 Bilibili',
     youtube: '▶️ YouTube',
+    pinterest: '📌 Pinterest',
 };
 
 /**

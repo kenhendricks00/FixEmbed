@@ -13,7 +13,7 @@
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
 
 # 🛠️ Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code>, or <code>YouTube community post</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code>, <code>YouTube community post</code>, or <code>Pinterest Pin</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
 
 > [!TIP]
 > You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`). FixEmbed will leave that message alone (no edits or deletions).
@@ -31,7 +31,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Right-click message → Apps → Fix Embed** - Convert links in any message
 
 # 🌟 Why Choose FixEmbed?
-- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube Community Posts.
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube Community Posts, and Pinterest Pins.
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
@@ -48,6 +48,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - **Bluesky**
     - **Bilibili**
     - **YouTube Community Posts**
+    - **Pinterest Pins**
 2. **User-Installable App**:
     - Install FixEmbed to your personal account
     - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere
@@ -107,12 +108,21 @@ Members of the support server automatically receive the **Voter** role after vot
 - [Join the Support Server](https://discord.gg/QFxTAmtZdn)
 
 # 📜 Credits
-- Instagram carousel images via [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram)
-- Emergency fallbacks: FxTwitter, VxInstagram/Snapsave, Phixiv, VxBilibili, and Invidious remain available only when direct source-platform requests fail.
-- Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
-- Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
 - Built with [Hono](https://hono.dev/) framework
 - Deployed on [Cloudflare Workers](https://workers.cloudflare.com/)
+
+## Fallback services & acknowledgements
+
+FixEmbed uses first-party platform data whenever available. When a platform blocks or limits access, it may use:
+
+- [FxTwitter](https://github.com/FxEmbed/FxEmbed) — X metadata fallback
+- [VxInstagram](https://github.com/Lainmode/InstagramEmbed-vxinstagram) — Instagram fallback
+- [KKInstagram](https://kkinstagram.com) — Instagram media fallback
+- [SnapSave](https://snapsave.app) — Instagram media recovery
+- [Phixiv](https://github.com/thelaao/phixiv) — Pixiv fallback
+- [VxBilibili](https://github.com/niconi21/vxBilibili) — Bilibili fallback
+
+These services are not affiliated with or endorsed by FixEmbed.
 
 # License
 

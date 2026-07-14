@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Pinterest and acknowledgements**
+- Added first-party Pinterest Pin metadata, full-size image and playable video cards, and safe `pin.it` short-link resolution.
+- Added Pinterest Components V2 rendering, settings migration, public docs, status checks, commands, and localized service lists.
+- Documented every current emergency fallback in `/about` and the README with its purpose and non-affiliation disclaimer.
+
 #### **Licensing**
 - Relicensed FixEmbed from MIT to the GNU Affero General Public License v3.0 or later.
 - Added visible author attribution and source links to the hosted service and Discord `/about` surface.
