@@ -298,6 +298,12 @@ const tests: TestCase[] = [
                         headers: { Location: 'https://www.pinterest.com/pin/424605071145119869/sent/?invite_code=test' },
                     });
                 }
+                if (url === 'https://www.pinterest.com/christinaebrautaset/') {
+                    return new Response(`<!doctype html><html><body><script>{
+                        "owner":{"full_name":"christinabrautaset","username":"christinaebrautaset",
+                        "image_medium_url":"https://i.pinimg.com/75x75_RS/ba/ab/af/avatar.jpg"}
+                    }</script></body></html>`, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                }
                 return new Response(`<!doctype html><html><head>
                     <meta property="og:title" content="Summer trip ideas">
                     <meta property="og:description" content="Mallorca with friends">
@@ -306,12 +312,11 @@ const tests: TestCase[] = [
                     <meta property="og:image:height" content="981">
                     <meta property="og:updated_time" content="2026-05-27T21:03:02.000Z">
                     <script>{"nativeCreator":{"fullName":"christinabrautaset","username":"christinaebrautaset"}}</script>
-                    <script>{"nativeCreator":{"fullName":"christinabrautaset","username":"christinaebrautaset","profileUrl":"https://www.pinterest.com/christinaebrautaset/","imageLargeUrl":"https://i.pinimg.com/140x140_RS/ba/ab/af/avatar.jpg"}}</script>
                 </head></html>`, { status: 200, headers: { 'Content-Type': 'text/html' } });
             };
             try {
                 const response = await pinterestHandler.handle('https://pin.it/CjGnCP20L', env);
-                assert.equal(requested.length, 3);
+                assert.equal(requested.length, 4);
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.platform, 'pinterest');

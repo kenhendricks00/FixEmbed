@@ -90,7 +90,7 @@ function embeddedObjects(html: string, key: string): Record<string, unknown>[] {
     return objects;
 }
 
-function creatorMetadata(html: string): {
+function creatorMetadata(html: string, expectedUsername = ''): {
     authorName?: string;
     authorHandle?: string;
     authorUrl?: string;
@@ -98,11 +98,12 @@ function creatorMetadata(html: string): {
 } {
     const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
     let bestMatch: ReturnType<typeof creatorMetadata> = {};
-    for (const key of ['nativeCreator', 'closeupUnifiedAttribution', 'originPinner', 'pinner']) {
+    for (const key of ['nativeCreator', 'closeupUnifiedAttribution', 'originPinner', 'pinner', 'owner']) {
         for (const creator of embeddedObjects(html, key)) {
             const username = text(creator.username).replace(/^@/, '');
+            if (expectedUsername && username.toLowerCase() !== expectedUsername.toLowerCase()) continue;
             const authorName = truncateText(
-                text(creator.fullName) || text(creator.firstName) || username,
+                text(creator.fullName) || text(creator.full_name) || text(creator.firstName) || username,
                 100,
             );
             if (!authorName && !username) continue;
@@ -116,7 +117,10 @@ function creatorMetadata(html: string): {
                 authorAvatar: originalPinterestAvatar(
                     text(creator.imageLargeUrl)
                     || text(creator.imageMediumUrl)
-                    || text(creator.imageSmallUrl),
+                    || text(creator.imageSmallUrl)
+                    || text(creator.image_large_url)
+                    || text(creator.image_medium_url)
+                    || text(creator.image_small_url),
                 ),
             };
             if (!bestMatch.authorName) bestMatch = candidate;
@@ -124,6 +128,21 @@ function creatorMetadata(html: string): {
         }
     }
     return bestMatch;
+}
+
+async function fetchCreatorAvatar(creator: ReturnType<typeof creatorMetadata>): Promise<string | undefined> {
+    const username = creator.authorHandle?.replace(/^@/, '');
+    if (!username || !/^[A-Za-z0-9_.-]+$/.test(username)) return undefined;
+    const profileUrl = `https://www.pinterest.com/${username}/`;
+    const response = await fetchWithTimeout(profileUrl, {
+        redirect: 'error',
+        headers: {
+            'Accept': 'text/html,application/xhtml+xml',
+            'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+        },
+    }, 6_000);
+    if (!response.ok) return undefined;
+    return creatorMetadata(await readTextLimited(response), username).authorAvatar;
 }
 
 function pinIdFromUrl(value: string): string | undefined {
@@ -226,6 +245,13 @@ export const pinterestHandler: PlatformHandler = {
             const videoUrl = trustedMediaUrl(metaContent(html, 'og:video:secure_url') || metaContent(html, 'og:video'));
             const timestamp = metaContent(html, 'og:updated_time');
             const creator = creatorMetadata(html);
+            if (!creator.authorAvatar) {
+                try {
+                    creator.authorAvatar = await fetchCreatorAvatar(creator);
+                } catch {
+                    // Creator identity is still useful when Pinterest blocks the profile fallback.
+                }
+            }
             if (!image && !videoUrl && title === 'Pinterest Pin' && !description) {
                 return { success: false, error: 'Pinterest metadata unavailable', redirect: canonicalUrl };
             }
