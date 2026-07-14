@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 from urllib.parse import urlencode
 
 import aiohttp
 import discord
 
 from component_emojis import format_component_stats
+from embed_footer import build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -44,7 +45,10 @@ def _section_text(section: Mapping[str, Any]) -> str:
     return "\n".join(part for part in (heading, body[:900]) if part)
 
 
-def build_reddit_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
+def build_reddit_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
     """Build a Reddit Components V2 card using only remote media URLs."""
     subreddit, post_title = _split_title(payload.get("title"))
     author = str(payload.get("authorName") or "u/unknown").strip().lstrip("@")
@@ -116,14 +120,18 @@ def build_reddit_layout(payload: Mapping[str, Any]) -> discord.ui.LayoutView:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
-    footer_parts = [
-        f"<:fixembed:{FIXEMBED_EMOJI_ID}> FixEmbed",
-        f"<:reddit:{REDDIT_EMOJI_ID}> Reddit",
-    ]
-    if source_url:
-        footer_parts.append(f"[View original]({source_url})")
-    footer_parts.append(f"<t:{_post_timestamp(payload.get('timestamp'))}:R>")
-    children.append(discord.ui.TextDisplay(f"-# {'  ·  '.join(footer_parts)}"))
+    children.append(
+        discord.ui.TextDisplay(
+            build_component_footer(
+                fixembed_emoji=f"<:fixembed:{FIXEMBED_EMOJI_ID}>",
+                platform_emoji=f"<:reddit:{REDDIT_EMOJI_ID}>",
+                platform_name="Reddit",
+                source_url=source_url,
+                converted_url=converted_url,
+                timestamp=_post_timestamp(payload.get("timestamp")),
+            )
+        )
+    )
 
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*children, accent_color=REDDIT_COLOR))
@@ -143,6 +151,9 @@ async def _fetch_reddit_payload(source_url: str) -> Mapping[str, Any]:
     return body.get("data") or {}
 
 
-async def fetch_reddit_layout(source_url: str) -> discord.ui.LayoutView:
+async def fetch_reddit_layout(
+    source_url: str,
+    converted_url: Optional[str] = None,
+) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Reddit Components V2 card."""
-    return build_reddit_layout(await _fetch_reddit_payload(source_url))
+    return build_reddit_layout(await _fetch_reddit_payload(source_url), converted_url)

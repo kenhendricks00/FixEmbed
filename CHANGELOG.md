@@ -20,6 +20,7 @@
 #### **🔧 Backend Changes**
 - **`Consistent Branded Discord Cards`**
   - Render every supported platform with the same creator, engagement, content, media, and branded footer hierarchy used by FixEmbed's X cards.
+  - Condense card footers into linked FixEmbed and platform labels followed by the post time.
   - Use creator avatars when available and route non-X embeds through Discord's Mastodon-compatible status discovery.
 - **`Discord X Text Rendering`**
   - Preserve paragraphs and numbered lists in ActivityPub-backed X embeds.

@@ -43,8 +43,10 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertIn("<:like:1526255244483362866> 23.8K", stats["content"])
         self.assertIn("<:views:1526255708683636896> 8.39M", stats["content"])
         self.assertIn("<:twitter:1526268173589155921>", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[X]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783614000:R>", footer["content"])
 
     def test_components_v2_layout_preserves_photo_carousel_and_structured_sections(self):

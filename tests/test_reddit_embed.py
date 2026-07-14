@@ -28,7 +28,8 @@ class RedditEmbedTests(unittest.TestCase):
             ],
         }
 
-        container = build_reddit_layout(payload).to_components()[0]
+        converted_url = "https://fixembed.app/embed?url=reddit-post"
+        container = build_reddit_layout(payload, converted_url).to_components()[0]
         header = container["components"][0]
         gallery = container["components"][1]
         rendered_text = "\n".join(
@@ -52,7 +53,10 @@ class RedditEmbedTests(unittest.TestCase):
         self.assertNotIn("<:like:", rendered_text)
         self.assertIn("[Open linked article]", rendered_text)
         self.assertIn("<:reddit:1526267589808881684>", rendered_text)
-        self.assertIn("[View original]", rendered_text)
+        self.assertIn(f"[FixEmbed]({converted_url})", rendered_text)
+        self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
+        self.assertNotIn("View original", rendered_text)
+        self.assertNotIn("FixEmbed link", rendered_text)
         self.assertIn("<t:1783900800:R>", rendered_text)
 
     def test_components_v2_layout_keeps_remote_video_playable(self):

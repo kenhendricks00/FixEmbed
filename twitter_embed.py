@@ -11,6 +11,7 @@ import aiohttp
 import discord
 
 from component_emojis import format_component_stats
+from embed_footer import build_component_footer
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -200,16 +201,18 @@ def build_twitter_layout(
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 
     children.append(discord.ui.Separator())
-    footer_parts = [
-        f"<:fixembed:{FIXEMBED_EMOJI_ID}> FixEmbed",
-        f"<:twitter:{TWITTER_EMOJI_ID}> X",
-    ]
-    if source_url:
-        footer_parts.append(f"[View original]({source_url})")
-    if converted_url:
-        footer_parts.append(f"[FixEmbed link]({converted_url})")
-    footer_parts.append(f"<t:{_post_timestamp(payload.get('timestamp'))}:R>")
-    children.append(discord.ui.TextDisplay(f"-# {'  ·  '.join(footer_parts)}"))
+    children.append(
+        discord.ui.TextDisplay(
+            build_component_footer(
+                fixembed_emoji=f"<:fixembed:{FIXEMBED_EMOJI_ID}>",
+                platform_emoji=f"<:twitter:{TWITTER_EMOJI_ID}>",
+                platform_name="X",
+                source_url=source_url,
+                converted_url=converted_url,
+                timestamp=_post_timestamp(payload.get("timestamp")),
+            )
+        )
+    )
 
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*children, accent_color=FIXEMBED_COLOR))

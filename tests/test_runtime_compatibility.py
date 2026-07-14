@@ -94,7 +94,10 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
         self.assertIn('elif item.service == "Reddit":', main_source)
-        self.assertIn("fetch_reddit_layout(item.canonical_url)", main_source)
+        self.assertIn(
+            "fetch_reddit_layout(item.canonical_url, automatic_url)",
+            main_source,
+        )
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)
         self.assertNotIn("download_reddit", main_source)

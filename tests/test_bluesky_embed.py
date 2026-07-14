@@ -42,8 +42,10 @@ class BlueskyEmbedTests(unittest.TestCase):
         self.assertIn("<:repost:1526255036072591450> 5", stats["content"])
         self.assertIn("<:like:1526255244483362866> 34", stats["content"])
         self.assertIn("<:bluesky:1526269663334502544>", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[Bluesky]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783969200:R>", footer["content"])
 
 

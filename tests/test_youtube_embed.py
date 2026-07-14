@@ -33,9 +33,11 @@ class YouTubeCommunityEmbedTests(unittest.TestCase):
         self.assertEqual(gallery["items"][0]["media"]["url"], payload["image"])
         self.assertIn("<:like:1526255244483362866> 1.2K", stats["content"])
         self.assertIn("<:comment:1526254715250282506> 34", stats["content"])
-        self.assertIn("<:youtube:1526267390592290926> YouTube", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn("[FixEmbed link]", footer["content"])
+        self.assertIn("<:youtube:1526267390592290926>", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[YouTube]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783987200:R>", footer["content"])
 
     def test_components_v2_layout_supports_text_only_posts(self):

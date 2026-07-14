@@ -37,9 +37,11 @@ class BilibiliEmbedTests(unittest.TestCase):
         self.assertIn("<:coins:1526369937013342350> 456", stats["content"])
         self.assertIn("<:bookmark:1526255813268733962> 1K", stats["content"])
         self.assertIn("<:repost:1526255036072591450> 42", stats["content"])
-        self.assertIn("<:bilibili:1526271150739423304> Bilibili", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn("[FixEmbed link]", footer["content"])
+        self.assertIn("<:bilibili:1526271150739423304>", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[Bilibili]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783987200:R>", footer["content"])
 
     def test_components_v2_layout_keeps_remote_video_playable(self):

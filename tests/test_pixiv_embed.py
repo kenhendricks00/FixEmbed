@@ -99,8 +99,10 @@ class PixivEmbedTests(unittest.TestCase):
         self.assertIn("<:views:1526255708683636896> 28K", stats["content"])
         self.assertIn("<:bookmark:1526255813268733962> 300", stats["content"])
         self.assertIn("<:pixiv:1526268469920792577>", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[Pixiv]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783969200:R>", footer["content"])
 
     def test_components_v2_layout_decodes_and_compacts_long_pixiv_captions(self):

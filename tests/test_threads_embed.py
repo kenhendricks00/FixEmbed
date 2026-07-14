@@ -35,8 +35,10 @@ class ThreadsEmbedTests(unittest.TestCase):
         self.assertIn("<:comment:1526254715250282506> 34", stats["content"])
         self.assertIn("<:like:1526255244483362866> 1.2K", stats["content"])
         self.assertIn("<:threads:1526267848924725399>", footer["content"])
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[Threads]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
 
     def test_components_v2_layout_preserves_photo_carousels(self):
         payload = {

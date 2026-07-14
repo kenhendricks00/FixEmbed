@@ -1254,7 +1254,7 @@ async def on_message(message):
                             formatted_links.append(automatic_url)
                     elif item.service == "Reddit":
                         try:
-                            layout = await fetch_reddit_layout(item.canonical_url)
+                            layout = await fetch_reddit_layout(item.canonical_url, automatic_url)
                             component_layouts.append((layout, automatic_url))
                         except Exception as error:
                             logging.warning(f"Reddit component build failed; using link fallback: {error}")

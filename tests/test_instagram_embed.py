@@ -244,8 +244,10 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertIn("<:instagram:1526267158793949435>", footer["content"])
         self.assertTrue(stats["content"].startswith("-# "))
         self.assertTrue(footer["content"].startswith("-# "))
-        self.assertIn("[View original]", footer["content"])
-        self.assertIn(f"[FixEmbed link]({converted_url})", footer["content"])
+        self.assertIn(f"[FixEmbed]({converted_url})", footer["content"])
+        self.assertIn(f"[Instagram]({payload['url']})", footer["content"])
+        self.assertNotIn("View original", footer["content"])
+        self.assertNotIn("FixEmbed link", footer["content"])
 
 
 if __name__ == "__main__":
