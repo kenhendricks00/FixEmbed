@@ -72,19 +72,21 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - Modifiers can be combined, such as `https://x.com/user/status/123/es/mosaic`.
 
 # 💎 Premium
-Power up your server with **FixEmbed Premium** for just **$1.99/month**! Use the `/premium` command in Discord to subscribe.
+Make FixEmbed fit your server with **FixEmbed Premium** for **$1.99/month**. Use `/premium` in Discord to subscribe and manage your server's subscription.
 
 **Perks include:**
-- 🎨 **Custom Social Card Colors** — Apply a custom hex accent to every supported Components V2 social card
-- 🎛️ **Card Style Controls** — Show or hide engagement stats and hashtags, and choose full or compact captions
-- 🌐 **Automatic X Translation** — Choose a default translation language while preserving per-link overrides
-- 🛡️ **Advanced Exclusions** — Leave links from selected members or roles untouched
-- 📈 **Private 30-Day Analytics** — Review aggregate platform usage and fallback reliability without storing links, message text, or member identities
-- 🏷️ **Custom Footer Branding** — Replace the leading FixEmbed footer label with your server name and an optional server emoji while retaining subtle `via FixEmbed` attribution
-- 🤖 **Bot Message Processing** — FixEmbed will process links posted by other bots
-- 🏷️ **No "Sent by" Label** — Clean embeds without the attribution footer
+- 🎨 **Custom Social Card Colors** — Choose a custom accent color for every supported Components V2 social card
+- 🖼️ **Social Card Controls** — Show or hide available engagement stats and hashtags, and choose full or compact captions
+- 🏷️ **Server-Branded Footers** — Display your server's current name and an optional server emoji while retaining subtle `via FixEmbed` attribution
+- 🌐 **Automatic X Translations** — Choose a default language for X posts while preserving per-link translation overrides
+- 🤖 **Bot and Webhook Link Fixing** — Automatically process supported links posted by bots and webhooks, not just members
+- 🚫 **Member and Role Exclusions** — Exclude selected members or roles from automatic conversion while keeping manual `/fix` usage available
+- 📊 **Private 30-Day Analytics** — Review aggregate rich-card and fallback counts by platform without storing URLs, post text, usernames, message IDs, or channel IDs
+- ✨ **Cleaner Automatic Posts** — Remove the "Sent by" attribution for a more streamlined appearance
 - 💎 **Supporters Role** — Receive the `Supporters` role in the FixEmbed Support Server while Premium is active
-- ❤️ **Support Development** — Help keep FixEmbed running and improving!
+- ❤️ **Support FixEmbed** — Help fund hosting, maintenance, platform updates, and new features
+
+Premium adds server customization and operational controls; media quality, playback, carousels, GIF support, and reliability fixes remain available to everyone.
 
 # 🚀 Invite FixEmbed to Your Server
 Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
