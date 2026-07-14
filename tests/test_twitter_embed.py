@@ -95,7 +95,7 @@ class TwitterEmbedTests(unittest.TestCase):
             [item["media"]["url"] for item in gallery["items"]],
             payload["images"],
         )
-        self.assertIn("Quoted @NASA", text)
+        self.assertIn("Quote from **NASA**", text)
         self.assertIn("Ready for launch.", text)
         self.assertIn("[Community Note]", text)
         self.assertIn("Additional context.", text)
@@ -164,10 +164,13 @@ class TwitterEmbedTests(unittest.TestCase):
         quote_gallery = container["components"][3]
         quote_text = quote_header["components"][0]["content"]
 
-        self.assertIn("[Quoted post](https://x.com/quoted/status/456)", quote_text)
-        self.assertIn("**Quoted Author**", quote_text)
-        self.assertIn("[@quoted](https://x.com/quoted)", quote_text)
-        self.assertIn("The quoted post body.", quote_text)
+        self.assertIn(
+            "> <:quote:1526256046786609164> [Quote from](https://x.com/quoted/status/456) "
+            "**Quoted Author** ([@quoted](https://x.com/quoted))",
+            quote_text,
+        )
+        self.assertIn("> The quoted post body.", quote_text)
+        self.assertNotIn("[Quoted post]", quote_text)
         self.assertEqual(
             quote_header["accessory"]["media"]["url"],
             "https://pbs.twimg.com/profile_images/456/avatar.jpg",

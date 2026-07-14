@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import aiohttp
 import discord
 
-from component_emojis import format_component_stats
+from component_emojis import application_emoji, format_component_stats
 from embed_footer import build_component_footer
 
 
@@ -80,7 +80,14 @@ def _media_urls(data: Mapping[str, Any]) -> list[tuple[str, Optional[str]]]:
 
 
 def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any]]:
-    name = str(section.get("authorName") or "Quoted author").strip().lstrip("@")
+    fallback_name = re.sub(
+        r"^quoted(?:\s+post)?\s*",
+        "",
+        str(section.get("title") or ""),
+        flags=re.IGNORECASE,
+    ).strip()
+    name = str(section.get("authorName") or fallback_name or "Quoted author")
+    name = name.strip().lstrip("@")
     handle = _clean_handle(section.get("authorHandle"))
     author_url = str(section.get("authorUrl") or "").strip()
     avatar = _high_resolution_avatar(section.get("authorAvatar"))
@@ -92,11 +99,16 @@ def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any
     else:
         identity = f"**{name}**"
 
-    heading = _section_text(section).split("\n", 1)[0]
+    quote_url = str(section.get("url") or "").strip()
+    quote_label = f"[Quote from]({quote_url})" if quote_url else "Quote from"
     body = str(section.get("body") or "").strip()
     if len(body) > 900:
         body = f"{body[:897].rstrip()}…"
-    text = "\n".join(part for part in (heading, identity, body) if part)
+    heading = f"> {application_emoji('quote')} {quote_label} {identity}"
+    quoted_body = "\n".join(
+        f"> {line}" if line else ">" for line in body.splitlines()
+    )
+    text = f"{heading}\n>\n{quoted_body}" if quoted_body else heading
     items: list[discord.ui.Item[Any]] = []
     if avatar:
         items.append(
