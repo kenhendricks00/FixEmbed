@@ -44,6 +44,11 @@ from reliability import (
     ReliabilityReport,
     format_reliability_status,
 )
+from conversion_telemetry import (
+    ConversionTelemetry,
+    format_local_conversion_health,
+    new_request_id,
+)
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -206,6 +211,7 @@ processing_stats = {
     "by_service": {}
 }
 reliability_client = ReliabilityClient()
+conversion_telemetry = ConversionTelemetry(supported_services=SERVICE_NAMES)
 
 async def rate_limited_send(
     channel,
@@ -1232,6 +1238,13 @@ class ReliabilitySettingsView(SettingsPageView):
                 self.interaction.guild, service
             ),
         )
+        status += "\n\n" + format_local_conversion_health(
+            conversion_telemetry.snapshot(),
+            pending_sends=SEND_QUEUE.qsize(),
+            icon_for_service=lambda service: get_service_display_icon(
+                self.interaction.guild, service
+            ),
+        )
         controls = ((
             ReliabilityRefreshButton(self),
             discord.ui.Button(
@@ -1843,105 +1856,94 @@ async def on_message(message):
                         media_quality,
                         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
                     )
-                    if item.service == "Instagram":
+                    request_id = new_request_id()
+                    if item.service in SERVICE_NAMES:
                         try:
-                            layout = await fetch_instagram_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
+                            async with conversion_telemetry.observe(
+                                item.service, request_id
+                            ):
+                                if item.service == "Instagram":
+                                    layout = await fetch_instagram_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Twitter":
+                                    fixed_url = build_fixembed_url(item, media_quality)
+                                    twitter_language = resolve_twitter_language(
+                                        item.language, guild_settings, premium=premium
+                                    )
+                                    payload = await fetch_twitter_payload(
+                                        item.canonical_url,
+                                        twitter_language,
+                                        item.mode,
+                                    )
+                                    layout = build_twitter_layout(
+                                        payload,
+                                        fixed_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Reddit":
+                                    layout = await fetch_reddit_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Threads":
+                                    layout = await fetch_threads_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Pixiv":
+                                    layout = await fetch_pixiv_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Bluesky":
+                                    layout = await fetch_bluesky_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Bilibili":
+                                    layout = await fetch_bilibili_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "YouTube":
+                                    layout = await fetch_youtube_community_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                elif item.service == "Pinterest":
+                                    layout = await fetch_pinterest_layout(
+                                        item.canonical_url,
+                                        automatic_url,
+                                        footer_branding,
+                                        card_preferences,
+                                    )
+                                else:
+                                    raise ValueError("unsupported rich-card service")
                             component_layouts.append((layout, automatic_url))
                             rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Instagram component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Twitter":
-                        try:
-                            fixed_url = build_fixembed_url(item, media_quality)
-                            twitter_language = resolve_twitter_language(
-                                item.language, guild_settings, premium=premium
-                            )
-                            payload = await fetch_twitter_payload(
-                                item.canonical_url, twitter_language, item.mode
-                            )
-                            layout = build_twitter_layout(
-                                payload, fixed_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"X component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Reddit":
-                        try:
-                            layout = await fetch_reddit_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Reddit component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Threads":
-                        try:
-                            layout = await fetch_threads_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Threads component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Pixiv":
-                        try:
-                            layout = await fetch_pixiv_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Pixiv component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Bluesky":
-                        try:
-                            layout = await fetch_bluesky_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Bluesky component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Bilibili":
-                        try:
-                            layout = await fetch_bilibili_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Bilibili component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "YouTube":
-                        try:
-                            layout = await fetch_youtube_community_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"YouTube component build failed; using link fallback: {error}")
-                            formatted_links.append(automatic_url)
-                    elif item.service == "Pinterest":
-                        try:
-                            layout = await fetch_pinterest_layout(
-                                item.canonical_url, automatic_url, footer_branding, card_preferences
-                            )
-                            component_layouts.append((layout, automatic_url))
-                            rich_card_built = True
-                        except Exception as error:
-                            logging.warning(f"Pinterest component build failed; using link fallback: {error}")
+                        except Exception:
                             formatted_links.append(automatic_url)
                     else:
-                        formatted_links.append(f"[{item.display_text}]({automatic_url})")
+                        formatted_links.append(
+                            f"[{item.display_text}]({automatic_url})"
+                        )
                     if premium:
                         try:
                             await record_processing_outcome(

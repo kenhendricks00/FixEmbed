@@ -78,6 +78,18 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         )[1].split("async def status", 1)[0]
         self.assertIn("@app_commands.guild_only()", status_decorators)
 
+    def test_card_builds_emit_privacy_safe_local_conversion_telemetry(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from conversion_telemetry import (", main_source)
+        self.assertIn(
+            "conversion_telemetry = ConversionTelemetry(supported_services=SERVICE_NAMES)",
+            main_source,
+        )
+        self.assertEqual(main_source.count("async with conversion_telemetry.observe("), 1)
+        self.assertIn("format_local_conversion_health(", main_source)
+        self.assertNotIn("component build failed; using link fallback", main_source)
+
     def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(
@@ -96,8 +108,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("footer_emoji_id INTEGER DEFAULT NULL", main_source)
         self.assertIn("class FooterBrandingSettingsView(SettingsPageView)", main_source)
         self.assertIn("footer_branding = get_footer_branding(", main_source)
-        self.assertGreaterEqual(main_source.count("automatic_url, footer_branding"), 8)
-        self.assertIn("payload, fixed_url, footer_branding", main_source)
+        self.assertGreaterEqual(main_source.count("footer_branding,"), 9)
+        self.assertIn("layout = build_twitter_layout(", main_source)
         self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
 
     def test_premium_card_controls_translation_and_exclusions_are_wired(self):
@@ -109,7 +121,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("preferences_from_settings(guild_settings, premium=premium)", main_source)
         self.assertIn("resolve_twitter_language(", main_source)
         self.assertIn("should_skip_automatic(message, guild_settings, premium=premium)", main_source)
-        self.assertGreaterEqual(main_source.count("footer_branding, card_preferences"), 9)
+        self.assertGreaterEqual(main_source.count("card_preferences,"), 9)
 
     def test_footer_branding_settings_option_is_visibly_premium(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
@@ -168,10 +180,9 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
 
         self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload", main_source)
         self.assertIn('elif item.service == "Twitter":', main_source)
-        self.assertIn(
-            "item.canonical_url, twitter_language, item.mode",
-            main_source,
-        )
+        self.assertIn("payload = await fetch_twitter_payload(", main_source)
+        self.assertIn("twitter_language,", main_source)
+        self.assertIn("item.mode,", main_source)
         self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
         self.assertIn("fallback_content=automatic_url", main_source)

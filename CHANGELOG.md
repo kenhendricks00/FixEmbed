@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Privacy-safe conversion observability**
+- Added bounded, process-local rich-card quality telemetry with per-service success, link-fallback, recent p95 latency, and fixed failure categories.
+- Replaced URL-bearing component-build warnings with structured fallback events containing only a random correlation ID, service, category, exception type, and duration.
+- Added an actionable local card-quality section to Reliability while keeping live Worker provider health visually distinct.
+
 #### **Live reliability diagnostics**
 - Connected `/settings` Reliability and `/status` to the Worker's live per-platform first-party, fallback, outage, and latency probes.
 - Added a refresh control, public dashboard shortcut, 30-second report cache, five-minute verified stale-data window, and retry cooldown after failed refreshes.

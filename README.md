@@ -37,6 +37,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
 - **Live Reliability Diagnostics**: View current first-party/fallback mode and latency in Discord, with a public status dashboard and safe stale-data handling during brief probe failures.
+- **Privacy-Safe Conversion Quality**: Reliability highlights local rich-card rate, link fallbacks, recent p95 build latency, and bounded failure categories without retaining links, post content, or member data.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 
