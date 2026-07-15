@@ -26,6 +26,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - `/fix [link]` - Convert one or more links into polished FixEmbed links (works in DMs and user-installed contexts)
 - `/help` - View all commands and supported services
 - `/settings` - Configure bot settings for your server
+- `/status` - View live first-party, fallback, and latency health for every supported platform
 - `/premium` - View and manage your Premium subscription
 - `/activate` / `/deactivate` - Toggle link conversion for specific channels
 - **Right-click message → Apps → Fix Embed** - Convert links in any message
@@ -35,6 +36,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
+- **Live Reliability Diagnostics**: View current first-party/fallback mode and latency in Discord, with a public status dashboard and safe stale-data handling during brief probe failures.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 

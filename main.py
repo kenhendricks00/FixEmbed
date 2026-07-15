@@ -39,6 +39,11 @@ from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
 from onboarding import send_onboarding_dm
 from settings_migrations import migrate_pinterest_service_default, migrate_youtube_service_default
+from reliability import (
+    ReliabilityClient,
+    ReliabilityReport,
+    format_reliability_status,
+)
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -196,6 +201,7 @@ processing_stats = {
     "total_failed": 0,
     "by_service": {}
 }
+reliability_client = ReliabilityClient()
 
 async def rate_limited_send(
     channel,
@@ -868,6 +874,16 @@ class SettingsDropdown(ui.Select):
             )
             await interaction.response.send_message(view=view, ephemeral=True)
             return
+        if value == "Reliability Status":
+            await interaction.response.defer(ephemeral=True)
+            report = await reliability_client.get_report()
+            view = ReliabilitySettingsView(
+                self.source_interaction,
+                self.settings,
+                report=report,
+            )
+            await interaction.followup.send(view=view, ephemeral=True)
+            return
 
         page_types = {
             "FixEmbed": FixEmbedSettingsView,
@@ -876,7 +892,6 @@ class SettingsDropdown(ui.Select):
             "Service Settings": ServiceSettingsView,
             "Quality Profile": QualitySettingsView,
             "Channel Rules": ChannelRulesSettingsView,
-            "Reliability Status": ReliabilitySettingsView,
             "Language": LanguageSettingsView,
             "Debug": DebugSettingsView,
             "Embed Color": PremiumSettingsView,
@@ -1186,18 +1201,48 @@ class StaticSettingsView(SettingsPageView):
         self.render_page(title=title, description=description, status=status, footer=footer)
 
 
-class ReliabilitySettingsView(StaticSettingsView):
-    def __init__(self, interaction, settings):
-        lines = []
-        for service in DEFAULT_ENABLED_SERVICES:
-            data = processing_stats.get("by_service", {}).get(service, {"ok": 0, "fail": 0})
-            lines.append(f"{get_service_display_icon(interaction.guild, service)} **{service}:** ✅ {data['ok']}  ·  ❌ {data['fail']}")
-        status = (
-            f"**Pending sends:** {SEND_QUEUE.qsize()}\n"
-            f"**Fixed:** {processing_stats['total_fixed']}  ·  **Failed:** {processing_stats['total_failed']}\n\n"
-            + "\n".join(lines)
+class ReliabilityRefreshButton(ui.Button):
+    def __init__(self, page):
+        super().__init__(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
+        self.page = page
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.page.report = await reliability_client.get_report(force=True)
+        self.page.render()
+        await interaction.edit_original_response(view=self.page)
+
+
+class ReliabilitySettingsView(SettingsPageView):
+    def __init__(self, interaction, settings, *, report: ReliabilityReport):
+        super().__init__(interaction, settings)
+        self.report = report
+        self.render()
+
+    def render(self):
+        status = format_reliability_status(
+            self.report,
+            local_stats=processing_stats,
+            pending_sends=SEND_QUEUE.qsize(),
+            icon_for_service=lambda service: get_service_display_icon(
+                self.interaction.guild, service
+            ),
         )
-        super().__init__(interaction, settings, title=get_text(settings.get("language", "en"), "reliability_status_title"), description=get_text(settings.get("language", "en"), "reliability_status_desc"), status=status, footer="Reliability")
+        controls = ((
+            ReliabilityRefreshButton(self),
+            discord.ui.Button(
+                label="Public status",
+                style=discord.ButtonStyle.link,
+                url="https://fixembed.app/status",
+            ),
+        ),)
+        self.render_page(
+            title=get_text(self.lang, "reliability_status_title"),
+            description=get_text(self.lang, "reliability_status_desc"),
+            status=status,
+            controls=controls,
+            footer="Reliability",
+        )
 
 
 class DebugSettingsView(StaticSettingsView):
@@ -1727,23 +1772,20 @@ async def rule(interaction: discord.Interaction, channel: discord.TextChannel, s
     await interaction.response.send_message(view=view, ephemeral=True)
 
 @client.tree.command(name='status', description="Power-user alias for reliability status (also in /settings)")
+@app_commands.guild_only()
 async def status(interaction: discord.Interaction):
-    by_service = processing_stats.get("by_service", {})
-    service_lines = []
-    for service in DEFAULT_ENABLED_SERVICES:
-        data = by_service.get(service, {"ok": 0, "fail": 0})
-        service_lines.append(f"{get_service_display_icon(interaction.guild, service)} **{service}:** ✅ {data['ok']}  ·  ❌ {data['fail']}")
-    view = SettingsNoticeView(
-        title="FixEmbed Status",
-        description=(
-            f"**Pending sends:** {SEND_QUEUE.qsize()}\n"
-            f"**Fixed:** {processing_stats['total_fixed']}  ·  **Failed:** {processing_stats['total_failed']}\n\n"
-            + "\n".join(service_lines)
-        ),
-        accent_color=discord.Color.blurple(),
-        footer="Reliability",
+    await interaction.response.defer(ephemeral=True)
+    settings = bot_settings.get(interaction.guild.id, {
+        "enabled_services": DEFAULT_ENABLED_SERVICES,
+        "language": "en",
+    })
+    report = await reliability_client.get_report()
+    view = ReliabilitySettingsView(
+        interaction,
+        settings,
+        report=report,
     )
-    await interaction.response.send_message(view=view, ephemeral=True)
+    await interaction.edit_original_response(view=view)
 
 @client.event
 async def on_message(message):

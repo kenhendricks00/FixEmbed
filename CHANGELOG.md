@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Live reliability diagnostics**
+- Connected `/settings` Reliability and `/status` to the Worker's live per-platform first-party, fallback, outage, and latency probes.
+- Added a refresh control, public dashboard shortcut, 30-second report cache, five-minute verified stale-data window, and retry cooldown after failed refreshes.
+- Kept local bot delivery counters visible when live Worker health is temporarily unavailable without misreporting the platform as operational.
+
 #### **Original post times**
 - Standardized every social card footer to use the platform's original publication time instead of the time FixEmbed converted the link.
 - Omit the time when upstream metadata does not provide a valid publication timestamp rather than displaying a misleading conversion time.

@@ -49,11 +49,28 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         alias_section = main_source.split("@client.tree.command(name='delivery'", 1)[1].split(
             "@client.event\nasync def on_message", 1
         )[0]
-        self.assertGreaterEqual(alias_section.count("SettingsNoticeView("), 4)
+        self.assertGreaterEqual(alias_section.count("SettingsNoticeView("), 3)
+        self.assertIn("view = ReliabilitySettingsView(", alias_section)
         self.assertNotIn("discord.Embed(", alias_section)
         self.assertIn("view=DebugSettingsView(interaction, settings)", main_source)
         self.assertIn('title=f"{client.user.name} Activated"', main_source)
         self.assertIn('title=f"{client.user.name} Deactivated"', main_source)
+
+    def test_reliability_views_use_live_worker_health_with_refresh_and_dashboard(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from reliability import (", main_source)
+        self.assertIn("reliability_client = ReliabilityClient(", main_source)
+        self.assertIn('if value == "Reliability Status":', main_source)
+        self.assertGreaterEqual(main_source.count("await reliability_client.get_report("), 3)
+        self.assertIn('label="Refresh"', main_source)
+        self.assertIn('label="Public status"', main_source)
+        self.assertIn('url="https://fixembed.app/status"', main_source)
+        self.assertIn("format_reliability_status(", main_source)
+        status_decorators = main_source.split(
+            "@client.tree.command(name='status'", 1
+        )[1].split("async def status", 1)[0]
+        self.assertIn("@app_commands.guild_only()", status_decorators)
 
     def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
