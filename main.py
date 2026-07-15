@@ -180,7 +180,11 @@ logging.basicConfig(level=logging.INFO)
 # Bot configuration
 intents = discord.Intents.default()
 intents.message_content = True
-client = commands.AutoShardedBot(command_prefix='/', intents=intents, shard_count=10)
+client = commands.AutoShardedBot(
+    command_prefix=commands.when_mentioned,
+    intents=intents,
+    shard_count=10,
+)
 
 # In-memory storage for channel states and settings
 channel_states = {}
@@ -1793,7 +1797,6 @@ async def on_message(message):
         return
 
     if not message.guild:
-        await client.process_commands(message)
         return
 
     guild_id = message.guild.id
@@ -1809,14 +1812,12 @@ async def on_message(message):
     media_quality = guild_settings.get("media_quality", "balanced")
     premium = await is_guild_premium(guild_id)
     if should_skip_automatic(message, guild_settings, premium=premium):
-        await client.process_commands(message)
         return
     footer_branding = get_footer_branding(message.guild, guild_settings, premium)
     card_preferences = preferences_from_settings(guild_settings, premium=premium)
 
     # Premium perk: skip bot messages only if NOT premium
     if message.author.bot and not premium:
-        await client.process_commands(message)
         return
     
     if channel_states.get(message.channel.id, True):
@@ -2020,8 +2021,6 @@ async def on_message(message):
         except Exception as e:
             logging.error(f"Unexpected error in on_message: {e}", exc_info=True)
             processing_stats["total_failed"] += 1
-
-    await client.process_commands(message)
 
 @client.event
 async def on_guild_join(guild):

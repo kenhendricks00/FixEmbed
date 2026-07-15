@@ -4,6 +4,7 @@
 - Connected `/settings` Reliability and `/status` to the Worker's live per-platform first-party, fallback, outage, and latency probes.
 - Added a refresh control, public dashboard shortcut, 30-second report cache, five-minute verified stale-data window, and retry cooldown after failed refreshes.
 - Kept local bot delivery counters visible when live Worker health is temporarily unavailable without misreporting the platform as operational.
+- Allowed up to 30 seconds for the Worker's multi-platform live probe and removed unused prefix-command parsing that logged `CommandNotFound` for manually typed slash text.
 
 #### **Original post times**
 - Standardized every social card footer to use the platform's original publication time instead of the time FixEmbed converted the link.

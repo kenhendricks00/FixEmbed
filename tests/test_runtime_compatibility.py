@@ -3,6 +3,12 @@ from pathlib import Path
 
 
 class DiscordRuntimeCompatibilityTests(unittest.TestCase):
+    def test_app_command_only_bot_does_not_parse_slash_text_as_a_prefix_command(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("command_prefix='/'", main_source)
+        self.assertNotIn("await client.process_commands(message)", main_source)
+
     def test_bot_does_not_call_removed_trigger_typing_api(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 

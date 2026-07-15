@@ -30,6 +30,7 @@ SUPPORTED_PLATFORM_NAMES = {
 VALID_STATUSES = {"operational", "degraded", "outage"}
 VALID_MODES = {"first-party", "fallback", "unavailable"}
 MAX_STATUS_BODY_BYTES = 256 * 1024
+STATUS_TIMEOUT_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ def parse_reliability_payload(payload: Any) -> ReliabilityReport:
 
 
 async def _fetch_status_json(url: str) -> Any:
-    timeout = aiohttp.ClientTimeout(total=10)
+    timeout = aiohttp.ClientTimeout(total=STATUS_TIMEOUT_SECONDS)
     headers = {"User-Agent": "FixEmbedBot/1.4 reliability-check"}
     async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
         async with session.get(url) as response:

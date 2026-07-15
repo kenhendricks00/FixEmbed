@@ -3,6 +3,7 @@ import unittest
 
 from reliability import (
     ReliabilityClient,
+    STATUS_TIMEOUT_SECONDS,
     format_reliability_status,
     parse_reliability_payload,
 )
@@ -43,6 +44,9 @@ class MutableClock:
 
 
 class ReliabilityPayloadTests(unittest.TestCase):
+    def test_live_probe_timeout_allows_slow_multi_platform_status_checks(self):
+        self.assertGreaterEqual(STATUS_TIMEOUT_SECONDS, 30)
+
     def test_parses_bounded_platform_health_from_worker_payload(self):
         report = parse_reliability_payload(STATUS_PAYLOAD)
 
