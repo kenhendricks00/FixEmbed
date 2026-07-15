@@ -63,27 +63,19 @@ class ReliabilityPayloadTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_reliability_payload({"platforms": [{"platform": "Unknown"}]})
 
-    def test_formats_live_and_local_health_without_exposing_raw_errors(self):
+    def test_formats_live_health_without_mixing_in_local_process_counters(self):
         report = parse_reliability_payload(STATUS_PAYLOAD)
 
         text = format_reliability_status(
             report,
-            local_stats={
-                "total_fixed": 14,
-                "total_failed": 2,
-                "by_service": {
-                    "Twitter": {"ok": 9, "fail": 1},
-                    "Instagram": {"ok": 5, "fail": 1},
-                },
-            },
-            pending_sends=3,
             icon_for_service=lambda service: f"[{service}]",
         )
 
         self.assertIn("**Live platform health:** ⚠️ Degraded", text)
         self.assertIn("[Twitter] **Twitter:** ✅ Operational · First-party · 125ms", text)
         self.assertIn("[Instagram] **Instagram:** ⚠️ Degraded · Fallback · 812ms", text)
-        self.assertIn("**This bot process:** 14 fixed · 2 failed · 3 pending", text)
+        self.assertNotIn("This bot process", text)
+        self.assertNotIn("pending", text)
         self.assertNotIn("Direct rendering failed", text)
 
 

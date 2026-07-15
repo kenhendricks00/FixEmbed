@@ -242,19 +242,14 @@ class ConversionTelemetry:
 def format_local_conversion_health(
     snapshot: ConversionSnapshot,
     *,
-    pending_sends: int,
     icon_for_service: Callable[[str], str],
 ) -> str:
     """Render a compact, bounded summary for the Reliability page."""
-    try:
-        pending = max(0, min(int(pending_sends), 1_000_000))
-    except (TypeError, ValueError, OverflowError):
-        pending = 0
     if snapshot.total_attempts:
         rich_rate = snapshot.total_rich / snapshot.total_attempts * 100
         lines = [
             f"**Local card quality:** {snapshot.total_rich} rich · "
-            f"{snapshot.total_fallbacks} link fallbacks · {pending} pending",
+            f"{snapshot.total_fallbacks} link fallbacks",
             f"**Recent rich-card rate:** {rich_rate:.1f}% · p95 {snapshot.p95_ms}ms",
         ]
         degraded = sorted(
@@ -276,6 +271,6 @@ def format_local_conversion_health(
                     f"p95 {service.p95_ms}ms"
                 )
     else:
-        lines = [f"**Local card quality:** No builds yet · {pending} pending"]
+        lines = ["**Local card quality:** No builds yet"]
     lines.append("-# Process-scoped aggregates; no links, posts, or member data retained.")
     return "\n".join(lines)

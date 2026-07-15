@@ -90,6 +90,17 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("format_local_conversion_health(", main_source)
         self.assertNotIn("component build failed; using link fallback", main_source)
 
+    def test_send_queue_emits_privacy_safe_delivery_telemetry(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from delivery_telemetry import (", main_source)
+        self.assertIn("delivery_telemetry = DeliveryTelemetry()", main_source)
+        self.assertIn("ticket = delivery_telemetry.queued(", main_source)
+        self.assertIn("await deliver_with_fallback(", main_source)
+        self.assertIn("format_delivery_health(", main_source)
+        self.assertNotIn("Queue send failed:", main_source)
+        self.assertNotIn("Queue fallback send failed:", main_source)
+
     def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(

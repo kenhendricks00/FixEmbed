@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Discord delivery observability**
+- Added bounded, process-local direct-delivery, link-rescue, complete-failure, pending-depth, and recent p95 delivery diagnostics.
+- Replaced free-form queue exception logs with structured, privacy-safe events using fixed categories and random correlation IDs.
+- Split Reliability into three explicit stages—live platform health, local card quality, and Discord delivery—and removed the ambiguous legacy process counter.
+
 #### **Privacy-safe conversion observability**
 - Added bounded, process-local rich-card quality telemetry with per-service success, link-fallback, recent p95 latency, and fixed failure categories.
 - Replaced URL-bearing component-build warnings with structured fallback events containing only a random correlation ID, service, category, exception type, and duration.

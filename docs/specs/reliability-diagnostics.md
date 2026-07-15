@@ -4,8 +4,9 @@
 
 Give server administrators an accurate, privacy-preserving view of FixEmbed's
 current platform health without requiring SparkedHost logs. The existing
-Reliability page and `/status` alias will combine local bot delivery counters
-with the Worker's live first-party, fallback, latency, and incident data.
+Reliability page and `/status` alias show the Worker's live first-party,
+fallback, latency, and incident data separately from process-local card-build
+and Discord-delivery health.
 
 ## Product Decisions
 
@@ -24,7 +25,7 @@ with the Worker's live first-party, fallback, latency, and incident data.
 - `reliability.py`: validated status contract, short-lived cache, stale-data
   policy, HTTP adapter, and Discord-safe formatting.
 - `main.py`: Components V2 Reliability page, refresh action, public dashboard
-  link, and `/status` integration.
+  link, process-local card and delivery sections, and `/status` integration.
 - `tests/test_reliability.py`: pure parsing, caching, failure, and formatting
   coverage.
 
@@ -73,7 +74,7 @@ tests. Never expose raw exceptions or requested post URLs in diagnostics.
 - A failed refresh can show a verified report no older than five minutes and
   labels it stale.
 - With no recent verified report, the UI says live health is unavailable while
-  still showing local delivery counters.
+  the separately rendered process-local sections remain available.
 - A refresh button bypasses the fresh-cache window without causing concurrent
   duplicate requests.
 - Existing command, settings, embed, and Worker tests remain green.

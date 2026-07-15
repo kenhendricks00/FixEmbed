@@ -132,11 +132,11 @@ class ConversionTelemetryTests(unittest.IsolatedAsyncioTestCase):
 
         text = format_local_conversion_health(
             telemetry.snapshot(),
-            pending_sends=2,
             icon_for_service=lambda service: f"[{service}]",
         )
 
-        self.assertIn("**Local card quality:** 1 rich · 4 link fallbacks · 2 pending", text)
+        self.assertIn("**Local card quality:** 1 rich · 4 link fallbacks", text)
+        self.assertNotIn("pending", text)
         self.assertIn("**Recent rich-card rate:** 20.0% · p95 200ms", text)
         self.assertIn("[Instagram] **Instagram:** 1/1 fallbacks · Rate limited", text)
         self.assertIn("[Reddit] **Reddit:** 1/1 fallbacks · Upstream 5xx", text)
@@ -160,7 +160,6 @@ class ConversionTelemetryTests(unittest.IsolatedAsyncioTestCase):
 
         text = format_local_conversion_health(
             telemetry.snapshot(),
-            pending_sends=0,
             icon_for_service=lambda service: f"[{service}]",
         )
 

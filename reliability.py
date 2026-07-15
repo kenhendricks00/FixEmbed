@@ -219,8 +219,6 @@ class ReliabilityClient:
 def format_reliability_status(
     report: ReliabilityReport,
     *,
-    local_stats: Mapping[str, Any],
-    pending_sends: int,
     icon_for_service: Callable[[str], str],
 ) -> str:
     """Build bounded Discord markdown for the Reliability Components V2 card."""
@@ -254,19 +252,4 @@ def format_reliability_status(
     else:
         lines.append("-# Live health is temporarily unavailable; local counters remain below.")
 
-    total_fixed = _bounded_integer(
-        local_stats.get("total_fixed"), minimum=0, maximum=1_000_000_000
-    ) or 0
-    total_failed = _bounded_integer(
-        local_stats.get("total_failed"), minimum=0, maximum=1_000_000_000
-    ) or 0
-    pending = _bounded_integer(
-        pending_sends, minimum=0, maximum=1_000_000
-    ) or 0
-    lines.extend(
-        (
-            "",
-            f"**This bot process:** {total_fixed} fixed · {total_failed} failed · {pending} pending",
-        )
-    )
     return "\n".join(lines)

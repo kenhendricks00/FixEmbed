@@ -49,6 +49,11 @@ from conversion_telemetry import (
     format_local_conversion_health,
     new_request_id,
 )
+from delivery_telemetry import (
+    DeliveryTelemetry,
+    deliver_with_fallback,
+    format_delivery_health,
+)
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -205,13 +210,9 @@ message_timestamps = deque()
 SEND_QUEUE = asyncio.Queue()
 processed_link_cache = {}
 DEDUP_WINDOW_SECONDS = 10
-processing_stats = {
-    "total_fixed": 0,
-    "total_failed": 0,
-    "by_service": {}
-}
 reliability_client = ReliabilityClient()
 conversion_telemetry = ConversionTelemetry(supported_services=SERVICE_NAMES)
+delivery_telemetry = DeliveryTelemetry()
 
 async def rate_limited_send(
     channel,
@@ -222,11 +223,32 @@ async def rate_limited_send(
     view=None,
     fallback_content=None,
 ):
-    await SEND_QUEUE.put((channel, content, embed, file, allowed_mentions, view, fallback_content))
+    ticket = delivery_telemetry.queued("card" if view is not None else "link")
+    await SEND_QUEUE.put(
+        (
+            ticket,
+            channel,
+            content,
+            embed,
+            file,
+            allowed_mentions,
+            view,
+            fallback_content,
+        )
+    )
 
 async def send_worker():
     while True:
-        channel, content, embed, file, allowed_mentions, view, fallback_content = await SEND_QUEUE.get()
+        (
+            ticket,
+            channel,
+            content,
+            embed,
+            file,
+            allowed_mentions,
+            view,
+            fallback_content,
+        ) = await SEND_QUEUE.get()
         try:
             current_time = time.time()
             while message_timestamps and current_time - message_timestamps[0] >= TIME_WINDOW:
@@ -239,27 +261,31 @@ async def send_worker():
                     message_timestamps.popleft()
 
             message_timestamps.append(time.time())
-            await channel.send(
-                content=content,
-                embed=embed,
-                file=file,
-                allowed_mentions=allowed_mentions,
-                view=view,
-                silent=True,
+            async def primary_send():
+                return await channel.send(
+                    content=content,
+                    embed=embed,
+                    file=file,
+                    allowed_mentions=allowed_mentions,
+                    view=view,
+                    silent=True,
+                )
+
+            async def fallback_send():
+                return await channel.send(
+                    content=fallback_content,
+                    allowed_mentions=allowed_mentions,
+                    silent=True,
+                )
+
+            await deliver_with_fallback(
+                ticket,
+                telemetry=delivery_telemetry,
+                primary_send=primary_send,
+                fallback_send=fallback_send if fallback_content else None,
             )
-        except Exception as e:
-            if fallback_content:
-                logging.warning(f"Component send failed; using link fallback: {e}")
-                try:
-                    await channel.send(
-                        content=fallback_content,
-                        allowed_mentions=allowed_mentions,
-                        silent=True,
-                    )
-                except Exception as fallback_error:
-                    logging.error(f"Queue fallback send failed: {fallback_error}")
-            else:
-                logging.error(f"Queue send failed: {e}")
+        except Exception as error:
+            delivery_telemetry.failed(ticket, error)
         finally:
             SEND_QUEUE.task_done()
 
@@ -1232,18 +1258,19 @@ class ReliabilitySettingsView(SettingsPageView):
     def render(self):
         status = format_reliability_status(
             self.report,
-            local_stats=processing_stats,
-            pending_sends=SEND_QUEUE.qsize(),
             icon_for_service=lambda service: get_service_display_icon(
                 self.interaction.guild, service
             ),
         )
         status += "\n\n" + format_local_conversion_health(
             conversion_telemetry.snapshot(),
-            pending_sends=SEND_QUEUE.qsize(),
             icon_for_service=lambda service: get_service_display_icon(
                 self.interaction.guild, service
             ),
+        )
+        status += "\n\n" + format_delivery_health(
+            delivery_telemetry.snapshot(),
+            pending=SEND_QUEUE.qsize(),
         )
         controls = ((
             ReliabilityRefreshButton(self),
@@ -1959,10 +1986,6 @@ async def on_message(message):
                                 error,
                             )
                     processed_link_cache[dedup_key] = time.time()
-                    service_stats = processing_stats["by_service"].setdefault(item.service, {"ok": 0, "fail": 0})
-                    service_stats["ok"] += 1
-                    processing_stats["total_fixed"] += 1
-
             if formatted_links or component_layouts:
                 if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
                     if not premium:
@@ -2013,16 +2036,12 @@ async def on_message(message):
 
         except discord.Forbidden as error:
             logging.warning("Missing permissions in channel %s: %s", message.channel.id, error)
-            processing_stats["total_failed"] += 1
         except discord.NotFound:
             logging.debug(f"Message already deleted in channel {message.channel.id}")
-            processing_stats["total_failed"] += 1
         except discord.HTTPException as e:
             logging.error(f"HTTP error in on_message: {e}")
-            processing_stats["total_failed"] += 1
         except Exception as e:
             logging.error(f"Unexpected error in on_message: {e}", exc_info=True)
-            processing_stats["total_failed"] += 1
 
 @client.event
 async def on_guild_join(guild):
