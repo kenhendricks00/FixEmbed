@@ -15,16 +15,18 @@ import {
     deriveMetaShortcodeTimestamp,
     normalizePostTimestamp,
 } from '../utils/timestamp.ts';
-import { fetchWithTimeout, parseInstagramUrl, truncateText } from '../utils/fetch.ts';
+import { createTimeoutBudget, fetchWithTimeout, parseInstagramUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
-const INSTAGRAM_NATIVE_TIMEOUT_MS = 3000;
-const INSTAGRAM_FALLBACK_TIMEOUT_MS = 3500;
+const INSTAGRAM_TOTAL_TIMEOUT_MS = 3500;
+const INSTAGRAM_NATIVE_TIMEOUT_MS = 2200;
+const INSTAGRAM_VX_TIMEOUT_MS = 1200;
+const INSTAGRAM_KK_TIMEOUT_MS = 600;
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata
 
-async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
+async function scrapeVxInstagram(shortcode: string, type: string, timeoutMs: number): Promise<{
     success: boolean;
     image?: string;
     video?: string;
@@ -44,7 +46,7 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
                 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
                 'Accept': 'text/html',
             },
-        }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
+        }, timeoutMs);
 
         if (!response.ok) {
             return { success: false, error: `vxinstagram returned ${response.status}` };
@@ -367,10 +369,15 @@ export const instagramHandler: PlatformHandler = {
 
         let nativeResult: HandlerResponse | undefined;
         try {
+            const remainingProviderTime = createTimeoutBudget(INSTAGRAM_TOTAL_TIMEOUT_MS);
             const shortcodeTimestamp = deriveMetaShortcodeTimestamp(parsed.shortcode);
             // First-party FixEmbed path: use Instagram's own embed document and
             // render its metadata ourselves before consulting embed services.
-            nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
+            nativeResult = await scrapeEmbedHtml(
+                canonicalUrl,
+                parsed,
+                remainingProviderTime(INSTAGRAM_NATIVE_TIMEOUT_MS),
+            );
             if (nativeResult.data && !nativeResult.data.timestamp) {
                 nativeResult.data.timestamp = shortcodeTimestamp;
             }
@@ -382,7 +389,11 @@ export const instagramHandler: PlatformHandler = {
             }
 
             // Try VxInstagram first for better image/carousel support
-            const vxResult = await scrapeVxInstagram(parsed.shortcode, parsed.type);
+            const vxResult = await scrapeVxInstagram(
+                parsed.shortcode,
+                parsed.type,
+                remainingProviderTime(INSTAGRAM_VX_TIMEOUT_MS),
+            );
 
             if (vxResult.success && vxResult.isVideo && vxResult.video) {
                 const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
@@ -492,7 +503,7 @@ export const instagramHandler: PlatformHandler = {
                         'Range': 'bytes=0-0',
                         'User-Agent': 'Discordbot/2.0',
                     },
-                }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
+                }, remainingProviderTime(INSTAGRAM_KK_TIMEOUT_MS));
                 const contentType = kkResponse.headers.get('Content-Type') || '';
                 kkAvailable = kkResponse.ok && (contentType.startsWith('image/') || contentType.startsWith('video/'));
             } catch (error) {
@@ -557,7 +568,7 @@ export const instagramHandler: PlatformHandler = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 },
                 body: formData,
-            }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
+            }, remainingProviderTime());
 
             if (!response.ok) {
                 throw new Error(`Snapsave returned ${response.status}`);
@@ -723,7 +734,11 @@ function extractInstagramTimestamp(html: string): string | undefined {
     return normalizePostTimestamp(dateValue);
 }
 
-async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
+async function scrapeEmbedHtml(
+    canonicalUrl: string,
+    parsed: { type: string; shortcode: string },
+    timeoutMs: number = INSTAGRAM_NATIVE_TIMEOUT_MS,
+): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
 
@@ -732,7 +747,7 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml',
             },
-        }, INSTAGRAM_NATIVE_TIMEOUT_MS);
+        }, timeoutMs);
 
         if (!response.ok) {
             console.warn('first_party_fetch_failed', {

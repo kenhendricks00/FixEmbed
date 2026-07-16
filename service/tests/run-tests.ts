@@ -28,6 +28,7 @@ import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
+    createTimeoutBudget,
     parseBlueskyUrl,
     parseInstagramUrl,
     parseRedditUrl,
@@ -65,6 +66,19 @@ async function topGgSignature(body: string, secret: string, timestamp: number): 
 }
 
 const tests: TestCase[] = [
+    {
+        name: 'createTimeoutBudget caps provider time against one shared deadline',
+        run: () => {
+            let now = 1000;
+            const remaining = createTimeoutBudget(3500, () => now);
+
+            assert.equal(remaining(2200), 2200);
+            now = 4000;
+            assert.equal(remaining(2200), 500);
+            now = 5000;
+            assert.equal(remaining(2200), 1);
+        },
+    },
     {
         name: 'extractPostTimestampFromHtml recognizes bounded platform publication fields',
         run: () => {

@@ -26,6 +26,25 @@ export async function fetchWithTimeout(
     }
 }
 
+/** Allocate sequential provider calls from one wall-clock request budget. */
+export function createTimeoutBudget(
+    totalMs: number,
+    now: () => number = Date.now,
+): (maxMs?: number) => number {
+    if (!Number.isFinite(totalMs) || totalMs <= 0) {
+        throw new RangeError('Timeout budget must be a positive finite number');
+    }
+
+    const total = Math.max(1, Math.floor(totalMs));
+    const deadline = now() + total;
+    return (maxMs: number = total): number => {
+        const providerCap = Number.isFinite(maxMs) && maxMs > 0
+            ? Math.floor(maxMs)
+            : 1;
+        return Math.max(1, Math.min(providerCap, deadline - now()));
+    };
+}
+
 /**
  * Fetch JSON from an API endpoint
  */
