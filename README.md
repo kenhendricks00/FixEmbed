@@ -109,6 +109,21 @@ docker pull kenhendricks00/fixembed:latest
 docker run --env-file .env -d kenhendricks00/fixembed:latest
 ```
 
+For SparkedHost or another file-based Python host, use the
+`sparkedhost-deployment-<commit>` artifact from a successful **Quality checks**
+workflow run. Extract the complete `fixembed-sparkedhost.zip` into the bot root
+as one deployment while preserving the host's existing `.env` and database.
+The archive contains every root Python module plus required runtime metadata,
+and its included manifest records the expected size and SHA-256 checksum of
+every file so partial or modified bundles fail verification.
+
+You can build and verify the same deterministic bundle locally:
+
+```bash
+python scripts/build_sparkedhost_bundle.py
+python scripts/build_sparkedhost_bundle.py --verify dist/fixembed-sparkedhost.zip
+```
+
 Operators can run the same semantic production canaries used by FixEmbed:
 
 ```bash

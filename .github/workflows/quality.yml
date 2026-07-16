@@ -25,6 +25,20 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Verify release metadata
         run: python scripts/check_release_metadata.py
+      - name: Build SparkedHost deployment bundle
+        run: python scripts/build_sparkedhost_bundle.py
+      - name: Verify SparkedHost deployment bundle
+        run: >-
+          python scripts/build_sparkedhost_bundle.py
+          --verify dist/fixembed-sparkedhost.zip
+      - name: Upload SparkedHost deployment bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sparkedhost-deployment-${{ github.sha }}
+          path: |
+            dist/fixembed-sparkedhost.zip
+            dist/fixembed-sparkedhost.manifest.json
+          retention-days: 14
 
   service:
     runs-on: ubuntu-latest

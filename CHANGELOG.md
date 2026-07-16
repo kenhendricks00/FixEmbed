@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **SparkedHost deployment integrity**
+- Added a deterministic SparkedHost archive containing every root Python module and required runtime metadata, with per-file sizes and SHA-256 checksums in an embedded manifest.
+- Made CI build, self-verify, and retain the complete deployment artifact so missing modules cannot hide behind partial manual uploads.
+
 #### **Pixiv first-party reliability**
 - Added a cached bot-local Pixiv metadata path so cards keep the real title, creator, profile link, high-resolution avatar, full gallery, publication time, and stats when Pixiv blocks Worker traffic.
 - Added a restricted, signed FixEmbed relay contract for future Worker recovery without exposing a general-purpose URL proxy; relay startup remains explicitly opt-in until a reachable allocation is configured.
