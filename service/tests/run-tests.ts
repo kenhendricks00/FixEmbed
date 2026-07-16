@@ -3536,7 +3536,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'status probes cover every handler and exercise healthy platform samples',
+        name: 'status probes cover every handler and exercise representative platform samples',
         run: () => {
             assert.equal(STATUS_PROBES.length, 9);
             assert.equal(
@@ -3551,7 +3551,7 @@ const tests: TestCase[] = [
             const instagram = STATUS_PROBES.find((probe) => probe.platform === 'Instagram');
             assert.equal(
                 instagram?.sampleUrl,
-                'https://www.instagram.com/p/DadSNf5EdUy/',
+                'https://www.instagram.com/reel/DaneAqzR3eV/',
             );
             const threads = STATUS_PROBES.find((probe) => probe.platform === 'Threads');
             assert.equal(

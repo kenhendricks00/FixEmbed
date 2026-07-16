@@ -155,7 +155,7 @@ function isFixEmbedPlaceholder(value?: string): boolean {
 
 export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Twitter/X', sampleUrl: 'https://x.com/jack/status/20' },
-    { platform: 'Instagram', sampleUrl: 'https://www.instagram.com/p/DadSNf5EdUy/' },
+    { platform: 'Instagram', sampleUrl: 'https://www.instagram.com/reel/DaneAqzR3eV/' },
     { platform: 'Reddit', sampleUrl: 'https://www.reddit.com/r/programming/comments/1d9m2ta/clean_code_means_good_code_performance_debate/' },
     { platform: 'Threads', sampleUrl: 'https://www.threads.com/@threads/post/DDKltrOTjJl' },
     { platform: 'Bluesky', sampleUrl: 'https://bsky.app/profile/bsky.app/post/3mqafridzgk2e' },
