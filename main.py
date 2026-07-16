@@ -38,6 +38,7 @@ from premium_controls import (
 )
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
+from install_links import build_install_controls
 from onboarding import send_onboarding_dm
 from settings_migrations import migrate_pinterest_service_default, migrate_youtube_service_default
 from reliability import (
@@ -376,13 +377,14 @@ def get_guild_color(guild_id, default=None):
 class CommandInfoView(ui.LayoutView):
     """Static Components V2 card for public informational commands."""
 
-    def __init__(self, *, title, description, sections, accent_color, footer):
+    def __init__(self, *, title, description, sections, accent_color, footer, controls=()):
         super().__init__(timeout=180)
         render_command_layout(
             self,
             title=title,
             description=description,
             sections=sections,
+            controls=controls,
             accent_color=accent_color,
             footer=footer,
         )
@@ -845,7 +847,8 @@ async def about(interaction: discord.Interaction):
         sections=(
             (
                 get_text(lang, "quick_links"),
-                "- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)\n"
+                "Choose **Install to My Account** to use `/fix` and the message command anywhere, "
+                "or **Add to Server** for automatic link conversion.\n\n"
                 "- [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)\n"
                 "- [Source Code (AGPL-3.0-or-later)](https://github.com/kenhendricks00/FixEmbed)\n"
                 "- [Join the Support Server](https://discord.gg/QFxTAmtZdn)",
@@ -869,6 +872,7 @@ async def about(interaction: discord.Interaction):
         ),
         accent_color=get_guild_color(guild_id, discord.Color(0x7289DA)),
         footer=f"About  ·  v{VERSION}",
+        controls=build_install_controls(),
     )
     await interaction.response.send_message(view=view)
 
@@ -894,8 +898,39 @@ async def help_command(interaction: discord.Interaction):
         ),
         accent_color=get_guild_color(guild_id, discord.Color(0x7289DA)),
         footer=f"Help  ·  v{VERSION}",
+        controls=build_install_controls(),
     )
     await interaction.response.send_message(view=view)
+
+
+@client.tree.command(
+    name='invite',
+    description="Install FixEmbed to your account or add it to a server")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def invite(interaction: discord.Interaction):
+    guild_id = interaction.guild.id if interaction.guild else None
+    view = CommandInfoView(
+        title="Install FixEmbed",
+        description=(
+            "Use FixEmbed anywhere with a personal install, or add it to a server "
+            "for automatic link conversion and server settings."
+        ),
+        sections=(
+            (
+                "Choose an install",
+                "**Install to My Account** — use `/fix` and Apps → Fix Embed in DMs, "
+                "group chats, and servers.\n\n"
+                "**Add to Server** — automatically convert supported links and unlock "
+                "server-wide controls.",
+            ),
+        ),
+        accent_color=get_guild_color(guild_id, discord.Color(0x7289DA)),
+        footer=f"Install  ·  v{VERSION}",
+        controls=build_install_controls(),
+    )
+    await interaction.response.send_message(view=view, ephemeral=True)
+
 
 @client.tree.command(
     name='fix',

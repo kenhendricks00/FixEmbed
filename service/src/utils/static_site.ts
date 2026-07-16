@@ -78,8 +78,7 @@ export const indexHtml = `<!DOCTYPE html>
                             <i class="fab fa-github"></i>
                         </a>
                     </div>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn"
-                        target="_blank">Invite Bot</a>
+                    <a href="/install/user/home-nav" class="invite-btn">Install to My Account</a>
                 </div>
             </div>
         </nav>
@@ -89,14 +88,12 @@ export const indexHtml = `<!DOCTYPE html>
                 <!-- Desktop layout wrapper -->
                 <div class="hero-desktop">
                     <div class="hero-content">
-                        <h1>Fix your Discord embeds with <span class="gradient-text">one bot</span></h1>
+                        <h1>Use FixEmbed anywhere. <span class="gradient-text">No server install required.</span></h1>
                         <p class="subtitle">FixEmbed automatically transforms social media links into beautiful, rich
                             embeds in Discord. No more broken previews.</p>
                         <div class="cta-buttons">
-                            <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764"
-                                class="primary-btn" target="_blank">Add to Discord</a>
-                            <a href="https://github.com/kenhendricks00/FixEmbed" class="secondary-btn"
-                                target="_blank">View on GitHub</a>
+                            <a href="/install/user/home-hero" class="primary-btn">Install to My Account</a>
+                            <a href="/install/server/home-hero" class="secondary-btn">Add to Server</a>
                         </div>
                     </div>
                     <div class="hero-image hero-image-desktop">
@@ -107,14 +104,12 @@ export const indexHtml = `<!DOCTYPE html>
 
                 <!-- Mobile layout wrapper (hidden on desktop) -->
                 <div class="hero-mobile">
-                    <h1>Fix your Discord embeds with <span class="gradient-text">one bot</span></h1>
+                    <h1>Use FixEmbed anywhere. <span class="gradient-text">No server install required.</span></h1>
                     <p class="subtitle">FixEmbed automatically transforms social media links into beautiful, rich embeds
                         in Discord. No more broken previews.</p>
                     <div class="mobile-buttons">
-                        <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="primary-btn"
-                            target="_blank">Add to Discord</a>
-                        <a href="https://github.com/kenhendricks00/FixEmbed" class="secondary-btn" target="_blank">View
-                            on GitHub</a>
+                        <a href="/install/user/home-mobile" class="primary-btn">Install to My Account</a>
+                        <a href="/install/server/home-mobile" class="secondary-btn">Add to Server</a>
                     </div>
                     <div class="hero-image-mobile">
                         <img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/header.png"
@@ -124,6 +119,33 @@ export const indexHtml = `<!DOCTYPE html>
             </div>
         </div>
     </header>
+
+    <section class="proof-section" aria-labelledby="proof-title">
+        <div class="container">
+            <p class="eyebrow">One link. A useful preview.</p>
+            <h2 id="proof-title">From a bare URL to a <span class="gradient-text">complete social card</span></h2>
+            <div class="proof-grid">
+                <article class="proof-panel proof-before">
+                    <span class="proof-label">Without FixEmbed</span>
+                    <div class="message-shell">
+                        <span class="message-avatar" aria-hidden="true">K</span>
+                        <div><strong>Kenneth</strong><p>https://x.com/example/status/123</p></div>
+                    </div>
+                    <p class="proof-note">The conversation stops at an unhelpful link.</p>
+                </article>
+                <article class="proof-panel proof-after">
+                    <span class="proof-label">With FixEmbed</span>
+                    <div class="social-card-demo">
+                        <div class="demo-author"><span class="demo-avatar">X</span><div><strong>Creator Name</strong><span>@creator</span></div></div>
+                        <p>See the post text, media, engagement, quoted context, and original publication time right inside Discord.</p>
+                        <div class="demo-media" aria-label="Media preview placeholder"><i class="fas fa-play" aria-hidden="true"></i></div>
+                        <div class="demo-stats"><span>◯ 128</span><span>↻ 2.4K</span><span>♡ 18K</span><span>◉ 1.2M</span></div>
+                    </div>
+                    <p class="proof-note">Modern Components V2 cards preserve the context people came to see.</p>
+                </article>
+            </div>
+        </div>
+    </section>
 
     <section id="features" class="features-section">
         <div class="container">
@@ -276,7 +298,7 @@ export const indexHtml = `<!DOCTYPE html>
             
             <div style="text-align: center; margin-top: 4rem;">
                 <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Ready to upgrade? Use <code>/premium</code> in your server to get started!</p>
-                <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="secondary-btn">Learn More in Discord</a>
+                <a href="/install/server/home-final" class="secondary-btn">Add Premium to a Server</a>
             </div>
         </div>
     </section>
@@ -287,8 +309,10 @@ export const indexHtml = `<!DOCTYPE html>
                 <h2>Ready to fix your Discord embeds?</h2>
                 <p>Add FixEmbed to your server for automatic conversion, or install to your account and use it anywhere!
                 </p>
-                <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="primary-btn"
-                    target="_blank">Add to Discord</a>
+                <div class="cta-buttons" style="justify-content: center;">
+                    <a href="/install/user/home-final" class="primary-btn">Install to My Account</a>
+                    <a href="/install/server/home-final" class="secondary-btn">Add to Server</a>
+                </div>
             </div>
         </div>
     </section>
@@ -395,6 +419,99 @@ docker run -d kenhendricks00/fixembed</code></pre>
 </body>
 
 </html>`;
+
+type GrowthPlatform = 'twitter' | 'instagram' | 'reddit';
+
+const growthPlatforms: Record<GrowthPlatform, {
+    name: string;
+    eyebrow: string;
+    headline: string;
+    description: string;
+    capabilities: readonly string[];
+    icon: string;
+}> = {
+    twitter: {
+        name: 'X / Twitter',
+        eyebrow: 'Better X embeds for Discord',
+        headline: 'X posts that keep the whole conversation intact.',
+        description: 'FixEmbed renders modern X cards with the details Discord users expect instead of leaving them with a bare link.',
+        capabilities: ['Playable videos and looping GIFs', 'Complete carousels and quoted posts', 'Polls, translations, stats, and original timestamps'],
+        icon: 'fa-brands fa-x-twitter',
+    },
+    instagram: {
+        name: 'Instagram',
+        eyebrow: 'Better Instagram embeds for Discord',
+        headline: 'Reels, posts, and carousels that play where you shared them.',
+        description: 'FixEmbed preserves the creator, caption, engagement, media, and publication context in a clean Components V2 card.',
+        capabilities: ['Playable Reels inside Discord', 'Full-resolution images and carousels', 'Creator identity, captions, and engagement'],
+        icon: 'fa-brands fa-instagram',
+    },
+    reddit: {
+        name: 'Reddit',
+        eyebrow: 'Better Reddit embeds for Discord',
+        headline: 'Reddit posts with the subreddit context still attached.',
+        description: 'FixEmbed turns shared posts into readable cards with community identity, content, media, and the public score Reddit exposes.',
+        capabilities: ['Subreddit identity and post author', 'Images, galleries, video, and linked media', 'Comments, score, and original publication time'],
+        icon: 'fa-brands fa-reddit',
+    },
+};
+
+export function platformLandingHtml(platform: GrowthPlatform): string {
+    const details = growthPlatforms[platform];
+    const capabilityItems = details.capabilities
+        .map((capability) => `<li><i class="fas fa-check" aria-hidden="true"></i><span>${capability}</span></li>`)
+        .join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix ${details.name} Embeds in Discord | FixEmbed</title>
+    <meta name="description" content="${details.description}">
+    <meta property="og:title" content="Fix ${details.name} Embeds in Discord | FixEmbed">
+    <meta property="og:description" content="${details.description}">
+    <meta property="og:image" content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
+    <meta name="theme-color" content="#5865F2">
+    <meta name="color-scheme" content="dark">
+    <link rel="icon" href="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" type="image/png">
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="landing-body loaded">
+    <div class="floating-shapes"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
+    <nav><div class="container"><div class="nav-container">
+        <a href="/" class="logo"><img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/logo.png" alt="FixEmbed Logo" class="logo-img"><span>FixEmbed</span></a>
+        <div class="nav-links"><a href="/docs">Docs</a><a href="/status">Status</a><a href="/support">Support</a></div>
+        <a href="/install/user/${platform}-landing" class="invite-btn">Install to My Account</a>
+    </div></div></nav>
+    <main class="platform-landing">
+        <section class="platform-landing-hero container">
+            <div class="platform-landing-copy">
+                <p class="eyebrow"><i class="${details.icon}" aria-hidden="true"></i> ${details.eyebrow}</p>
+                <h1>${details.headline}</h1>
+                <p class="subtitle">${details.description}</p>
+                <div class="cta-buttons">
+                    <a href="/install/user/${platform}-landing" class="primary-btn">Install to My Account</a>
+                    <a href="/install/server/${platform}-landing" class="secondary-btn">Add to Server</a>
+                </div>
+                <p class="install-hint">Personal installs work in DMs, group chats, and servers. Server installs add automatic conversion and settings.</p>
+            </div>
+            <aside class="platform-capability-card" aria-label="${details.name} embed capabilities">
+                <div class="platform-capability-icon"><i class="${details.icon}" aria-hidden="true"></i></div>
+                <h2>What FixEmbed preserves</h2>
+                <ul>${capabilityItems}</ul>
+            </aside>
+        </section>
+    </main>
+    <footer><div class="container"><div class="footer-content">
+        <div class="footer-left"><a href="/" class="footer-logo">FixEmbed</a><p>Rich social previews, wherever you use Discord.</p></div>
+        <div class="footer-right"><div class="footer-links"><a href="/docs">Docs</a><a href="/privacy">Privacy</a><a href="https://github.com/kenhendricks00/FixEmbed">Source (AGPL-3.0)</a></div><p class="copyright">© 2024-2026 Kenneth Hendricks · FixEmbed · AGPL-3.0-or-later</p></div>
+    </div></div></footer>
+</body>
+</html>`;
+}
 
 export const stylesCss = `/* ===================================
    FIXEMBED - DISCORD PREMIUM THEME
@@ -1104,6 +1221,8 @@ nav {
 }
 
 .hosting-text {
+    width: 100%;
+    min-width: 0;
     max-width: 800px;
     background: var(--bg-card);
     backdrop-filter: blur(20px);
@@ -1502,7 +1621,199 @@ footer {
     .credits-note {
         align-items: flex-start;
     }
-}`;
+}
+
+/* Product proof and focused acquisition pages */
+.proof-section {
+    padding: 104px 0;
+    background: linear-gradient(180deg, var(--bg-primary), var(--bg-secondary));
+}
+
+.eyebrow {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.proof-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    margin-top: 48px;
+}
+
+.proof-panel,
+.platform-capability-card {
+    background: rgba(22, 27, 34, 0.88);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+}
+
+.proof-label {
+    display: inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(88, 101, 242, 0.16);
+    color: var(--primary-light);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 20px;
+}
+
+.message-shell,
+.demo-author {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.message-avatar,
+.demo-avatar {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--gradient-hero);
+    font-weight: 800;
+}
+
+.message-shell p {
+    color: #58a6ff;
+    overflow-wrap: anywhere;
+}
+
+.social-card-demo {
+    border-left: 4px solid var(--primary-color);
+    background: #111418;
+    border-radius: 8px;
+    padding: 18px;
+}
+
+.demo-author span:not(.demo-avatar) {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.social-card-demo > p {
+    margin: 16px 0;
+    color: var(--text-secondary);
+}
+
+.demo-media {
+    min-height: 190px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: radial-gradient(circle at 70% 20%, #5060b8, #202641 45%, #121621 80%);
+    color: white;
+    font-size: 1.4rem;
+}
+
+.demo-media i {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.62);
+}
+
+.demo-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 14px;
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+}
+
+.proof-note,
+.install-hint {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 18px;
+}
+
+.platform-landing {
+    min-height: calc(100vh - 180px);
+    padding: 96px 0 72px;
+}
+
+.platform-landing-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    gap: 64px;
+    align-items: center;
+}
+
+.platform-landing-copy .eyebrow {
+    text-align: left;
+}
+
+.platform-landing-copy h1 {
+    max-width: 780px;
+}
+
+.platform-landing-copy .subtitle {
+    text-align: left;
+    max-width: 700px;
+    margin: 20px 0 30px;
+}
+
+.platform-capability-card h2 {
+    text-align: left;
+    font-size: 1.5rem;
+    margin: 18px 0;
+}
+
+.platform-capability-icon {
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--gradient-primary);
+    font-size: 1.5rem;
+}
+
+.platform-capability-card ul {
+    list-style: none;
+    display: grid;
+    gap: 16px;
+}
+
+.platform-capability-card li {
+    display: flex;
+    gap: 12px;
+    color: var(--text-secondary);
+}
+
+.platform-capability-card li i {
+    color: var(--accent-green);
+    margin-top: 5px;
+}
+
+@media (max-width: 850px) {
+    .proof-grid,
+    .platform-landing-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .platform-landing {
+        padding-top: 64px;
+    }
+}
+`;
 
 export const scriptJs = `document.addEventListener('DOMContentLoaded', function () {
     // ===================================
@@ -1753,7 +2064,7 @@ export const tosHtml = `<!DOCTYPE html>
                             <i class="fab fa-github"></i>
                         </a>
                     </div>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
+                    <a href="/install/user/site-nav" class="invite-btn">Install to My Account</a>
                 </div>
             </div>
         </nav>
@@ -1763,7 +2074,7 @@ export const tosHtml = `<!DOCTYPE html>
         <div class="container">
             <div class="glass-card">
                 <h1>Terms of Service</h1>
-                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2024</p>
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: July 16, 2026</p>
                 
                 <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Acceptance of Terms</h3>
@@ -1865,7 +2176,7 @@ export const privacyHtml = `<!DOCTYPE html>
                             <i class="fab fa-github"></i>
                         </a>
                     </div>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
+                    <a href="/install/user/site-nav" class="invite-btn">Install to My Account</a>
                 </div>
             </div>
         </nav>
@@ -1887,6 +2198,7 @@ export const privacyHtml = `<!DOCTYPE html>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Cookies and Tracking</h3>
                     <p>We do not use tracking cookies or third-party analytics on our service.</p>
+                    <p>When someone chooses an install button on fixembed.app, FixEmbed may count the redirect using only a fixed install-source label and the selected install context (personal or server). These bounded labels help us understand which product surfaces are useful. We do not attach cookies, user IDs, Discord IDs, message content, or source social-media URLs to these counts.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">3. Data Sharing</h3>
                     <p>We do not sell, trade, or transfer your information to outside parties. When you use FixEmbed, we make requests to public social media pages on your behalf to fetch metadata.</p>
@@ -1986,7 +2298,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <i class="fab fa-github"></i>
                         </a>
                     </div>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
+                    <a href="/install/user/site-nav" class="invite-btn">Install to My Account</a>
                 </div>
             </div>
         </nav>
@@ -2203,7 +2515,7 @@ export const supportHtml = `<!DOCTYPE html>
                             <i class="fab fa-github"></i>
                         </a>
                     </div>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" class="invite-btn" target="_blank">Invite Bot</a>
+                    <a href="/install/user/site-nav" class="invite-btn">Install to My Account</a>
                 </div>
             </div>
         </nav>
@@ -2218,8 +2530,8 @@ export const supportHtml = `<!DOCTYPE html>
                 <div class="support-card" style="border: 1px solid var(--primary-color); background: rgba(88, 101, 242, 0.05);">
                     <h3><i class="fas fa-gem" style="color: var(--accent-cyan);"></i> Server Subscription</h3>
                     <p>The best way to support us! Get custom colors and bot support for your whole server.</p>
-                    <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764" target="_blank" class="btn btn-discord">
-                        <i class="fas fa-crown"></i> Subscribe Now
+                    <a href="/install/server/support-action" class="btn btn-discord">
+                        <i class="fas fa-crown"></i> Add to Server
                     </a>
                 </div>
                 <div class="support-card">

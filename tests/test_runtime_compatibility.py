@@ -191,6 +191,15 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("Fallback services & acknowledgements", info_commands)
         self.assertIn("These services are not affiliated with or endorsed by FixEmbed.", info_commands)
 
+    def test_public_info_commands_offer_distinct_user_and_server_installs(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from install_links import build_install_controls", main_source)
+        self.assertIn("controls=build_install_controls()", main_source)
+        self.assertGreaterEqual(main_source.count("controls=build_install_controls()"), 3)
+        self.assertIn("name='invite'", main_source)
+        self.assertIn("async def invite(interaction: discord.Interaction):", main_source)
+
     def test_instagram_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 

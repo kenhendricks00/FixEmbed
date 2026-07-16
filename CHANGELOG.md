@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Product-led installation and discovery**
+- Added distinct personal and server install paths across `/invite`, `/help`, `/about`, and the public website.
+- Made personal installation the primary homepage action while preserving server installation for automatic conversion and settings.
+- Added focused, indexable X/Twitter, Instagram, and Reddit landing pages plus a responsive product-proof section.
+- Added allowlisted, privacy-safe install redirect attribution that records only the placement label and install context.
+- Added launch copy, a demonstration storyboard, measurement guidance, and a consent-first testimonial process without adding promotional copy to social-card footers.
+
 #### **Confirmed Discord delivery**
 - Waits for queued Discord sends to finish before deleting or suppressing source messages, preserving the original whenever any replacement fails.
 - Bounds every component and fallback send attempt to 15 seconds so a stalled Discord request cannot freeze the delivery queue.

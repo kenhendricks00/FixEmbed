@@ -19,7 +19,8 @@ import {
     generateEmbedHTML,
     generateErrorHTML,
 } from './utils/embed.ts';
-import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
+import { indexHtml, platformLandingHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
+import { discordInstallUrl, parseInstallContext, parseInstallSource } from './utils/install.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
 import {
     StatusProbeTimeoutError,
@@ -252,6 +253,21 @@ app.post('/webhooks/topgg', (c) => handleTopGgWebhook(c.req.raw, c.env));
 app.get('/', (c) => {
     return c.html(indexHtml);
 });
+
+app.get('/install/:context/:source', (c) => {
+    const context = parseInstallContext(c.req.param('context'));
+    const source = parseInstallSource(c.req.param('source'));
+    if (!context || !source) {
+        return c.json({ error: 'Not found' }, 404);
+    }
+
+    console.info('install_redirect', { context, source });
+    return c.redirect(discordInstallUrl(context), 302);
+});
+
+for (const platform of ['twitter', 'instagram', 'reddit'] as const) {
+    app.get(`/${platform}`, (c) => c.html(platformLandingHtml(platform)));
+}
 
 // Serve static assets
 app.get('/styles.css', (c) => {

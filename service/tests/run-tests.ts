@@ -23,12 +23,18 @@ import { deriveMetaShortcodeTimestamp, extractPostTimestampFromHtml } from '../s
 import {
     docsHtml,
     indexHtml,
+    platformLandingHtml,
     privacyHtml,
     statusHtml,
     stylesCss,
     supportHtml,
     tosHtml,
 } from '../src/utils/static_site.ts';
+import {
+    discordInstallUrl,
+    parseInstallContext,
+    parseInstallSource,
+} from '../src/utils/install.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
@@ -3622,6 +3628,59 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'install redirects accept only bounded contexts and sources',
+        run: async () => {
+            assert.equal(parseInstallContext('user'), 'user');
+            assert.equal(parseInstallContext('server'), 'server');
+            assert.equal(parseInstallContext('admin'), null);
+            assert.equal(parseInstallSource('home-hero'), 'home-hero');
+            assert.equal(parseInstallSource('raw-user-input'), null);
+
+            const userResponse = await app.request('/install/user/home-hero', {}, env);
+            assert.equal(userResponse.status, 302);
+            assert.equal(userResponse.headers.get('location'), discordInstallUrl('user'));
+
+            const serverResponse = await app.request('/install/server/home-hero', {}, env);
+            assert.equal(serverResponse.status, 302);
+            assert.equal(serverResponse.headers.get('location'), discordInstallUrl('server'));
+
+            assert.equal((await app.request('/install/admin/home-hero', {}, env)).status, 404);
+            assert.equal((await app.request('/install/user/unbounded', {}, env)).status, 404);
+        },
+    },
+    {
+        name: 'homepage makes account install primary and server install secondary',
+        run: () => {
+            assert.match(indexHtml, /href="\/install\/user\/home-hero"[^>]*>Install to My Account</);
+            assert.match(indexHtml, /href="\/install\/server\/home-hero"[^>]*>Add to Server</);
+            assert.match(indexHtml, /Use FixEmbed anywhere/i);
+            assert.match(privacyHtml, /fixed install-source label/i);
+            assert.doesNotMatch(privacyHtml, /user IDs?[^<]*install-source/i);
+        },
+    },
+    {
+        name: 'platform landing pages provide focused install paths and metadata',
+        run: async () => {
+            const expectations = [
+                ['twitter', 'X / Twitter', 'quoted posts'],
+                ['instagram', 'Instagram', 'Reels'],
+                ['reddit', 'Reddit', 'subreddit'],
+            ] as const;
+
+            for (const [slug, platformName, capability] of expectations) {
+                const html = platformLandingHtml(slug);
+                assert.match(html, new RegExp(`<title>[^<]*${platformName.replace(' / ', ' \\/ ')}[^<]*<\\/title>`, 'i'));
+                assert.match(html, new RegExp(capability, 'i'));
+                assert.match(html, new RegExp(`/install/user/${slug}-landing`));
+                assert.match(html, new RegExp(`/install/server/${slug}-landing`));
+
+                const response = await app.request(`/${slug}`, {}, env);
+                assert.equal(response.status, 200);
+                assert.match(await response.text(), new RegExp(platformName.replace(' / ', ' \\/ '), 'i'));
+            }
+        },
+    },
+    {
         name: 'public website advertises YouTube and Pinterest support',
         run: () => {
             assert.match(indexHtml, /<h3>YouTube<\/h3>/);
@@ -3637,7 +3696,17 @@ const tests: TestCase[] = [
     {
         name: 'every public page offers AGPL source and credits the creator',
         run: () => {
-            const publicPages = [indexHtml, tosHtml, privacyHtml, docsHtml, supportHtml, statusHtml];
+            const publicPages = [
+                indexHtml,
+                tosHtml,
+                privacyHtml,
+                docsHtml,
+                supportHtml,
+                statusHtml,
+                platformLandingHtml('twitter'),
+                platformLandingHtml('instagram'),
+                platformLandingHtml('reddit'),
+            ];
 
             for (const page of publicPages) {
                 assert.match(page, /Source \(AGPL-3\.0\)/);

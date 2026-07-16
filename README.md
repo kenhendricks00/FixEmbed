@@ -2,8 +2,8 @@
   <a href="https://github.com/kenhendricks00/FixEmbed/releases"><img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/banner.png" /></a>
 </p>
 <div align="center">
-  <a href="https://discord.com/oauth2/authorize?client_id=1173820242305224764">
-    <img src="https://img.shields.io/static/v1?label=Invite&message=Link&color=blue" alt="Invite Link"></a>
+  <a href="https://fixembed.app/install/user/home-hero">
+    <img src="https://img.shields.io/static/v1?label=Install&message=My%20Account&color=5865F2" alt="Install FixEmbed to your account"></a>
   <a href="https://top.gg/bot/1173820242305224764">
     <img src="https://img.shields.io/static/v1?label=Top.gg&message=Vote&color=red" alt="Top.gg"></a>
   <a href="https://github.com/kenhendricks00/FixEmbed/commits/main/">
@@ -25,6 +25,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 **Commands:**
 - `/fix [link]` - Convert one or more links into polished FixEmbed links (works in DMs and user-installed contexts)
 - `/help` - View all commands and supported services
+- `/invite` - Install FixEmbed to your account or add it to a server
 - `/settings` - Configure bot settings for your server
 - `/status` - View live first-party, fallback, and latency health for every supported platform
 - `/premium` - View and manage your Premium subscription
@@ -96,8 +97,9 @@ Make FixEmbed fit your server with **FixEmbed Premium** for **$1.99/month**. Use
 
 Premium adds server customization and operational controls; media quality, playback, carousels, GIF support, and reliability fixes remain available to everyone.
 
-# 🚀 Invite FixEmbed to Your Server
-Click the following link to invite FixEmbed to your server: [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+# 🚀 Install FixEmbed
+- [Install to My Account](https://fixembed.app/install/user/home-hero) — use `/fix` and Apps → Fix Embed anywhere
+- [Add to Server](https://fixembed.app/install/server/home-hero) — enable automatic conversion and server settings
 
 # 🐳 Host FixEmbed Yourself
 You can host the bot yourself using Docker:
@@ -143,7 +145,8 @@ If you need support or have any questions, you can join the [support server](htt
 Members of the support server automatically receive the **Voter** role after voting for FixEmbed on Top.gg.
 
 # 🎉 Quick Links
-- [Invite FixEmbed](https://discord.com/oauth2/authorize?client_id=1173820242305224764)
+- [Install FixEmbed to My Account](https://fixembed.app/install/user/home-hero)
+- [Add FixEmbed to a Server](https://fixembed.app/install/server/home-hero)
 - [Vote for FixEmbed on Top.gg](https://top.gg/bot/1173820242305224764)
 - [Star our Source Code on GitHub](https://github.com/kenhendricks00/FixEmbed)
 - [Join the Support Server](https://discord.gg/QFxTAmtZdn)

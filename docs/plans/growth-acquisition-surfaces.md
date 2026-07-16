@@ -2,29 +2,29 @@
 
 ## Phase 1: Install contract
 
-- [ ] Add bot install-link helpers and command-card button coverage.
-- [ ] Add validated Worker redirect helpers and route coverage.
+- [x] Add bot install-link helpers and command-card button coverage.
+- [x] Add validated Worker redirect helpers and route coverage.
 
 ### Checkpoint
 
-- [ ] Focused Python and Worker tests pass.
+- [x] Focused Python and Worker tests pass.
 
 ## Phase 2: Discovery surfaces
 
-- [ ] Add `/invite` and install controls to `/help` and `/about`.
-- [ ] Replace ambiguous homepage CTAs with account/server choices.
-- [ ] Add shared `/twitter`, `/instagram`, and `/reddit` landing pages.
+- [x] Add `/invite` and install controls to `/help` and `/about`.
+- [x] Replace ambiguous homepage CTAs with account/server choices.
+- [x] Add shared `/twitter`, `/instagram`, and `/reddit` landing pages.
 
 ### Checkpoint
 
-- [ ] Commands render valid Components V2 layouts.
-- [ ] Website tests and TypeScript checks pass.
+- [x] Commands render valid Components V2 layouts.
+- [x] Website tests and TypeScript checks pass.
 
 ## Phase 3: Launch support
 
-- [ ] Document privacy-safe attribution semantics.
-- [ ] Add launch copy, demo storyboard, and testimonial intake guidance.
-- [ ] Update README and changelog.
+- [x] Document privacy-safe attribution semantics.
+- [x] Add launch copy, demo storyboard, and testimonial intake guidance.
+- [x] Update README and changelog.
 
 ### Complete
 
