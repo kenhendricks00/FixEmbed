@@ -6,9 +6,14 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { truncateText } from '../utils/fetch.ts';
+import { createTimeoutBudget, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { deriveMetaShortcodeTimestamp, normalizePostTimestamp } from '../utils/timestamp.ts';
+
+const THREADS_TOTAL_TIMEOUT_MS = 4500;
+const THREADS_GRAPHQL_TIMEOUT_MS = 3500;
+const THREADS_OEMBED_TIMEOUT_MS = 1400;
+const THREADS_PROFILE_TIMEOUT_MS = 1200;
 
 function decodeThreadsHtml(value: string): string {
     return value
@@ -30,16 +35,34 @@ function isThreadsAvatarUrl(value: string): boolean {
     }
 }
 
-async function fetchThreadsProfilePic(username: string, fallback = ''): Promise<string | undefined> {
-    const fallbackPic = decodeThreadsHtml(fallback) || undefined;
+function upgradeThreadsAvatarUrl(value: string): string | undefined {
+    const decoded = decodeThreadsHtml(value);
+    if (!isThreadsAvatarUrl(decoded)) return undefined;
+
+    // GraphQL commonly returns a 150px avatar even though the same signed CDN
+    // URL supports a larger rendition. Reusing that URL avoids downloading an
+    // entire Threads profile page solely to discover the 640px variant.
+    const upgraded = decoded
+        .replace(/([?&]stp=[^&#]*?)s\d{2,4}x\d{2,4}/i, '$1s640x640')
+        .replace(/\/s\d{2,4}x\d{2,4}\//i, '/s640x640/');
+    return isThreadsAvatarUrl(upgraded) ? upgraded : undefined;
+}
+
+async function fetchThreadsProfilePic(
+    username: string,
+    fallback = '',
+    timeoutMs = THREADS_PROFILE_TIMEOUT_MS,
+): Promise<string | undefined> {
+    const fallbackPic = upgradeThreadsAvatarUrl(fallback);
+    if (fallbackPic) return fallbackPic;
     try {
         const profileUrl = `https://www.threads.net/@${encodeURIComponent(username)}`;
-        const response = await fetch(profileUrl, {
+        const response = await fetchWithTimeout(profileUrl, {
             headers: {
                 'Accept': 'text/html,application/xhtml+xml',
                 'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
             },
-        });
+        }, timeoutMs);
         if (!response.ok) return fallbackPic;
         const html = await response.text();
         const match = html.match(
@@ -47,8 +70,7 @@ async function fetchThreadsProfilePic(username: string, fallback = ''): Promise<
         ) || html.match(
             /<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*\bproperty=["']og:image["'][^>]*>/i,
         );
-        const candidate = decodeThreadsHtml(match?.[1] || '');
-        return isThreadsAvatarUrl(candidate) ? candidate : fallbackPic;
+        return upgradeThreadsAvatarUrl(match?.[1] || '');
     } catch {
         return fallbackPic;
     }
@@ -116,7 +138,7 @@ interface ThreadsGraphQLResponse {
     errors?: Array<{ summary?: string; message?: string }>;
 }
 
-async function fetchThreadsGraphQL(postCode: string): Promise<{
+async function fetchThreadsGraphQL(postCode: string, timeoutMs = THREADS_GRAPHQL_TIMEOUT_MS): Promise<{
     success: boolean;
     username?: string;
     caption?: string;
@@ -150,7 +172,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
             lsd: 'hgmSkqDnLNFckqa7t1vJdn',
         });
 
-        const response = await fetch('https://www.threads.net/api/graphql', {
+        const response = await fetchWithTimeout('https://www.threads.net/api/graphql', {
             method: 'POST',
             headers: {
                 'Sec-Fetch-Mode': 'cors',
@@ -161,7 +183,7 @@ async function fetchThreadsGraphQL(postCode: string): Promise<{
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: formBody.toString(),
-        });
+        }, timeoutMs);
 
         if (!response.ok) {
             return { success: false, error: `API returned ${response.status}` };
@@ -275,8 +297,12 @@ export const threadsHandler: PlatformHandler = {
         username = username.replace('@', '');
 
         try {
+            const remainingProviderTime = createTimeoutBudget(THREADS_TOTAL_TIMEOUT_MS);
             // Try GraphQL API first
-            const graphqlResult = await fetchThreadsGraphQL(postCode);
+            const graphqlResult = await fetchThreadsGraphQL(
+                postCode,
+                remainingProviderTime(THREADS_GRAPHQL_TIMEOUT_MS),
+            );
 
             if (graphqlResult.success) {
                 const displayUsername = graphqlResult.username || username;
@@ -284,6 +310,7 @@ export const threadsHandler: PlatformHandler = {
                 const authorAvatar = await fetchThreadsProfilePic(
                     displayUsername,
                     graphqlResult.profilePic,
+                    remainingProviderTime(THREADS_PROFILE_TIMEOUT_MS),
                 );
                 const recoveredTimestamp = deriveMetaShortcodeTimestamp(postCode);
 
@@ -340,11 +367,11 @@ export const threadsHandler: PlatformHandler = {
             // GraphQL failed, try oEmbed as fallback
             try {
                 const oembedUrl = `https://www.threads.net/oembed/?url=${encodeURIComponent(normalizedUrl)}`;
-                const response = await fetch(oembedUrl, {
+                const response = await fetchWithTimeout(oembedUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0)',
                     },
-                });
+                }, remainingProviderTime(THREADS_OEMBED_TIMEOUT_MS));
 
                 if (response.ok) {
                     const data = await response.json() as {
@@ -353,7 +380,11 @@ export const threadsHandler: PlatformHandler = {
                         thumbnail_url?: string;
                     };
                     const displayUsername = data.author_name || username;
-                    const authorAvatar = await fetchThreadsProfilePic(displayUsername);
+                    const authorAvatar = await fetchThreadsProfilePic(
+                        displayUsername,
+                        '',
+                        remainingProviderTime(THREADS_PROFILE_TIMEOUT_MS),
+                    );
 
                     return {
                         success: true,
@@ -378,7 +409,11 @@ export const threadsHandler: PlatformHandler = {
             }
 
             // Final fallback: return basic info
-            const authorAvatar = await fetchThreadsProfilePic(username);
+            const authorAvatar = await fetchThreadsProfilePic(
+                username,
+                '',
+                remainingProviderTime(THREADS_PROFILE_TIMEOUT_MS),
+            );
             return {
                 success: true,
                 source: 'first-party',

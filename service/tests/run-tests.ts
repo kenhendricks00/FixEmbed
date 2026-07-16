@@ -161,6 +161,46 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'threadsHandler upgrades a trusted GraphQL avatar without fetching the profile page',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            let graphqlSignal: AbortSignal | null | undefined;
+            globalThis.fetch = async (input, init) => {
+                const url = String(input);
+                requested.push(url);
+                if (url === 'https://www.threads.net/api/graphql') {
+                    graphqlSignal = init?.signal;
+                    return Response.json({
+                        data: { data: { edges: [{ node: { thread_items: [{ post: {
+                            code: 'DDKltrOTjJl',
+                            user: {
+                                username: 'threads',
+                                profile_pic_url: 'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s150x150_tt6&ccb=1-7',
+                            },
+                            caption: { text: 'A current public Threads post.' },
+                        } }] } }] } },
+                    });
+                }
+                return new Response('<meta property="og:image" content="https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s640x640_tt6">');
+            };
+
+            try {
+                const response = await threadsHandler.handle(
+                    'https://www.threads.com/@threads/post/DDKltrOTjJl',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.deepEqual(requested, ['https://www.threads.net/api/graphql']);
+                assert.equal(graphqlSignal instanceof AbortSignal, true);
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://scontent.example.cdninstagram.com/avatar.jpg?stp=dst-jpg_s640x640_tt6&ccb=1-7',
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'threadsHandler recovers publication time from the post shortcode',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -2829,6 +2869,11 @@ const tests: TestCase[] = [
                 instagram?.sampleUrl,
                 'https://www.instagram.com/p/DadSNf5EdUy/',
             );
+            const threads = STATUS_PROBES.find((probe) => probe.platform === 'Threads');
+            assert.equal(
+                threads?.sampleUrl,
+                'https://www.threads.com/@threads/post/DDKltrOTjJl',
+            );
         },
     },
     {
@@ -2858,6 +2903,24 @@ const tests: TestCase[] = [
             assert.equal(assessment.status, 'operational');
             assert.equal(assessment.mode, 'first-party');
             assert.equal(assessment.notice, null);
+        },
+    },
+    {
+        name: 'status probes flag successful placeholder cards as degraded',
+        run: () => {
+            const assessment = assessProbeResult({
+                success: true,
+                source: 'first-party',
+                data: {
+                    title: 'Thread',
+                    description: '',
+                },
+            }, 120);
+
+            assert.equal(assessment.status, 'degraded');
+            assert.equal(assessment.mode, 'first-party');
+            assert.match(assessment.notice || '', /basic link card/i);
+            assert.equal(assessment.responseCode, 200);
         },
     },
     {

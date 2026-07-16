@@ -7,6 +7,17 @@ export interface ProbeAssessment {
     responseCode: number | null;
 }
 
+interface ProbeCardData {
+    title?: string;
+    description?: string;
+    caption?: string;
+    authorName?: string;
+    authorHandle?: string;
+    image?: string;
+    images?: string[];
+    video?: unknown;
+}
+
 const PROBE_CONTENT_ISSUE_PATTERNS = [
     /post not found/i,
     /not found/i,
@@ -15,6 +26,16 @@ const PROBE_CONTENT_ISSUE_PATTERNS = [
     /invalid .*url/i,
 ];
 
+const BASIC_LINK_TEXT = /^(?:view|watch|open)\b.*\b(?:on|at)\b/i;
+
+function hasSubstantiveCardData(data: ProbeCardData): boolean {
+    const hasCreator = Boolean(data.authorName?.trim() || data.authorHandle?.trim());
+    const hasMedia = Boolean(data.image || data.images?.length || data.video);
+    const postText = (data.caption || data.description || '').trim();
+    const hasPostText = Boolean(postText && !BASIC_LINK_TEXT.test(postText));
+    return hasCreator || hasMedia || hasPostText;
+}
+
 export function deriveStatusFromLatency(latencyMs: number, success: boolean): PlatformStatus {
     if (!success) return 'outage';
     if (latencyMs > 4000) return 'degraded';
@@ -22,7 +43,13 @@ export function deriveStatusFromLatency(latencyMs: number, success: boolean): Pl
 }
 
 export function assessProbeResult(
-    result: { success: boolean; error?: string; redirect?: string; source?: 'first-party' | 'fallback' },
+    result: {
+        success: boolean;
+        error?: string;
+        redirect?: string;
+        source?: 'first-party' | 'fallback';
+        data?: ProbeCardData;
+    },
     latencyMs: number,
 ): ProbeAssessment {
     if (result.success) {
@@ -31,6 +58,14 @@ export function assessProbeResult(
                 status: 'degraded',
                 mode: 'fallback',
                 notice: 'Direct rendering failed; an emergency fallback supplied the embed.',
+                responseCode: 200,
+            };
+        }
+        if (result.data && !hasSubstantiveCardData(result.data)) {
+            return {
+                status: 'degraded',
+                mode: result.source || 'first-party',
+                notice: 'The probe returned only a basic link card without post metadata.',
                 responseCode: 200,
             };
         }
