@@ -413,11 +413,16 @@ export const bilibiliHandler: PlatformHandler = {
             const directResult = await fetchBilibiliVideo(bvid);
             if (directResult) return directResult;
 
-            const mobilePageResult = await fetchBilibiliMobilePage(bvid);
+            // Once the direct API is unavailable, overlap both recovery paths.
+            // We still await and prefer the official mobile result, while the
+            // emergency fallback can make progress instead of starting after it.
+            const mobilePagePromise = fetchBilibiliMobilePage(bvid);
+            const scrapePromise = scrapeVxBilibili(bvid);
+            const mobilePageResult = await mobilePagePromise;
             if (mobilePageResult) return mobilePageResult;
 
             // Emergency fallback when Bilibili rejects the direct Worker request.
-            const scrapeResult = await scrapeVxBilibili(bvid);
+            const scrapeResult = await scrapePromise;
 
             if (scrapeResult.success && (scrapeResult.title || scrapeResult.image)) {
                 scrapeResult.timestamp ||= await fetchBilibiliPostTimestamp(bvid);

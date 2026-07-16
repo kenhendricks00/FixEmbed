@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Bilibili cold-path latency**
+- Overlapped official mobile-page recovery with the emergency BiliFix request after the direct Bilibili API is unavailable.
+- Preserved first-party mobile metadata priority while allowing the fallback card to make progress during blocked official requests.
+
 #### **Repeated-link edge caching**
 - Added privacy-safe Cloudflare edge caching for successful public embed API responses, cutting repeated-link latency without caching failures.
 - Isolated translations and gallery/mosaic layouts in separate hashed cache entries, kept source URLs out of cache keys, and limited freshness to five minutes.

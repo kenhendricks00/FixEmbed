@@ -1052,6 +1052,9 @@ const tests: TestCase[] = [
                         headers: { 'Content-Type': 'text/html; charset=utf-8' },
                     });
                 }
+                if (url.includes('vxbilibili.com/video/')) {
+                    return new Response('fallback unavailable', { status: 503 });
+                }
                 throw new Error(`Unexpected request: ${url}`);
             };
             try {
@@ -1059,8 +1062,8 @@ const tests: TestCase[] = [
                     'https://www.bilibili.com/video/BV1xx411c7mD',
                     env,
                 );
-                assert.equal(requested.length, 2);
-                assert.equal(requested[1], 'https://m.bilibili.com/video/BV1xx411c7mD');
+                assert.equal(requested.includes('https://m.bilibili.com/video/BV1xx411c7mD'), true);
+                assert.equal(requested.some((url) => url.includes('vxbilibili.com/video/')), true);
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.title, 'Mobile video');
@@ -1263,12 +1266,16 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'bilibiliHandler starts BiliFix oEmbed while fallback HTML is in flight',
+        name: 'bilibiliHandler overlaps mobile and BiliFix recovery requests',
         run: async () => {
             const originalFetch = globalThis.fetch;
+            let releaseMobile: (() => void) | undefined;
+            let markMobileStarted: (() => void) | undefined;
             let releaseHtml: (() => void) | undefined;
             let markHtmlStarted: (() => void) | undefined;
             let oembedStarted = false;
+            const mobileGate = new Promise<void>((resolve) => { releaseMobile = resolve; });
+            const mobileStarted = new Promise<void>((resolve) => { markMobileStarted = resolve; });
             const htmlGate = new Promise<void>((resolve) => { releaseHtml = resolve; });
             const htmlStarted = new Promise<void>((resolve) => { markHtmlStarted = resolve; });
 
@@ -1278,6 +1285,8 @@ const tests: TestCase[] = [
                     return new Response('Precondition Failed', { status: 412 });
                 }
                 if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
+                    markMobileStarted?.();
+                    await mobileGate;
                     return new Response('blocked', { status: 412 });
                 }
                 if (url.includes('vxbilibili.com/video/')) {
@@ -1306,17 +1315,25 @@ const tests: TestCase[] = [
                     'https://www.bilibili.com/video/BV1p3Nc6pEoP/',
                     env,
                 );
+                await mobileStarted;
+                const fallbackStartedBeforeMobileCompleted = await Promise.race([
+                    htmlStarted.then(() => true),
+                    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 25)),
+                ]);
+                releaseMobile?.();
                 await htmlStarted;
                 const startedBeforeHtmlCompleted = oembedStarted;
                 releaseHtml?.();
                 const response = await responsePromise;
 
+                assert.equal(fallbackStartedBeforeMobileCompleted, true);
                 assert.equal(startedBeforeHtmlCompleted, true);
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'fallback');
                 assert.equal(response.data?.authorName, 'Fallback creator');
                 assert.equal(response.data?.timestamp, '2026-07-14T00:00:00.000Z');
             } finally {
+                releaseMobile?.();
                 releaseHtml?.();
                 globalThis.fetch = originalFetch;
             }
