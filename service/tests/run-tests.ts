@@ -96,6 +96,7 @@ const tests: TestCase[] = [
                 deriveMetaShortcodeTimestamp('Cu8M4wXLZQx'),
                 '2023-07-21T01:16:38.791Z',
             );
+            assert.equal(deriveMetaShortcodeTimestamp('Resolved123'), undefined);
             assert.equal(deriveMetaShortcodeTimestamp('not valid!'), undefined);
             assert.equal(extractPostTimestampFromHtml('timestamp="1784202091997"'), undefined);
         },
@@ -785,18 +786,15 @@ const tests: TestCase[] = [
                 if (url.includes('/share/p/')) {
                     const response = new Response('', { status: 200 });
                     Object.defineProperty(response, 'url', {
-                        value: 'https://www.instagram.com/p/Resolved123/',
+                        value: 'https://www.instagram.com/p/DadSNf5EdUy/',
                     });
                     return response;
                 }
-                if (url.includes('/p/Resolved123/embed/captioned/')) {
+                if (url.includes('/p/DadSNf5EdUy/embed/captioned/')) {
                     return new Response(
                         '<script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Resolved post"}</script>',
                         { status: 200 },
                     );
-                }
-                if (url === 'https://www.instagram.com/p/Resolved123/') {
-                    return new Response('<script>{"taken_at":1783969200}</script>', { status: 200 });
                 }
                 throw new Error(`Unexpected request: ${url}`);
             };
@@ -807,9 +805,9 @@ const tests: TestCase[] = [
                 );
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'first-party');
-                assert.equal(response.data?.url, 'https://www.instagram.com/p/Resolved123/');
-                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
-                assert.equal(requested.length, 3);
+                assert.equal(response.data?.url, 'https://www.instagram.com/p/DadSNf5EdUy/');
+                assert.equal(response.data?.timestamp, '2026-07-06T16:08:03.275Z');
+                assert.equal(requested.length, 2);
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -1017,6 +1015,136 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://i0.hdslb.com/mobile-video.jpg');
                 assert.equal(response.data?.stats, '💬 321 ❤️ 5K 👁️ 98.8K 🪙 456 🔖 1K 🔁 42');
                 assert.equal(response.data?.timestamp, new Date(1783987200 * 1000).toISOString());
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler derives the post time without a duplicate canonical request',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(
+                    '<script>{"username":"creator","display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Caption"}</script>',
+                    { status: 200 },
+                );
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/DadSNf5EdUy/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.timestamp, '2026-07-06T16:08:03.275Z');
+                assert.deepEqual(requested, [
+                    'https://www.instagram.com/p/DadSNf5EdUy/embed/captioned/',
+                ]);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler bounds the native Instagram request with an abort signal',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let nativeSignal: AbortSignal | null | undefined;
+            globalThis.fetch = async (input, init) => {
+                if (String(input).includes('/embed/captioned/')) {
+                    nativeSignal = init?.signal;
+                    return new Response(
+                        '<script>{"username":"creator","taken_at":1783969200,"display_url":"https:\\/\\/scontent.example.com\\/photo.jpg","text":"Caption"}</script>',
+                        { status: 200 },
+                    );
+                }
+                throw new Error(`Unexpected request: ${String(input)}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/ABC123/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(nativeSignal instanceof AbortSignal, true);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler reuses first-party metadata for carousel recovery',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/p/DadSNf5EdUy/embed/captioned/')) {
+                    return new Response([
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />Carousel caption</div>',
+                    ].join(''), { status: 200 });
+                }
+                if (url.includes('vxinstagram.com/p/DadSNf5EdUy')) {
+                    return new Response([
+                        '<meta property="og:image" content="https://vxinstagram.com/generated/DadSNf5EdUy.jpg">',
+                        '<meta property="og:description" content="Carousel caption">',
+                    ].join(''), { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/DadSNf5EdUy/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorName, 'creator');
+                assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.image, 'https://vxinstagram.com/generated/DadSNf5EdUy.jpg');
+                assert.equal(
+                    requested.filter((request) => request.includes('/embed/captioned/')).length,
+                    1,
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler preserves first-party metadata when media recovery is unavailable',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/p/DadSNf5EdUy/embed/captioned/')) {
+                    return new Response([
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />Caption without exposed media</div>',
+                    ].join(''), { status: 200 });
+                }
+                if (url.includes('vxinstagram.com')) {
+                    return new Response('', { status: 404 });
+                }
+                if (url.includes('kkinstagram.com')) {
+                    return new Response('', { status: 404 });
+                }
+                if (url.includes('snapsave.app')) {
+                    return new Response('', { status: 503 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/DadSNf5EdUy/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.authorName, 'creator');
+                assert.equal(response.data?.caption, 'Caption without exposed media');
+                assert.equal(
+                    requested.filter((request) => request.includes('/embed/captioned/')).length,
+                    1,
+                );
             } finally { globalThis.fetch = originalFetch; }
         },
     },

@@ -13,11 +13,13 @@
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import {
     deriveMetaShortcodeTimestamp,
-    extractPostTimestampFromHtml,
     normalizePostTimestamp,
 } from '../utils/timestamp.ts';
 import { fetchWithTimeout, parseInstagramUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
+
+const INSTAGRAM_NATIVE_TIMEOUT_MS = 3000;
+const INSTAGRAM_FALLBACK_TIMEOUT_MS = 3500;
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata
@@ -37,12 +39,12 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
             ? `https://vxinstagram.com/reel/${shortcode}/`
             : `https://vxinstagram.com/p/${shortcode}/`;
 
-        const response = await fetch(vxUrl, {
+        const response = await fetchWithTimeout(vxUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
                 'Accept': 'text/html',
             },
-        });
+        }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
 
         if (!response.ok) {
             return { success: false, error: `vxinstagram returned ${response.status}` };
@@ -81,7 +83,11 @@ async function scrapeVxInstagram(shortcode: string, type: string): Promise<{
             isVideo,
         };
     } catch (error) {
-        console.error('VxInstagram scrape error:', error);
+        console.warn('fallback_fetch_failed', {
+            platform: 'instagram',
+            provider: 'vxinstagram',
+            errorType: error instanceof Error ? error.name : 'unknown',
+        });
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }
@@ -313,13 +319,13 @@ export const instagramHandler: PlatformHandler = {
         if (!parsed && /instagram\.com\/share\/(?:p|reel)\//i.test(url)) {
             try {
                 const safeShareUrl = `https://www.instagram.com${inputUrl.pathname}`;
-                const response = await fetch(safeShareUrl, {
+                const response = await fetchWithTimeout(safeShareUrl, {
                     redirect: 'follow',
                     headers: {
                         'Accept': 'text/html,application/xhtml+xml',
                         'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
                     },
-                });
+                }, INSTAGRAM_NATIVE_TIMEOUT_MS);
                 resolvedUrl = response.url || url;
                 parsed = parseInstagramUrl(resolvedUrl);
 
@@ -334,7 +340,11 @@ export const instagramHandler: PlatformHandler = {
                     }
                 }
             } catch (error) {
-                console.warn('Instagram share URL resolution failed:', error);
+                console.warn('first_party_fetch_failed', {
+                    platform: 'instagram',
+                    stage: 'share_resolution',
+                    errorType: error instanceof Error ? error.name : 'unknown',
+                });
             }
         }
 
@@ -355,14 +365,14 @@ export const instagramHandler: PlatformHandler = {
             canonicalUrl = `https://www.instagram.com/p/${parsed.shortcode}/`;
         }
 
+        let nativeResult: HandlerResponse | undefined;
         try {
             const shortcodeTimestamp = deriveMetaShortcodeTimestamp(parsed.shortcode);
             // First-party FixEmbed path: use Instagram's own embed document and
             // render its metadata ourselves before consulting embed services.
-            const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
+            nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
             if (nativeResult.data && !nativeResult.data.timestamp) {
-                nativeResult.data.timestamp = await fetchInstagramPostTimestamp(canonicalUrl);
-                nativeResult.data.timestamp ||= shortcodeTimestamp;
+                nativeResult.data.timestamp = shortcodeTimestamp;
             }
             const nativeHasRequiredMedia = parsed.type === 'reel'
                 ? Boolean(nativeResult.data?.video)
@@ -409,41 +419,12 @@ export const instagramHandler: PlatformHandler = {
             if (vxResult.success && vxResult.image && !vxResult.isVideo) {
                 // VxInstagram found an image (possibly composite carousel)
 
-                // Fetch author metadata since vxinstagram doesn't provide it reliably
-                let authorName = undefined;
-                let authorHandle = undefined;
-                let authorUrl = undefined;
-                let authorAvatar = undefined;
-                let timestamp = undefined;
-                try {
-                    const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
-                    if (embedInfo.success && embedInfo.data) {
-                        // Logic to extract best author name (Name + Handle)
-                        if (embedInfo.data.title && embedInfo.data.title.includes('@')) {
-                            const authorMatch = embedInfo.data.title.match(/^([^\(]+)/);
-                            if (authorMatch) authorName = authorMatch[1].trim();
-
-                            const handleMatch = embedInfo.data.title.match(/\(@([^\)]+)\)/);
-                            if (handleMatch) {
-                                const handle = `@${handleMatch[1]}`;
-                                if (!authorName || authorName === 'Instagram') {
-                                    authorName = handle;
-                                } else {
-                                    authorName = `${authorName} (${handle})`;
-                                }
-                            }
-                        }
-                        if (!authorName && embedInfo.data.authorName) {
-                            authorName = embedInfo.data.authorName;
-                        }
-                        authorHandle = embedInfo.data.authorHandle;
-                        authorUrl = embedInfo.data.authorUrl;
-                        authorAvatar = embedInfo.data.authorAvatar;
-                        timestamp = embedInfo.data.timestamp || shortcodeTimestamp;
-                    }
-                } catch (e) {
-                    console.warn('Failed to fetch carousel metadata:', e);
-                }
+                const metadata = nativeResult.data;
+                const authorName = metadata?.authorName;
+                const authorHandle = metadata?.authorHandle;
+                const authorUrl = metadata?.authorUrl;
+                const authorAvatar = metadata?.authorAvatar;
+                const timestamp = metadata?.timestamp || shortcodeTimestamp;
 
                 let desc = vxResult.description || '';
 
@@ -505,17 +486,21 @@ export const instagramHandler: PlatformHandler = {
             const kkMediaUrl = `https://kkinstagram.com/${parsed.type === 'reel' ? 'reel' : 'p'}/${parsed.shortcode}/`;
             let kkAvailable = false;
             try {
-                const kkResponse = await fetch(kkMediaUrl, {
+                const kkResponse = await fetchWithTimeout(kkMediaUrl, {
                     headers: {
                         'Accept': 'image/*,video/*',
                         'Range': 'bytes=0-0',
                         'User-Agent': 'Discordbot/2.0',
                     },
-                });
+                }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
                 const contentType = kkResponse.headers.get('Content-Type') || '';
                 kkAvailable = kkResponse.ok && (contentType.startsWith('image/') || contentType.startsWith('video/'));
             } catch (error) {
-                console.warn('KKInstagram media recovery failed:', error);
+                console.warn('fallback_fetch_failed', {
+                    platform: 'instagram',
+                    provider: 'kkinstagram',
+                    errorType: error instanceof Error ? error.name : 'unknown',
+                });
             }
 
             if (kkAvailable && parsed.type === 'reel') {
@@ -562,7 +547,7 @@ export const instagramHandler: PlatformHandler = {
             const formData = new URLSearchParams();
             formData.append('url', canonicalUrl);
 
-            const response = await fetch('https://snapsave.app/action.php?lang=en', {
+            const response = await fetchWithTimeout('https://snapsave.app/action.php?lang=en', {
                 method: 'POST',
                 headers: {
                     'Accept': '*/*',
@@ -572,7 +557,7 @@ export const instagramHandler: PlatformHandler = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 },
                 body: formData,
-            });
+            }, INSTAGRAM_FALLBACK_TIMEOUT_MS);
 
             if (!response.ok) {
                 throw new Error(`Snapsave returned ${response.status}`);
@@ -600,13 +585,15 @@ export const instagramHandler: PlatformHandler = {
                 success: true,
                 source: 'fallback',
                 data: {
-                    title: parsed.type === 'reel' ? 'Reel' : 'Post',
-                    description: description
+                    ...(nativeResult.data || {}),
+                    title: nativeResult.data?.title || (parsed.type === 'reel' ? 'Reel' : 'Post'),
+                    description: nativeResult.data?.description || (description
                         ? truncateText(description, 280)
-                        : '',
-                    caption: description || undefined,
+                        : ''),
+                    caption: nativeResult.data?.caption || description || undefined,
                     url: canonicalUrl,
                     siteName: getBrandedSiteName('instagram'),
+                    timestamp: nativeResult.data?.timestamp || shortcodeTimestamp,
                     color: platformColors.instagram,
                     platform: 'instagram',
                 },
@@ -620,7 +607,7 @@ export const instagramHandler: PlatformHandler = {
 
                 // Use proxy URL for video like vxinstagram does
                 // This ensures Discord fetches the video properly
-                const embedDomain = (env as any).EMBED_DOMAIN || 'fixembed.app';
+                const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
                 const proxyVideoUrl = `https://${embedDomain}/video/instagram?url=${encodeURIComponent(firstMedia.url)}`;
 
                 result.data!.video = {
@@ -639,60 +626,6 @@ export const instagramHandler: PlatformHandler = {
                 result.data!.video = undefined;
             }
 
-            // Try to get better metadata (username) from the embed page
-            // Snapsave gives us the video, but often misses the username
-            // Try to get better metadata (username) from the embed page
-            // Snapsave gives us the video, but often misses the username
-            try {
-                const embedInfo = await scrapeEmbedHtml(canonicalUrl, parsed);
-                if (embedInfo.success && embedInfo.data) {
-                    let authorName = '';
-
-                    // Update Title with author if found
-                    if (embedInfo.data.title && embedInfo.data.title.includes('@')) {
-                        // Parse "Username (@handle)" from title
-                        const authorMatch = embedInfo.data.title.match(/^([^\(]+)/);
-                        if (authorMatch) {
-                            authorName = authorMatch[1].trim();
-                        }
-                        // Also try to get handle
-                        const handleMatch = embedInfo.data.title.match(/\(@([^\)]+)\)/);
-                        if (handleMatch) {
-                            const handle = `@${handleMatch[1]}`;
-                            // Prefer handle if name is just "Instagram" or empty
-                            if (!authorName || authorName === 'Instagram') {
-                                authorName = handle;
-                            } else {
-                                // Combine if both exist: Name (@handle)
-                                authorName = `${authorName} (${handle})`;
-                            }
-                        }
-                    }
-
-                    // Fallback to simpler username scraping
-                    if (!authorName && embedInfo.data.authorName) {
-                        authorName = embedInfo.data.authorName;
-                    }
-
-                    if (authorName) {
-                        result.data!.authorName = authorName;
-                    }
-                    result.data!.authorHandle = embedInfo.data.authorHandle;
-                    result.data!.authorUrl = embedInfo.data.authorUrl;
-                    result.data!.authorAvatar = embedInfo.data.authorAvatar;
-
-                    // Update description if we have a better one
-                    if (!description && embedInfo.data.description) {
-                        result.data!.description = embedInfo.data.description;
-                    }
-                }
-            } catch (e) {
-                // Ignore metadata fetch errors, we have the video at least
-                console.warn('Failed to fetch extra metadata:', e);
-            }
-
-            // Clean description: Remove author name if it appears at the start
-            // This happens often (e.g. "username Caption text")
             // Clean description: Remove author name if it appears at the start
             // This happens often (e.g. "username Caption text")
             if (result.data!.description && result.data!.title) {
@@ -735,10 +668,16 @@ export const instagramHandler: PlatformHandler = {
             return result;
 
         } catch (error) {
-            console.error('Instagram handler error:', error);
+            console.warn('fallback_fetch_failed', {
+                platform: 'instagram',
+                provider: 'media_recovery_chain',
+                errorType: error instanceof Error ? error.name : 'unknown',
+            });
 
-            // Fallback: try embed HTML scraping
-            return await scrapeEmbedHtml(canonicalUrl, parsed);
+            if (nativeResult?.success) {
+                return nativeResult;
+            }
+            return { success: false, error: 'Unable to recover Instagram media', redirect: canonicalUrl };
         }
     },
 };
@@ -784,31 +723,16 @@ function extractInstagramTimestamp(html: string): string | undefined {
     return normalizePostTimestamp(dateValue);
 }
 
-async function fetchInstagramPostTimestamp(canonicalUrl: string): Promise<string | undefined> {
-    try {
-        const response = await fetchWithTimeout(canonicalUrl, {
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml',
-                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
-            },
-        }, 5000);
-        if (!response.ok) return undefined;
-        return extractPostTimestampFromHtml(await response.text());
-    } catch {
-        return undefined;
-    }
-}
-
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {
     try {
         const embedUrl = `https://www.instagram.com/p/${parsed.shortcode}/embed/captioned/`;
 
-        const response = await fetch(embedUrl, {
+        const response = await fetchWithTimeout(embedUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml',
             },
-        });
+        }, INSTAGRAM_NATIVE_TIMEOUT_MS);
 
         if (!response.ok) {
             console.warn('first_party_fetch_failed', {

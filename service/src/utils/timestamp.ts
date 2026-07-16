@@ -32,7 +32,9 @@ export function deriveMetaShortcodeTimestamp(shortcode: string): string | undefi
 
     const milliseconds = Number(mediaId >> 23n) + 1_314_220_021_721;
     const earliest = Date.parse('2011-08-24T21:07:01.721Z');
-    const latest = Date.parse('2100-01-01T00:00:00.000Z');
+    // Media IDs encode creation time, so a timestamp materially ahead of the
+    // current clock is a malformed shortcode rather than a future post.
+    const latest = Date.now() + 24 * 60 * 60 * 1000;
     if (!Number.isSafeInteger(milliseconds) || milliseconds < earliest || milliseconds > latest) {
         return undefined;
     }
