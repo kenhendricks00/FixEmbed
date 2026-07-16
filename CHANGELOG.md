@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Repeated-link edge caching**
+- Added privacy-safe Cloudflare edge caching for successful public embed API responses, cutting repeated-link latency without caching failures.
+- Isolated translations and gallery/mosaic layouts in separate hashed cache entries, kept source URLs out of cache keys, and limited freshness to five minutes.
+
 #### **CI supply-chain hardening**
 - Upgraded repository workflows to the official Node 24 action releases and pinned every third-party action to an immutable commit.
 - Added a regression test that rejects floating action tags and deprecated release majors while keeping Dependabot responsible for reviewed updates.

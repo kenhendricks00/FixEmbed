@@ -43,6 +43,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Continuous Embed Conformance**: Scheduled privacy-safe canaries verify live metadata, build the real Discord Components V2 card for every supported platform, and fetch a bounded byte from approved rendered media targets so broken avatars, images, GIFs, and videos fail before users report them.
 - **Advanced X Regression Coverage**: Production canaries continuously exercise X carousels, GIFs, videos, translations, and unavailable quoted-post context instead of testing only a simple text post.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
+- **Fast Repeated Links**: Successful cards are reused briefly at the edge with privacy-safe hashed keys; failures and distinct translation/layout options are never mixed.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 
 # 📋 Key Features

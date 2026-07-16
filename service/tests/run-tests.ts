@@ -2199,6 +2199,8 @@ const tests: TestCase[] = [
                 } };
 
                 assert.equal(response.status, 200);
+                assert.equal(response.headers.get('X-FixEmbed-Cache'), null);
+                assert.equal(response.headers.get('Cache-Control'), null);
                 assert.equal(payload.source, 'first-party');
                 assert.equal(payload.data?.description, '');
                 assert.equal(payload.data?.stats, undefined);
@@ -2208,6 +2210,148 @@ const tests: TestCase[] = [
                 ]);
             } finally {
                 globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: '/api/embed reuses successful edge entries without mixing render options',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const cacheKeys: string[] = [];
+            const pendingWrites: Promise<unknown>[] = [];
+            let upstreamRequests = 0;
+            const cacheKey = (key: Request | string) => typeof key === 'string' ? key : key.url;
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request | string) {
+                                const response = entries.get(cacheKey(key));
+                                const cached = response?.clone();
+                                cached?.headers.set('Cache-Control', 'public, max-age=14400');
+                                return cached;
+                            },
+                            async put(key: Request | string, response: Response) {
+                                cacheKeys.push(cacheKey(key));
+                                entries.set(cacheKey(key), response.clone());
+                            },
+                        };
+                    },
+                },
+            });
+            globalThis.fetch = async () => {
+                upstreamRequests += 1;
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '1234567890',
+                    text: 'Cached card',
+                    lang: 'en',
+                    user: { name: 'Cache Author', screen_name: 'cache_author' },
+                    created_at: '2026-07-16T00:00:00.000Z',
+                });
+            };
+
+            try {
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+                const source = encodeURIComponent('https://x.com/cache_author/status/1234567890');
+                const first = await app.request(
+                    `/api/embed?url=${source}&mode=gallery`, {}, cacheEnv, executionContext,
+                );
+                await Promise.all(pendingWrites.splice(0));
+                const requestsAfterFirst = upstreamRequests;
+                const second = await app.request(
+                    `/api/embed?url=${source}&mode=gallery`, {}, cacheEnv, executionContext,
+                );
+                const requestsAfterHit = upstreamRequests;
+                const differentMode = await app.request(
+                    `/api/embed?url=${source}&mode=mosaic`, {}, cacheEnv, executionContext,
+                );
+                const translated = await app.request(
+                    `/api/embed?url=${source}&mode=gallery&lang=es`, {}, cacheEnv, executionContext,
+                );
+                await Promise.all(pendingWrites.splice(0));
+
+                assert.equal(first.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(second.headers.get('X-FixEmbed-Cache'), 'HIT');
+                assert.equal(differentMode.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(translated.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(first.headers.get('Cache-Control'), 'no-store');
+                assert.equal(second.headers.get('Cache-Control'), 'no-store');
+                assert.equal(requestsAfterHit, requestsAfterFirst);
+                assert.ok(upstreamRequests > requestsAfterHit);
+                assert.equal(cacheKeys.length, 3);
+                assert.equal(
+                    Array.from(entries.values()).every((entry) => (
+                        entry.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=300'
+                    )),
+                    true,
+                );
+                assert.equal(cacheKeys.some((key) => key.includes('cache_author')), false);
+            } finally {
+                globalThis.fetch = originalFetch;
+                if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+                else delete (globalThis as { caches?: unknown }).caches;
+            }
+        },
+    },
+    {
+        name: '/api/embed never caches failed card builds',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const pendingWrites: Promise<unknown>[] = [];
+            let upstreamRequests = 0;
+            const cacheKey = (key: Request | string) => typeof key === 'string' ? key : key.url;
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request | string) {
+                                return entries.get(cacheKey(key))?.clone();
+                            },
+                            async put(key: Request | string, response: Response) {
+                                entries.set(cacheKey(key), response.clone());
+                            },
+                        };
+                    },
+                },
+            });
+            globalThis.fetch = async () => {
+                upstreamRequests += 1;
+                return new Response('unavailable', { status: 503 });
+            };
+
+            try {
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+                const source = encodeURIComponent('https://x.com/cache_failure/status/1234567890');
+                const first = await app.request(`/api/embed?url=${source}`, {}, cacheEnv, executionContext);
+                await Promise.all(pendingWrites.splice(0));
+                const requestsAfterFirst = upstreamRequests;
+                const second = await app.request(`/api/embed?url=${source}`, {}, cacheEnv, executionContext);
+
+                assert.equal(first.status, 500);
+                assert.equal(second.status, 500);
+                assert.ok(upstreamRequests > requestsAfterFirst);
+                assert.equal(entries.size, 0);
+            } finally {
+                globalThis.fetch = originalFetch;
+                if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+                else delete (globalThis as { caches?: unknown }).caches;
             }
         },
     },

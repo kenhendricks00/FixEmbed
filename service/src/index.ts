@@ -10,7 +10,7 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import type { Env } from './types.ts';
+import type { Env, HandlerOptions } from './types.ts';
 import { findHandler } from './handlers/index.ts';
 import {
     FIXEMBED_LOGO,
@@ -21,6 +21,7 @@ import {
 } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
+import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -1475,7 +1476,12 @@ app.get('/api/embed', async (c) => {
     }
 
     try {
-        const result = await handler.handle(url, c.env, { language, mode });
+        const options: HandlerOptions = { language, mode };
+        const cacheContext = await prepareEmbedCache(c.env, c.req.url, url, options);
+        const cached = await readEmbedCache(cacheContext);
+        if (cached) return cached;
+
+        const result = await handler.handle(url, c.env, options);
 
         if (!result.success) {
             return c.json({
@@ -1484,12 +1490,15 @@ app.get('/api/embed', async (c) => {
             }, 500);
         }
 
-        return c.json({
+        const response = c.json({
             success: true,
             platform: handler.name,
             source: result.source,
             data: result.data,
         });
+        return cacheContext
+            ? storeEmbedCache(cacheContext, response, c.executionCtx)
+            : response;
     } catch (error) {
         return c.json({
             error: error instanceof Error ? error.message : 'Unknown error'

@@ -13,7 +13,7 @@ EMBED_DOMAIN = "fixembed.app"
 
 # Feature flags
 ENABLE_CACHE = true
-CACHE_TTL = 3600
+CACHE_TTL = 300
 
 # Top.gg voter rewards (secrets are configured with `wrangler secret put`)
 TOPGG_BOT_ID = "1173820242305224764"
