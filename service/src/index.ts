@@ -776,33 +776,71 @@ app.get('/video/threads', async (c) => {
 
 // Image proxy endpoint for Pixiv - adds required Referer header
 app.get('/proxy/pixiv', async (c) => {
-    const imageUrl = c.req.query('url');
+    const rawImageUrl = c.req.query('url');
 
-    if (!imageUrl) {
+    if (!rawImageUrl) {
         return c.json({ error: 'Missing image URL' }, 400);
     }
 
+    const trustedImageUrl = (rawUrl: string): string | null => {
+        try {
+            const parsed = new URL(rawUrl);
+            const hostname = parsed.hostname.toLowerCase();
+            const trustedHost = hostname === 'embed.pixiv.net'
+                || hostname === 'i.pximg.net'
+                || hostname.endsWith('.pximg.net')
+                || hostname === 'phixiv.net'
+                || hostname === 'www.phixiv.net';
+            return parsed.protocol === 'https:' && trustedHost ? parsed.toString() : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const initialImageUrl = trustedImageUrl(rawImageUrl);
+    if (!initialImageUrl) {
+        return c.json({ error: 'Invalid Pixiv image URL' }, 400);
+    }
+    let imageUrl = initialImageUrl;
+
     try {
-        // Pixiv requires Referer header to serve images
-        const response = await fetch(imageUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.pixiv.net/',
-                'Accept': 'image/*',
-            },
-        });
+        const requestHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.pixiv.net/',
+            'Accept': 'image/*',
+        };
+        let response: Response;
+        for (let redirectCount = 0; ; redirectCount += 1) {
+            response = await fetch(imageUrl, {
+                headers: requestHeaders,
+                redirect: 'manual',
+            });
+            if (response.status < 300 || response.status >= 400) break;
+            const location = response.headers.get('location');
+            const redirectedUrl = location
+                ? trustedImageUrl(new URL(location, imageUrl).toString())
+                : null;
+            if (!redirectedUrl) {
+                return c.json({ error: 'Unsafe Pixiv image redirect' }, 502);
+            }
+            if (redirectCount >= 2) {
+                return c.json({ error: 'Too many Pixiv image redirects' }, 502);
+            }
+            imageUrl = redirectedUrl;
+        }
 
         if (!response.ok) {
             return c.redirect(imageUrl, 302);
         }
 
-        // Get content type from response or default to image/jpeg
-        const contentType = response.headers.get('Content-Type') || 'image/jpeg';
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.toLowerCase().startsWith('image/')) {
+            return c.json({ error: 'Invalid Pixiv image response' }, 502);
+        }
 
-        // Stream the image back with proper headers and long cache
         const headers = new Headers();
         headers.set('Content-Type', contentType);
-        headers.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+        headers.set('Cache-Control', 'public, max-age=86400');
 
         const contentLength = response.headers.get('Content-Length');
         if (contentLength) {
@@ -901,6 +939,10 @@ app.get('/proxy/bilibili', async (c) => {
         return c.redirect(videoUrl, 302);
     }
 });
+
+// Diagnostic handlers contain upstream response details and are intentionally
+// unavailable from the public production application.
+app.use('/debug/*', async (c) => c.notFound());
 
 // Debug endpoint to test Instagram
 app.get('/debug/instagram', async (c) => {

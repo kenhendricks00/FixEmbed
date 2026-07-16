@@ -13,6 +13,9 @@
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
+import { fetchWithTimeout } from '../utils/fetch.ts';
+
+const MAX_PIXIV_OEMBED_BYTES = 64 * 1024;
 
 interface PixivArtworkResponse {
     error?: boolean;
@@ -48,9 +51,44 @@ interface PixivUserResponse {
     };
 }
 
+interface PixivOEmbedResponse {
+    title?: string;
+    author_name?: string;
+    author_url?: string;
+    thumbnail_url?: string;
+}
+
 function proxyPixivImage(sourceUrl: string, env: Env): string {
     const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
     return `https://${embedDomain}/proxy/pixiv?url=${encodeURIComponent(sourceUrl)}`;
+}
+
+function trustedPixivMediaUrl(rawUrl: string | undefined): string | undefined {
+    if (!rawUrl) return undefined;
+    try {
+        const parsed = new URL(rawUrl.replace(/&amp;/gi, '&'));
+        const hostname = parsed.hostname.toLowerCase();
+        const trustedHost = hostname === 'embed.pixiv.net'
+            || hostname === 'i.pximg.net'
+            || hostname.endsWith('.pximg.net');
+        return parsed.protocol === 'https:' && trustedHost ? parsed.toString() : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function trustedPixivAuthorUrl(rawUrl: string | undefined): string | undefined {
+    if (!rawUrl) return undefined;
+    try {
+        const parsed = new URL(rawUrl);
+        const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        const userId = parsed.pathname.match(/^\/(?:en\/)?users\/(\d+)\/?$/i)?.[1];
+        return parsed.protocol === 'https:' && hostname === 'pixiv.net' && userId
+            ? `https://www.pixiv.net/en/users/${userId}`
+            : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function cleanPixivDescription(value: string | undefined): string {
@@ -92,10 +130,25 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
                 'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
             },
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.warn('first_party_fetch_failed', {
+                platform: 'pixiv',
+                stage: 'artwork',
+                status: response.status,
+            });
+            return null;
+        }
         const payload = await response.json() as PixivArtworkResponse;
         const artwork = payload?.body;
-        if (payload?.error || !artwork?.title) return null;
+        if (payload?.error || !artwork?.title) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'pixiv',
+                stage: 'artwork',
+                upstreamError: payload?.error === true,
+                hasTitle: Boolean(artwork?.title),
+            });
+            return null;
+        }
         const sourceImage = artwork.urls?.regular || artwork.urls?.original;
         let profileImage = findPixivProfileImage(artwork, illustId);
         let image = sourceImage ? proxyPixivImage(sourceImage, env) : undefined;
@@ -182,6 +235,78 @@ async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerRes
     }
 }
 
+async function fetchPixivOEmbed(illustId: string, env: Env): Promise<HandlerResponse | null> {
+    try {
+        const canonicalUrl = `https://www.pixiv.net/artworks/${illustId}`;
+        const endpoint = `https://embed.pixiv.net/oembed.php?url=${encodeURIComponent(canonicalUrl)}`;
+        const response = await fetchWithTimeout(endpoint, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        }, 5000);
+        if (!response.ok) {
+            console.warn('first_party_fetch_failed', {
+                platform: 'pixiv',
+                stage: 'oembed',
+                status: response.status,
+            });
+            return null;
+        }
+
+        const declaredLength = Number(response.headers.get('content-length') || 0);
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_PIXIV_OEMBED_BYTES) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'pixiv',
+                stage: 'oembed',
+                reason: 'declared_size',
+            });
+            return null;
+        }
+        const rawPayload = await response.text();
+        if (new TextEncoder().encode(rawPayload).byteLength > MAX_PIXIV_OEMBED_BYTES) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'pixiv',
+                stage: 'oembed',
+                reason: 'actual_size',
+            });
+            return null;
+        }
+
+        const payload = JSON.parse(rawPayload) as PixivOEmbedResponse;
+        const image = trustedPixivMediaUrl(payload.thumbnail_url);
+        if (!payload.title || !image) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'pixiv',
+                stage: 'oembed',
+                hasTitle: Boolean(payload.title),
+                hasImage: Boolean(image),
+            });
+            return null;
+        }
+
+        return {
+            success: true,
+            source: 'first-party',
+            data: {
+                title: payload.title,
+                description: '',
+                url: canonicalUrl,
+                siteName: getBrandedSiteName('pixiv'),
+                authorName: payload.author_name,
+                authorUrl: trustedPixivAuthorUrl(payload.author_url),
+                image: proxyPixivImage(image, env),
+                color: platformColors.pixiv,
+                platform: 'pixiv',
+                timestamp: extractPostTimestampFromHtml(image),
+            },
+        };
+    } catch (error) {
+        console.warn('Pixiv official oEmbed request failed:', error);
+        return null;
+    }
+}
+
 // Scrape phixiv.net HTML for OG tags
 async function scrapePhixivHtml(illustId: string): Promise<{
     success: boolean;
@@ -263,6 +388,9 @@ export const pixivHandler: PlatformHandler = {
         try {
             const directResult = await fetchPixivArtwork(illustId, env);
             if (directResult) return directResult;
+
+            const officialEmbedResult = await fetchPixivOEmbed(illustId, env);
+            if (officialEmbedResult) return officialEmbedResult;
 
             // Emergency fallback when Pixiv rejects the direct Worker request.
             const scrapeResult = await scrapePhixivHtml(illustId);

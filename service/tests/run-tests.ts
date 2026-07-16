@@ -526,6 +526,48 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'pixivHandler recovers blocked artwork metadata from official Pixiv oEmbed',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/ajax/illust/789')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (url.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return Response.json({
+                        version: '1.0',
+                        type: 'rich',
+                        title: 'Official artwork',
+                        author_name: 'Official artist',
+                        author_url: 'https://www.pixiv.net/en/users/42',
+                        thumbnail_url: 'https://embed.pixiv.net/decorate.php?illust_id=789&mdate=1783900800',
+                        width: 600,
+                        height: 315,
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await pixivHandler.handle('https://www.pixiv.net/artworks/789', env);
+                assert.equal(requested.length, 2);
+                assert.match(requested[1], /^https:\/\/embed\.pixiv\.net\/oembed\.php\?/);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Official artwork');
+                assert.equal(response.data?.authorName, 'Official artist');
+                assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(
+                    response.data?.image,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fembed.pixiv.net%2Fdecorate.php%3Fillust_id%3D789%26mdate%3D1783900800',
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'bilibiliHandler uses Bilibili API data before VxBilibili fallback',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -930,6 +972,55 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'bilibiliHandler recovers API rejection from official mobile page state',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.startsWith('https://api.bilibili.com/')) {
+                    return new Response('blocked', { status: 412 });
+                }
+                if (url === 'https://m.bilibili.com/video/BV1xx411c7mD') {
+                    const state = {
+                        video: {
+                            viewInfo: {
+                                title: 'Mobile video',
+                                desc: 'Official page description',
+                                pic: '//i0.hdslb.com/mobile-video.jpg',
+                                pubdate: 1783987200,
+                                owner: { name: 'Mobile creator', mid: 42, face: '//i0.hdslb.com/mobile-avatar.jpg' },
+                                stat: { view: 98765, reply: 321, coin: 456, favorite: 1000, share: 42, like: 5000 },
+                            },
+                        },
+                    };
+                    return new Response(`<script>window.__INITIAL_STATE__=${JSON.stringify(state)};</script>`, {
+                        status: 200,
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await bilibiliHandler.handle(
+                    'https://www.bilibili.com/video/BV1xx411c7mD',
+                    env,
+                );
+                assert.equal(requested.length, 2);
+                assert.equal(requested[1], 'https://m.bilibili.com/video/BV1xx411c7mD');
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Mobile video');
+                assert.equal(response.data?.authorName, 'Mobile creator');
+                assert.equal(response.data?.authorAvatar, 'https://i0.hdslb.com/mobile-avatar.jpg');
+                assert.equal(response.data?.image, 'https://i0.hdslb.com/mobile-video.jpg');
+                assert.equal(response.data?.stats, '💬 321 ❤️ 5K 👁️ 98.8K 🪙 456 🔖 1K 🔁 42');
+                assert.equal(response.data?.timestamp, new Date(1783987200 * 1000).toISOString());
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'bilibiliHandler recovers complete cards from minified BiliFix metadata',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -1030,6 +1121,71 @@ const tests: TestCase[] = [
             } finally {
                 globalThis.fetch = originalFetch;
             }
+        },
+    },
+    {
+        name: 'Pixiv media proxy rejects URLs outside trusted image hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response('unexpected');
+            };
+            try {
+                const response = await app.request(
+                    '/proxy/pixiv?url=' + encodeURIComponent('https://example.com/internal-target'),
+                    {},
+                    env,
+                );
+                assert.equal(response.status, 400);
+                assert.deepEqual(await response.json(), { error: 'Invalid Pixiv image URL' });
+                assert.equal(requests, 0);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'Pixiv media proxy rejects redirects outside trusted image hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: 'https://example.com/internal-target' },
+                });
+            };
+            try {
+                const response = await app.request(
+                    '/proxy/pixiv?url=' + encodeURIComponent(
+                        'https://embed.pixiv.net/decorate.php?illust_id=789',
+                    ),
+                    {},
+                    env,
+                );
+                assert.equal(response.status, 502);
+                assert.deepEqual(await response.json(), { error: 'Unsafe Pixiv image redirect' });
+                assert.equal(requested.length, 1);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'production app does not expose internal platform diagnostics',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response('unexpected');
+            };
+            try {
+                for (const platform of ['instagram', 'pixiv', 'youtube', 'bilibili']) {
+                    const response = await app.request(`/debug/${platform}`, {}, env);
+                    assert.equal(response.status, 404);
+                }
+                assert.equal(requests, 0);
+            } finally { globalThis.fetch = originalFetch; }
         },
     },
     {

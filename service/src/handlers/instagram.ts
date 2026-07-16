@@ -811,6 +811,11 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
         });
 
         if (!response.ok) {
+            console.warn('first_party_fetch_failed', {
+                platform: 'instagram',
+                stage: 'embed',
+                status: response.status,
+            });
             return { success: false, error: `Instagram returned ${response.status}`, redirect: canonicalUrl };
         }
 
@@ -1005,6 +1010,16 @@ async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; sho
             } else {
                 result.data!.image = mediaUrl;
             }
+        }
+
+        if (!mediaUrl) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'instagram',
+                stage: 'embed',
+                contentType: parsed.type,
+                hasAuthor: Boolean(username),
+                hasCaption: Boolean(caption),
+            });
         }
 
         return result;

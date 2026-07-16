@@ -16,6 +16,8 @@ import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed
 import { fetchWithTimeout } from '../utils/fetch.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 
+const MAX_BILIBILI_PAGE_BYTES = 1_000_000;
+
 interface BilibiliVideoResponse {
     code?: number;
     data?: {
@@ -40,6 +42,71 @@ interface BiliFixOEmbedResponse {
     author_name?: string;
     author_url?: string;
     provider_name?: string;
+}
+
+interface BilibiliPageState {
+    video?: {
+        viewInfo?: NonNullable<BilibiliVideoResponse['data']>;
+    };
+}
+
+function buildBilibiliResponse(
+    video: NonNullable<BilibiliVideoResponse['data']>,
+    bvid: string,
+): HandlerResponse {
+    const image = typeof video.pic === 'string' && video.pic.startsWith('//') ? `https:${video.pic}` : video.pic;
+    const authorAvatar = typeof video.owner?.face === 'string' && video.owner.face.startsWith('//')
+        ? `https:${video.owner.face}`
+        : video.owner?.face;
+    const stats = [
+        video.stat?.reply !== undefined ? `\u{1F4AC} ${formatNumber(video.stat.reply)}` : '',
+        video.stat?.like !== undefined ? `\u2764\uFE0F ${formatNumber(video.stat.like)}` : '',
+        video.stat?.view !== undefined ? `\u{1F441}\uFE0F ${formatNumber(video.stat.view)}` : '',
+        video.stat?.coin !== undefined ? `\u{1FA99} ${formatNumber(video.stat.coin)}` : '',
+        video.stat?.favorite !== undefined ? `\u{1F516} ${formatNumber(video.stat.favorite)}` : '',
+        video.stat?.share !== undefined ? `\u{1F501} ${formatNumber(video.stat.share)}` : '',
+    ].filter(Boolean).join(' ');
+    return {
+        success: true,
+        source: 'first-party',
+        data: {
+            title: video.title || 'Bilibili Video',
+            description: video.desc || '',
+            url: `https://www.bilibili.com/video/${bvid}`,
+            siteName: getBrandedSiteName('bilibili'),
+            authorName: video.owner?.name,
+            authorUrl: video.owner?.mid ? `https://space.bilibili.com/${video.owner.mid}` : undefined,
+            authorAvatar,
+            image,
+            color: platformColors.bilibili,
+            platform: 'bilibili',
+            stats: stats || undefined,
+            timestamp: video.pubdate ? new Date(video.pubdate * 1000).toISOString() : undefined,
+        },
+    };
+}
+
+function extractJsonObjectAfterMarker(html: string, marker: string): string | undefined {
+    const markerIndex = html.indexOf(marker);
+    const start = markerIndex >= 0 ? html.indexOf('{', markerIndex + marker.length) : -1;
+    if (start < 0) return undefined;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < html.length; index += 1) {
+        const character = html[index];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (character === '\\') escaped = true;
+            else if (character === '"') inString = false;
+            continue;
+        }
+        if (character === '"') inString = true;
+        else if (character === '{') depth += 1;
+        else if (character === '}' && --depth === 0) return html.slice(start, index + 1);
+    }
+    return undefined;
 }
 
 function htmlAttribute(tag: string, name: string): string | undefined {
@@ -82,42 +149,84 @@ async function fetchBilibiliVideo(bvid: string): Promise<HandlerResponse | null>
                 'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
             },
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.warn('first_party_fetch_failed', {
+                platform: 'bilibili',
+                stage: 'video',
+                status: response.status,
+            });
+            return null;
+        }
         const payload = await response.json() as BilibiliVideoResponse;
         const video = payload?.data;
-        if (payload?.code !== 0 || !video?.title) return null;
-        const image = typeof video.pic === 'string' && video.pic.startsWith('//') ? `https:${video.pic}` : video.pic;
-        const authorAvatar = typeof video.owner?.face === 'string' && video.owner.face.startsWith('//')
-            ? `https:${video.owner.face}`
-            : video.owner?.face;
-        const stats = [
-            video.stat?.reply !== undefined ? `💬 ${formatNumber(video.stat.reply)}` : '',
-            video.stat?.like !== undefined ? `❤️ ${formatNumber(video.stat.like)}` : '',
-            video.stat?.view !== undefined ? `👁️ ${formatNumber(video.stat.view)}` : '',
-            video.stat?.coin !== undefined ? `🪙 ${formatNumber(video.stat.coin)}` : '',
-            video.stat?.favorite !== undefined ? `🔖 ${formatNumber(video.stat.favorite)}` : '',
-            video.stat?.share !== undefined ? `🔁 ${formatNumber(video.stat.share)}` : '',
-        ].filter(Boolean).join(' ');
-        return {
-            success: true,
-            source: 'first-party',
-            data: {
-                title: video.title,
-                description: video.desc || '',
-                url: `https://www.bilibili.com/video/${bvid}`,
-                siteName: getBrandedSiteName('bilibili'),
-                authorName: video.owner?.name,
-                authorUrl: video.owner?.mid ? `https://space.bilibili.com/${video.owner.mid}` : undefined,
-                authorAvatar,
-                image,
-                color: platformColors.bilibili,
+        if (payload?.code !== 0 || !video?.title) {
+            console.warn('first_party_payload_rejected', {
                 platform: 'bilibili',
-                stats: stats || undefined,
-                timestamp: video.pubdate ? new Date(video.pubdate * 1000).toISOString() : undefined,
-            },
-        };
+                stage: 'video',
+                upstreamCode: payload?.code,
+                hasTitle: Boolean(video?.title),
+            });
+            return null;
+        }
+        return buildBilibiliResponse(video, bvid);
     } catch (error) {
         console.warn('Bilibili direct request failed:', error);
+        return null;
+    }
+}
+
+async function fetchBilibiliMobilePage(bvid: string): Promise<HandlerResponse | null> {
+    try {
+        const response = await fetchWithTimeout(`https://m.bilibili.com/video/${encodeURIComponent(bvid)}`, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'Referer': `https://www.bilibili.com/video/${bvid}`,
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+            },
+        }, 5000);
+        if (!response.ok) {
+            console.warn('first_party_fetch_failed', {
+                platform: 'bilibili',
+                stage: 'mobile_page',
+                status: response.status,
+            });
+            return null;
+        }
+
+        const declaredLength = Number(response.headers.get('content-length') || 0);
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_BILIBILI_PAGE_BYTES) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'bilibili',
+                stage: 'mobile_page',
+                reason: 'declared_size',
+            });
+            return null;
+        }
+        const html = await response.text();
+        if (new TextEncoder().encode(html).byteLength > MAX_BILIBILI_PAGE_BYTES) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'bilibili',
+                stage: 'mobile_page',
+                reason: 'actual_size',
+            });
+            return null;
+        }
+
+        const stateJson = extractJsonObjectAfterMarker(html, '__INITIAL_STATE__');
+        const state = stateJson ? JSON.parse(stateJson) as BilibiliPageState : undefined;
+        const video = state?.video?.viewInfo;
+        if (!video?.title) {
+            console.warn('first_party_payload_rejected', {
+                platform: 'bilibili',
+                stage: 'mobile_page',
+                hasState: Boolean(stateJson),
+                hasTitle: Boolean(video?.title),
+            });
+            return null;
+        }
+        return buildBilibiliResponse(video, bvid);
+    } catch (error) {
+        console.warn('Bilibili official mobile page request failed:', error);
         return null;
     }
 }
@@ -306,6 +415,9 @@ export const bilibiliHandler: PlatformHandler = {
         try {
             const directResult = await fetchBilibiliVideo(bvid);
             if (directResult) return directResult;
+
+            const mobilePageResult = await fetchBilibiliMobilePage(bvid);
+            if (mobilePageResult) return mobilePageResult;
 
             // Emergency fallback when Bilibili rejects the direct Worker request.
             const scrapeResult = await scrapeVxBilibili(bvid);

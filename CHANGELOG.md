@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Provider recovery hardening**
+- Added bounded official Pixiv oEmbed and Bilibili mobile-page recovery paths before external fallbacks when platform APIs reject Worker requests.
+- Added privacy-safe first-party failure diagnostics without post identifiers or source URLs.
+- Restricted the Pixiv media proxy to trusted HTTPS image hosts, validated every redirect, rejected non-image responses, and closed public access to internal diagnostic routes.
+
 #### **Continuous embed conformance**
 - Added an offline-tested semantic canary runner and reviewed production manifest covering all nine Worker platforms.
 - Scheduled six-hour production checks for author, original timestamp, stats, media type, and structured-section contracts, with bounded privacy-safe reports retained for 14 days.
