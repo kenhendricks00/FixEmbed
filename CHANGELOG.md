@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **CI supply-chain hardening**
+- Upgraded repository workflows to the official Node 24 action releases and pinned every third-party action to an immutable commit.
+- Added a regression test that rejects floating action tags and deprecated release majors while keeping Dependabot responsible for reviewed updates.
+
 #### **Provider recovery hardening**
 - Added bounded official Pixiv oEmbed and Bilibili mobile-page recovery paths before external fallbacks when platform APIs reject Worker requests.
 - Added privacy-safe first-party failure diagnostics without post identifiers or source URLs.
