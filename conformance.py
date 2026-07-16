@@ -269,6 +269,18 @@ def build_api_url(base_url: str, source_url: str, *, probe_id: Optional[str] = N
     return f"{base_url.rstrip('/')}/api/embed?{urlencode(query)}"
 
 
+async def _read_bounded_body(content: Any) -> bytes:
+    body = bytearray()
+    while True:
+        remaining = MAX_RESPONSE_BYTES - len(body)
+        chunk = await content.read(min(65_536, remaining + 1))
+        if not chunk:
+            return bytes(body)
+        body.extend(chunk)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise ValueError("response-too-large")
+
+
 async def fetch_json(url: str, timeout_seconds: float) -> FetchResponse:
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     started = asyncio.get_running_loop().time()
@@ -280,9 +292,7 @@ async def fetch_json(url: str, timeout_seconds: float) -> FetchResponse:
             declared_size = response.content_length
             if declared_size is not None and declared_size > MAX_RESPONSE_BYTES:
                 raise ValueError("response-too-large")
-            body = await response.content.read(MAX_RESPONSE_BYTES + 1)
-            if len(body) > MAX_RESPONSE_BYTES:
-                raise ValueError("response-too-large")
+            body = await _read_bounded_body(response.content)
             duration_ms = round((asyncio.get_running_loop().time() - started) * 1000)
             try:
                 payload = json.loads(body)

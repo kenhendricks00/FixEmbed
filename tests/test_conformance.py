@@ -6,6 +6,7 @@ import unittest
 from conformance import (
     FetchResponse,
     ManifestError,
+    _read_bounded_body,
     build_api_url,
     evaluate_payload,
     parse_manifest,
@@ -25,6 +26,20 @@ def valid_manifest(**case_overrides):
     }
     case.update(case_overrides)
     return {"version": 1, "cases": [case]}
+
+
+class ChunkedResponseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reads_every_chunk_before_decoding_json(self):
+        class ChunkedBody:
+            def __init__(self):
+                self.chunks = [b'{"success":', b'true,"data":', b'{}}', b'']
+
+            async def read(self, _size):
+                return self.chunks.pop(0)
+
+        body = await _read_bounded_body(ChunkedBody())
+
+        self.assertEqual(json.loads(body), {"success": True, "data": {}})
 
 
 class ManifestTests(unittest.TestCase):
