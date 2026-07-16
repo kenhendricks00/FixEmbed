@@ -59,11 +59,18 @@ export function extractPostTimestampFromHtml(html: string): string | undefined {
     const allowedMetaKeys = new Set([
         'article:published_time',
         'datepublished',
+        'pubdate',
         'uploaddate',
     ]);
     for (const tag of decoded.match(/<meta\b[^>]*>/gi) || []) {
-        const key = tag.match(/\b(?:property|name|itemprop)\s*=\s*["']([^"']+)["']/i)?.[1];
-        const content = tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1];
+        const keyMatch = tag.match(
+            /\b(?:property|name|itemprop)\s*=\s*(?:["']([^"']+)["']|([^\s>]+))/i,
+        );
+        const contentMatch = tag.match(
+            /\bcontent\s*=\s*(?:["']([^"']+)["']|([^\s>]+))/i,
+        );
+        const key = keyMatch?.[1] || keyMatch?.[2];
+        const content = contentMatch?.[1] || contentMatch?.[2];
         if (key && content && allowedMetaKeys.has(key.toLowerCase())) {
             const timestamp = normalizePostTimestamp(content);
             if (timestamp) return timestamp;

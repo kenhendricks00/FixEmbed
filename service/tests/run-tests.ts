@@ -81,6 +81,10 @@ const tests: TestCase[] = [
                 '2025-04-03T11:52:28.000Z',
             );
             assert.equal(
+                extractPostTimestampFromHtml('<meta content=2025-04-03T19:52:28+08:00 name=pubdate property=article:published_time>'),
+                '2025-04-03T11:52:28.000Z',
+            );
+            assert.equal(
                 extractPostTimestampFromHtml('<meta property="og:image" content="https://i.pximg.net/img.jpg?mdate=1665435823">'),
                 '2022-10-10T21:03:43.000Z',
             );
@@ -941,7 +945,8 @@ const tests: TestCase[] = [
                         '<meta content="BiliFix / vxbilibili.com\n📺53.7萬 👍2.3萬 🪙927 ⭐6931 📤1843"property=og:site_name>'
                         + '<meta content=最棒的更新就得配上最多的bug！ property=og:title>'
                         + '<meta content=http://i1.hdslb.com/video.jpg property=og:image>'
-                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>',
+                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>'
+                        + '<meta content=2026-07-14T08:00:00+08:00 name=pubdate property=article:published_time>',
                         { status: 200 },
                     );
                 }
