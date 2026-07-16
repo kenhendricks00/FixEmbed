@@ -17,6 +17,8 @@ import uuid
 
 import aiohttp
 
+from card_conformance import evaluate_components_v2
+
 
 MAX_CASES = 50
 MAX_RESPONSE_BYTES = 1_048_576
@@ -35,8 +37,11 @@ SUPPORTED_HOSTS = {
     "bilibili": frozenset({"bilibili.com", "www.bilibili.com"}),
     "pinterest": frozenset({"pinterest.com", "www.pinterest.com", "pin.it"}),
 }
-REQUIREMENTS = frozenset({"title", "author", "timestamp", "stats", "media"})
+REQUIREMENTS = frozenset(
+    {"title", "author", "timestamp", "stats", "media", "translation"}
+)
 MEDIA_TYPES = frozenset({"image", "carousel", "video", "gif"})
+RENDERERS = frozenset({"components-v2"})
 SECTION_KINDS = frozenset(
     {"poll", "quote", "community-note", "article", "link-card", "tombstone"}
 )
@@ -56,6 +61,8 @@ class ConformanceCase:
     media_type: Optional[str]
     section_kinds: frozenset[str]
     allow_fallback: bool
+    renderer: Optional[str]
+    options: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -144,7 +151,9 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
             raw_case.get("requires", []), field="requirement", allowed=REQUIREMENTS
         )
         media_type = raw_case.get("mediaType")
-        if media_type is not None and media_type not in MEDIA_TYPES:
+        if media_type is not None and (
+            not isinstance(media_type, str) or media_type not in MEDIA_TYPES
+        ):
             raise ManifestError("unknown mediaType value")
         if media_type is not None and "media" not in requires:
             raise ManifestError("mediaType requires the media requirement")
@@ -156,6 +165,31 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
         allow_fallback = raw_case.get("allowFallback", False)
         if not isinstance(allow_fallback, bool):
             raise ManifestError("allowFallback must be a boolean")
+        renderer = raw_case.get("renderer")
+        if renderer is not None and (
+            not isinstance(renderer, str) or renderer not in RENDERERS
+        ):
+            raise ManifestError("unknown renderer value")
+        raw_options = raw_case.get("options", {})
+        if not isinstance(raw_options, Mapping):
+            raise ManifestError("options must be an object")
+        if not set(raw_options).issubset({"lang", "mode"}):
+            raise ManifestError("unknown option value")
+        options: dict[str, str] = {}
+        if "lang" in raw_options:
+            language = raw_options["lang"]
+            if not isinstance(language, str) or not re.fullmatch(r"[a-zA-Z]{2}", language):
+                raise ManifestError("lang option must be a two-letter language code")
+            options["lang"] = language.lower()
+        if "mode" in raw_options:
+            mode = raw_options["mode"]
+            if not isinstance(mode, str) or mode not in {"gallery", "mosaic"}:
+                raise ManifestError("mode option is unsupported")
+            options["mode"] = mode
+        if options and platform != "twitter":
+            raise ManifestError("options are only supported for twitter cases")
+        if "translation" in requires and "lang" not in options:
+            raise ManifestError("translation requirement needs a lang option")
 
         cases.append(
             ConformanceCase(
@@ -166,6 +200,8 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
                 media_type=media_type,
                 section_kinds=section_kinds,
                 allow_fallback=allow_fallback,
+                renderer=renderer,
+                options=options,
             )
         )
     return tuple(cases)
@@ -230,8 +266,21 @@ def evaluate_payload(
             "timestamp": _has_text(data, "timestamp"),
             "stats": _has_text(data, "stats"),
             "media": _media_matches(data, None),
+            "translation": bool(
+                re.search(
+                    r"Translation \([A-Z]{2}\):",
+                    str(data.get("description") or ""),
+                )
+            ),
         }
-        for requirement in ("title", "author", "timestamp", "stats", "media"):
+        for requirement in (
+            "title",
+            "author",
+            "timestamp",
+            "stats",
+            "media",
+            "translation",
+        ):
             if requirement in case.requires and not checks[requirement]:
                 codes.append(f"missing-{requirement}")
         if case.media_type and not _media_matches(data, case.media_type):
@@ -243,6 +292,16 @@ def evaluate_payload(
             }
             if not case.section_kinds.issubset(actual_kinds):
                 codes.append("missing-section")
+        if case.renderer == "components-v2":
+            codes.extend(
+                evaluate_components_v2(
+                    case.platform,
+                    data,
+                    requires=case.requires,
+                    media_type=case.media_type,
+                    section_kinds=case.section_kinds,
+                )
+            )
 
     only_allowed_fallback = codes == ["fallback-used"]
     status = "degraded" if only_allowed_fallback else "failed" if codes else "passed"
@@ -256,7 +315,13 @@ def evaluate_payload(
     )
 
 
-def build_api_url(base_url: str, source_url: str, *, probe_id: Optional[str] = None) -> str:
+def build_api_url(
+    base_url: str,
+    source_url: str,
+    *,
+    probe_id: Optional[str] = None,
+    options: Optional[Mapping[str, str]] = None,
+) -> str:
     parsed = urlparse(base_url)
     local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     if parsed.scheme != "https" and not local_http:
@@ -264,6 +329,7 @@ def build_api_url(base_url: str, source_url: str, *, probe_id: Optional[str] = N
     if not parsed.hostname:
         raise ValueError("conformance base URL is invalid")
     query = {"url": source_url}
+    query.update(options or {})
     if probe_id:
         query["_conformance"] = probe_id
     return f"{base_url.rstrip('/')}/api/embed?{urlencode(query)}"
@@ -317,7 +383,12 @@ async def run_conformance(
     probe_id = uuid.uuid4().hex
 
     async def run_case(case: ConformanceCase) -> ConformanceResult:
-        endpoint = build_api_url(base_url, case.source_url, probe_id=probe_id)
+        endpoint = build_api_url(
+            base_url,
+            case.source_url,
+            probe_id=probe_id,
+            options=case.options,
+        )
         async with semaphore:
             try:
                 response = await fetch_json(endpoint, timeout_seconds)

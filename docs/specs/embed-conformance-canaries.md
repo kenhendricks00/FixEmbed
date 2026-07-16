@@ -2,15 +2,15 @@
 
 ## Objective
 
-Continuously prove that FixEmbed's public JSON API returns usable, first-party
-metadata for the user flows the bot advertises. Existing `/api/status` probes
+Continuously prove that FixEmbed's public JSON API returns usable metadata and
+that the production Python renderer can turn it into a valid Discord Components
+V2 card for the user flows the bot advertises. Existing `/api/status` probes
 measure whether handlers respond; conformance canaries additionally verify the
 shape of the returned author, original timestamp, stats, media, and structured
-sections.
+sections before building the same `discord.py` layout used by the live bot.
 
-The first increment provides an offline-tested manifest contract and an opt-in
-production runner. It does not post to Discord, retain social-post content, or
-run during ordinary unit tests.
+The runner does not post to Discord, retain social-post content, or make
+ordinary unit tests depend on the internet.
 
 ## On-call Questions
 
@@ -18,6 +18,8 @@ run during ordinary unit tests.
 2. Did the case fail completely or recover through an emergency fallback?
 3. How long did the public API take to build the card?
 4. Is a failure isolated to one platform or shared across the service?
+5. Did live metadata succeed but the bot's Components V2 layout lose identity,
+   media, stats, structured context, footer links, or the source timestamp?
 
 ## Commands
 
@@ -33,6 +35,8 @@ run during ordinary unit tests.
 
 - `conformance.py`: manifest validation, contract evaluation, bounded HTTP
   client, privacy-safe report, and CLI.
+- `card_conformance.py`: real platform-layout registry and bounded serialized
+  Components V2 checks.
 - `conformance/production.json`: reviewed public sample URLs and semantic
   expectations.
 - `tests/test_conformance.py`: offline contract and runner tests.
@@ -43,24 +47,35 @@ run during ordinary unit tests.
 
 Each case has a stable, non-sensitive `id`, supported `platform`, public HTTPS
 `url`, a list of semantic `requires`, an optional `mediaType`, optional
-`sectionKinds`, and an explicit `allowFallback` flag. Exact post text, counts,
-and media URLs are never asserted because those values legitimately change.
+`sectionKinds`, an explicit `allowFallback` flag, and an optional reviewed
+`renderer`. X cases may also supply allowlisted `lang` and `mode` options. Exact
+post text, counts, and media URLs are never copied into reports because those
+values legitimately change.
 
-Allowed requirements are `title`, `author`, `timestamp`, `stats`, and `media`.
+Allowed requirements are `title`, `author`, `timestamp`, `stats`, `media`, and
+`translation`.
 Allowed media types are `image`, `carousel`, `video`, and `gif`. Section kinds
 must match the Worker's bounded section vocabulary.
+
+When `renderer` is `components-v2`, the canary calls the real platform builder
+and validates one Discord container with the expected identity/avatar, remote
+media, stats, requested structured sections, original-link footer, source
+timestamp, and translation marker. Renderer failures use fixed codes and never
+include card text or media URLs in the report.
 
 ## Privacy and Security Boundaries
 
 - Reports contain only case ID, platform, bounded outcome codes, source mode,
   and latency. They never contain source URLs, response bodies, author names,
-  captions, Discord identifiers, or raw exception messages.
+  captions, serialized cards, Discord identifiers, or raw exception messages.
 - The manifest accepts only supported HTTPS platform hosts and at most 50 cases.
 - HTTP responses are capped at 1 MiB and use a bounded per-case timeout.
 - Every run adds one opaque request nonce to all API probes so edge caches
   cannot make a stale deployment appear healthy. The nonce is never reported.
 - Normal unit tests inject a fake fetcher and never access the network.
 - Production traffic is opt-in through the CLI or scheduled canary workflow.
+- Components V2 validation is local and never sends a message or requires a
+  Discord token.
 
 ## Outcome Semantics
 
@@ -77,6 +92,8 @@ non-zero when an emergency fallback is serving a canary.
 
 - Invalid or unsafe manifests fail before any network request.
 - Every supported platform has at least one production case.
+- Every production case builds the same Components V2 layout used by the bot.
+- Stable X cases cover carousels, GIFs, videos, translations, and tombstones.
 - The public API exposes whether metadata came from first-party or fallback
   handling.
 - Reports never expose URLs, content, or raw errors.
@@ -93,7 +110,8 @@ non-zero when an emergency fallback is serving a canary.
 
 ## Follow-up Increments
 
-- Add feature-specific X cases for GIF, quote, poll, carousel, and translation.
+- Add still-live, stable X quote and poll cases when reviewed public samples are
+  available; do not substitute fixture-only confidence for production behavior.
 - Add media reachability checks that validate content type and byte-range
   support without downloading complete media.
 - Feed aggregate canary history into a durable status/SLO store.

@@ -7,7 +7,59 @@
       "url": "https://x.com/jack/status/20",
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
-      "allowFallback": true
+      "allowFallback": true,
+      "renderer": "components-v2"
+    },
+    {
+      "id": "twitter-carousel",
+      "platform": "twitter",
+      "url": "https://x.com/SpaceX/status/1848831595014459513",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "carousel",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "renderer": "components-v2"
+    },
+    {
+      "id": "twitter-gif",
+      "platform": "twitter",
+      "url": "https://x.com/RoRoFli/status/2031318660011188567",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "gif",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "renderer": "components-v2"
+    },
+    {
+      "id": "twitter-video",
+      "platform": "twitter",
+      "url": "https://x.com/IndieGameJoe/status/2076971764257575262",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "video",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "renderer": "components-v2"
+    },
+    {
+      "id": "twitter-translation",
+      "platform": "twitter",
+      "url": "https://x.com/SpaceX/status/1848831595014459513",
+      "requires": ["title", "author", "timestamp", "stats", "media", "translation"],
+      "mediaType": "carousel",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "renderer": "components-v2",
+      "options": {"lang": "es"}
+    },
+    {
+      "id": "twitter-tombstone",
+      "platform": "twitter",
+      "url": "https://x.com/carrionkid/status/1902059299591090335",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "video",
+      "sectionKinds": ["tombstone"],
+      "allowFallback": false,
+      "renderer": "components-v2"
     },
     {
       "id": "instagram-reel",
@@ -16,7 +68,8 @@
       "requires": ["title", "author", "timestamp", "stats", "media"],
       "mediaType": "video",
       "sectionKinds": [],
-      "allowFallback": true
+      "allowFallback": true,
+      "renderer": "components-v2"
     },
     {
       "id": "reddit-post",
@@ -24,7 +77,8 @@
       "url": "https://www.reddit.com/r/programming/comments/1d9m2ta/clean_code_means_good_code_performance_debate/",
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
-      "allowFallback": false
+      "allowFallback": false,
+      "renderer": "components-v2"
     },
     {
       "id": "threads-post",
@@ -32,7 +86,8 @@
       "url": "https://www.threads.net/@zuck/post/Cu8M4wXLZQx",
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
-      "allowFallback": false
+      "allowFallback": false,
+      "renderer": "components-v2"
     },
     {
       "id": "bluesky-image",
@@ -41,7 +96,8 @@
       "requires": ["title", "author", "timestamp", "stats", "media"],
       "mediaType": "image",
       "sectionKinds": [],
-      "allowFallback": false
+      "allowFallback": false,
+      "renderer": "components-v2"
     },
     {
       "id": "pixiv-artwork",
@@ -50,7 +106,8 @@
       "requires": ["title", "author", "timestamp", "media"],
       "mediaType": "image",
       "sectionKinds": [],
-      "allowFallback": true
+      "allowFallback": true,
+      "renderer": "components-v2"
     },
     {
       "id": "bilibili-video",
@@ -59,7 +116,8 @@
       "requires": ["title", "author", "timestamp", "stats", "media"],
       "mediaType": "video",
       "sectionKinds": [],
-      "allowFallback": true
+      "allowFallback": true,
+      "renderer": "components-v2"
     },
     {
       "id": "youtube-community-post",
@@ -67,7 +125,8 @@
       "url": "https://www.youtube.com/post/UgkxAcAx0FNJNhrLMff_RLjK_d20485xSAyz",
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
-      "allowFallback": false
+      "allowFallback": false,
+      "renderer": "components-v2"
     },
     {
       "id": "pinterest-pin",
@@ -76,7 +135,8 @@
       "requires": ["title", "author", "timestamp", "media"],
       "mediaType": "image",
       "sectionKinds": [],
-      "allowFallback": false
+      "allowFallback": false,
+      "renderer": "components-v2"
     }
   ]
 }

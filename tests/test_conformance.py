@@ -12,6 +12,7 @@ from conformance import (
     parse_manifest,
     run_conformance,
 )
+from card_conformance import BUILDERS, evaluate_components_v2, validate_serialized_card
 
 
 def valid_manifest(**case_overrides):
@@ -89,6 +90,35 @@ class ManifestTests(unittest.TestCase):
                 valid_manifest(requires=["title"], mediaType="video")
             )
 
+    def test_parses_components_renderer_and_bounded_api_options(self):
+        case = parse_manifest(
+            valid_manifest(
+                renderer="components-v2",
+                options={"lang": "ES", "mode": "mosaic"},
+                requires=["title", "translation"],
+                mediaType=None,
+                sectionKinds=[],
+            )
+        )[0]
+
+        self.assertEqual(case.renderer, "components-v2")
+        self.assertEqual(case.options, {"lang": "es", "mode": "mosaic"})
+        self.assertIn("translation", case.requires)
+
+    def test_rejects_unknown_renderer_and_unbounded_api_options(self):
+        for overrides in (
+            {"renderer": "legacy-embed"},
+            {"renderer": ["components-v2"]},
+            {"options": {"unknown": "value"}},
+            {"options": {"lang": "not-a-language"}},
+            {"options": {"mode": "unsupported"}},
+            {"options": {"mode": ["gallery"]}},
+            {"mediaType": ["video"]},
+        ):
+            with self.subTest(overrides=overrides):
+                with self.assertRaises(ManifestError):
+                    parse_manifest(valid_manifest(**overrides))
+
     def test_production_manifest_covers_every_worker_platform(self):
         manifest = json.loads(
             Path("conformance/production.json").read_text(encoding="utf-8")
@@ -109,6 +139,25 @@ class ManifestTests(unittest.TestCase):
                 "pinterest",
             },
         )
+        self.assertEqual(set(BUILDERS), platforms)
+
+    def test_production_manifest_exercises_real_cards_and_advanced_x_media(self):
+        manifest = json.loads(
+            Path("conformance/production.json").read_text(encoding="utf-8")
+        )
+        cases = parse_manifest(manifest)
+        by_id = {case.case_id: case for case in cases}
+
+        self.assertTrue(all(case.renderer == "components-v2" for case in cases))
+        self.assertEqual(by_id["twitter-carousel"].media_type, "carousel")
+        self.assertEqual(by_id["twitter-gif"].media_type, "gif")
+        self.assertEqual(by_id["twitter-video"].media_type, "video")
+        self.assertEqual(
+            by_id["twitter-translation"].options,
+            {"lang": "es"},
+        )
+        self.assertIn("translation", by_id["twitter-translation"].requires)
+        self.assertIn("tombstone", by_id["twitter-tombstone"].section_kinds)
 
 
 class ContractEvaluationTests(unittest.TestCase):
@@ -183,6 +232,189 @@ class ContractEvaluationTests(unittest.TestCase):
         self.assertIn("platform-mismatch", invalid.failure_codes)
         self.assertIn("invalid-source", invalid.failure_codes)
 
+    def test_components_renderer_is_part_of_the_payload_contract(self):
+        case = parse_manifest(
+            valid_manifest(
+                renderer="components-v2",
+                requires=["title", "author", "timestamp", "stats", "media"],
+                mediaType="carousel",
+                sectionKinds=["quote"],
+            )
+        )[0]
+        payload = {
+            **self.payload,
+            "data": {
+                **self.payload["data"],
+                "description": "A complete public post.",
+                "url": "https://x.com/example/status/123",
+                "authorUrl": "https://x.com/creator",
+                "authorAvatar": "https://pbs.twimg.com/profile_images/1/avatar_normal.jpg",
+                "sections": [
+                    {
+                        "kind": "quote",
+                        "title": "Quoted Creator",
+                        "body": "Quoted body",
+                        "url": "https://x.com/quoted/status/456",
+                        "authorName": "Quoted Creator",
+                        "authorHandle": "@quoted",
+                    }
+                ],
+            },
+        }
+
+        result = evaluate_payload(case, payload, duration_ms=25)
+
+        self.assertEqual(result.status, "passed")
+        self.assertEqual(result.failure_codes, ())
+
+
+class ComponentsV2EvaluationTests(unittest.TestCase):
+    def setUp(self):
+        self.payload = {
+            "title": "A public post",
+            "description": "A complete public post.",
+            "url": "https://x.com/example/status/123",
+            "authorName": "Creator",
+            "authorHandle": "@creator",
+            "authorUrl": "https://x.com/creator",
+            "authorAvatar": "https://pbs.twimg.com/profile_images/1/avatar_normal.jpg",
+            "timestamp": "2026-07-15T12:00:00Z",
+            "stats": "comments 1 reposts 2 likes 3 views 4",
+            "images": [
+                "https://pbs.twimg.com/media/one.jpg",
+                "https://pbs.twimg.com/media/two.jpg",
+            ],
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Quoted Creator",
+                    "body": "Quoted body",
+                    "url": "https://x.com/quoted/status/456",
+                    "authorName": "Quoted Creator",
+                    "authorHandle": "@quoted",
+                }
+            ],
+        }
+
+    def test_real_twitter_builder_satisfies_components_v2_contract(self):
+        codes = evaluate_components_v2(
+            "twitter",
+            self.payload,
+            requires=frozenset({"title", "author", "timestamp", "stats", "media"}),
+            media_type="carousel",
+            section_kinds=frozenset({"quote"}),
+        )
+
+        self.assertEqual(codes, ())
+
+    def test_serialized_validator_returns_only_bounded_layout_codes(self):
+        codes = validate_serialized_card(
+            self.payload,
+            [{"type": 17, "components": [{"type": 10, "content": "Creator"}]}],
+            requires=frozenset({"author", "timestamp", "stats", "media"}),
+            media_type="carousel",
+            section_kinds=frozenset({"quote"}),
+        )
+
+        self.assertEqual(
+            set(codes),
+            {
+                "card-missing-avatar",
+                "card-missing-media",
+                "card-missing-stats",
+                "card-missing-section",
+                "card-missing-footer",
+                "card-missing-timestamp",
+            },
+        )
+
+    def test_stats_must_be_rendered_in_a_dedicated_stats_row(self):
+        components = [
+            {
+                "type": 17,
+                "components": [
+                    {
+                        "type": 10,
+                        "content": "Creator posted item 1",
+                    },
+                    {
+                        "type": 10,
+                        "content": (
+                            "-# [FixEmbed](https://fixembed.app) · "
+                            "[X](https://x.com/example/status/123) · <t:1784116800:R>"
+                        ),
+                    },
+                ],
+            }
+        ]
+
+        codes = validate_serialized_card(
+            self.payload,
+            components,
+            requires=frozenset({"stats"}),
+            media_type=None,
+            section_kinds=frozenset(),
+        )
+
+        self.assertIn("card-missing-stats", codes)
+
+    def test_serialized_validator_rejects_non_https_media(self):
+        payload = {
+            **self.payload,
+            "authorAvatar": "http://example.test/avatar.jpg",
+            "images": ["http://example.test/image.jpg"],
+        }
+        components = [
+            {
+                "type": 17,
+                "components": [
+                    {
+                        "type": 9,
+                        "components": [{"type": 10, "content": "Creator"}],
+                        "accessory": {
+                            "type": 11,
+                            "media": {"url": "http://example.test/avatar.jpg"},
+                        },
+                    },
+                    {
+                        "type": 12,
+                        "items": [
+                            {"media": {"url": "http://example.test/image.jpg"}}
+                        ],
+                    },
+                    {
+                        "type": 10,
+                        "content": (
+                            "-# [FixEmbed](https://fixembed.app) · "
+                            "[X](https://x.com/example/status/123) · <t:1784116800:R>"
+                        ),
+                    },
+                ],
+            }
+        ]
+
+        codes = validate_serialized_card(
+            payload,
+            components,
+            requires=frozenset({"author", "media"}),
+            media_type="image",
+            section_kinds=frozenset(),
+        )
+
+        self.assertIn("card-unsafe-media", codes)
+
+    def test_unknown_platform_fails_without_exposing_payload_content(self):
+        codes = evaluate_components_v2(
+            "unknown",
+            {**self.payload, "description": "private canary content"},
+            requires=frozenset({"title"}),
+            media_type=None,
+            section_kinds=frozenset(),
+        )
+
+        self.assertEqual(codes, ("card-render-failed",))
+        self.assertNotIn("private", json.dumps(codes))
+
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_builds_encoded_api_url_and_preserves_manifest_order(self):
@@ -238,6 +470,36 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first_probe, second_probe)
         self.assertEqual(requested[0][1], 7)
         self.assertEqual(report.summary, {"passed": 2, "degraded": 0, "failed": 0})
+
+    async def test_forwards_only_reviewed_manifest_options(self):
+        case = parse_manifest(
+            valid_manifest(
+                options={"lang": "es", "mode": "gallery"},
+                requires=["title"],
+                mediaType=None,
+                sectionKinds=[],
+            )
+        )[0]
+        requested = []
+
+        async def fetch_json(url, _timeout_seconds):
+            requested.append(url)
+            return FetchResponse(
+                status_code=200,
+                duration_ms=5,
+                payload={
+                    "success": True,
+                    "platform": "twitter",
+                    "source": "first-party",
+                    "data": {"title": "Post"},
+                },
+            )
+
+        report = await run_conformance([case], fetch_json=fetch_json)
+
+        self.assertEqual(report.summary["passed"], 1)
+        self.assertIn("lang=es", requested[0])
+        self.assertIn("mode=gallery", requested[0])
 
     async def test_timeout_and_http_failures_are_bounded_and_privacy_safe(self):
         cases = parse_manifest(valid_manifest())

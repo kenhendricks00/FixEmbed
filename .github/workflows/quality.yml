@@ -20,7 +20,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Compile Python sources
-        run: python -m compileall -q main.py translations.py link_utils.py conformance.py
+        run: python -m compileall -q main.py translations.py link_utils.py conformance.py card_conformance.py
       - name: Run Python tests
         run: python -m unittest discover -s tests -v
       - name: Verify release metadata

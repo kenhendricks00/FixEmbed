@@ -40,7 +40,8 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Privacy-Safe Conversion Quality**: Reliability highlights local rich-card rate, link fallbacks, recent p95 build latency, and bounded failure categories without retaining links, post content, or member data.
 - **Discord Delivery Diagnostics**: Reliability separates direct sends, component-to-link rescues, complete delivery failures, pending queue depth, and recent p95 delivery latency without retaining channel, message, or member data.
 - **Permission-Aware Delivery**: If delete or suppress mode lacks Manage Messages, FixEmbed keeps the original and still replies with the fixed card; Settings, Debug, and Reliability explain the recovery.
-- **Continuous Embed Conformance**: Scheduled privacy-safe canaries verify author, original timestamp, stats, media type, and structured card sections across every supported platform.
+- **Continuous Embed Conformance**: Scheduled privacy-safe canaries verify live metadata and build the real Discord Components V2 card for every supported platform, including identity, avatar, media, stats, structured sections, source footer, and original timestamp.
+- **Advanced X Regression Coverage**: Production canaries continuously exercise X carousels, GIFs, videos, translations, and unavailable quoted-post context instead of testing only a simple text post.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 
@@ -115,7 +116,8 @@ python conformance.py --manifest conformance/production.json --fail-on-degraded
 
 The bounded JSON report contains case IDs, platform names, source mode,
 latency, and fixed outcome codes only. It never includes source URLs, post
-content, usernames, or raw upstream errors.
+content, usernames, rendered cards, or raw upstream errors. The canary builds
+cards locally for validation and never posts them to Discord.
 
 # 💬 Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.
