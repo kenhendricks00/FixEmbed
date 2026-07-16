@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import AsyncMock, patch
 
 import pixiv_embed
 from pixiv_embed import _profile_image, build_pixiv_layout
@@ -118,6 +119,64 @@ class PixivEmbedTests(unittest.TestCase):
         self.assertNotIn("&amp;#44;", header_text)
         self.assertLessEqual(len(header_text), 1300)
         self.assertTrue(header_text.endswith("…"))
+
+    def test_local_metadata_card_rejects_media_outside_pixiv_hosts(self):
+        metadata = {
+            "version": 1,
+            "id": "123456",
+            "title": "Artwork",
+            "authorName": "Creator",
+            "authorId": "42",
+            "images": ["https://evil.example/image.jpg"],
+        }
+
+        with self.assertRaisesRegex(ValueError, "media"):
+            pixiv_embed._local_metadata_card(metadata, "123456")
+
+
+class PixivEmbedFetchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_local_first_party_metadata_builds_a_complete_card_without_worker_data(self):
+        metadata = {
+            "version": 1,
+            "id": "101844438",
+            "title": "Demon ladies",
+            "description": "Complete artwork caption.",
+            "authorName": "aion21",
+            "authorHandle": "master_nj_aion",
+            "authorId": "3565666",
+            "authorAvatar": "https://i.pximg.net/user-profile/avatar_170.jpg",
+            "timestamp": "2022-10-09T10:30:00+00:00",
+            "stats": {
+                "comments": 12,
+                "likes": 345,
+                "views": 6789,
+                "bookmarks": 234,
+            },
+            "images": [
+                "https://i.pximg.net/img-original/one.jpg",
+                "https://i.pximg.net/img-original/two.jpg",
+            ],
+        }
+        with patch.object(
+            pixiv_embed._PIXIV_METADATA_SERVICE,
+            "metadata",
+            AsyncMock(return_value=metadata),
+        ):
+            payload = await pixiv_embed._fetch_pixiv_payload(
+                "https://www.pixiv.net/artworks/101844438"
+            )
+
+        self.assertEqual(payload["title"], "Demon ladies")
+        self.assertEqual(payload["authorName"], "aion21")
+        self.assertEqual(payload["authorHandle"], "@master_nj_aion")
+        self.assertEqual(
+            payload["authorUrl"],
+            "https://www.pixiv.net/en/users/3565666",
+        )
+        self.assertIn("avatar_170.jpg", payload["authorAvatar"])
+        self.assertEqual(len(payload["images"]), 2)
+        self.assertEqual(payload["timestamp"], "2022-10-09T10:30:00+00:00")
+        self.assertEqual(payload["stats"], "💬 12 ❤️ 345 👁️ 6.8K 🔖 234")
 
 
 if __name__ == "__main__":

@@ -111,7 +111,7 @@ class ManifestTests(unittest.TestCase):
                 renderer="components-v2",
                 options={"lang": "ES", "mode": "mosaic"},
                 probeMedia=True,
-                requires=["title", "translation"],
+                requires=["title", "avatar", "author-link", "translation"],
                 mediaType=None,
                 sectionKinds=[],
             )
@@ -120,6 +120,8 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(case.renderer, "components-v2")
         self.assertEqual(case.options, {"lang": "es", "mode": "mosaic"})
         self.assertTrue(case.probe_media)
+        self.assertIn("avatar", case.requires)
+        self.assertIn("author-link", case.requires)
         self.assertIn("translation", case.requires)
 
     def test_rejects_unknown_renderer_and_unbounded_api_options(self):
@@ -268,6 +270,24 @@ class ContractEvaluationTests(unittest.TestCase):
             },
         )
 
+    def test_reports_missing_creator_avatar_and_profile_link(self):
+        case = parse_manifest(
+            valid_manifest(
+                requires=["author", "avatar", "author-link"],
+                mediaType=None,
+                sectionKinds=[],
+            )
+        )[0]
+        self.payload["data"] = {"authorName": "Creator"}
+
+        result = evaluate_payload(case, self.payload, duration_ms=25)
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(
+            set(result.failure_codes),
+            {"missing-avatar", "missing-author-link"},
+        )
+
     def test_rejects_invalid_envelope_platform_and_source(self):
         invalid = evaluate_payload(self.case, {}, duration_ms=1)
         self.assertEqual(invalid.failure_codes, ("invalid-envelope",))
@@ -373,6 +393,34 @@ class ComponentsV2EvaluationTests(unittest.TestCase):
                 "card-missing-timestamp",
             },
         )
+
+    def test_serialized_validator_requires_creator_avatar_and_profile_link(self):
+        components = [
+            {
+                "type": 17,
+                "components": [
+                    {"type": 10, "content": "Creator"},
+                    {
+                        "type": 10,
+                        "content": (
+                            "-# [FixEmbed](https://fixembed.app) · "
+                            "[X](https://x.com/example/status/123)"
+                        ),
+                    },
+                ],
+            }
+        ]
+
+        codes = validate_serialized_card(
+            self.payload,
+            components,
+            requires=frozenset({"author", "avatar", "author-link"}),
+            media_type=None,
+            section_kinds=frozenset(),
+        )
+
+        self.assertIn("card-missing-avatar", codes)
+        self.assertIn("card-missing-author-link", codes)
 
     def test_stats_must_be_rendered_in_a_dedicated_stats_row(self):
         components = [

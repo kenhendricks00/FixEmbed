@@ -21,6 +21,7 @@ from reddit_embed import fetch_reddit_layout
 from threads_embed import fetch_threads_layout
 from bluesky_embed import fetch_bluesky_layout
 from pixiv_embed import fetch_pixiv_layout
+from pixiv_relay import start_pixiv_relay
 from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
 from pinterest_embed import fetch_pinterest_layout
@@ -567,6 +568,14 @@ def get_service_rule(guild_id, channel_id, service, default_enabled=True):
 async def on_ready():
     print(f'We have logged in as {client.user}')
     logging.info(f'Logged in as {client.user}')
+    if (
+        os.getenv("PIXIV_RELAY_ENABLED") == "1"
+        and getattr(client, "pixiv_relay_runner", None) is None
+    ):
+        try:
+            client.pixiv_relay_runner = await start_pixiv_relay()
+        except Exception as error:
+            logging.exception("Pixiv relay startup failed: %s", error)
     client.db = await init_db()
     await init_premium_controls(client.db)
     await migrate_youtube_service_default(client.db)

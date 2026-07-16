@@ -44,6 +44,9 @@ export async function prepareEmbedCache(
     }
 
     try {
+        if (new URL(requestUrl).searchParams.has('_conformance')) {
+            return undefined;
+        }
         const digest = await digestCacheInput(sourceUrl, options);
         const origin = new URL(requestUrl).origin;
         return {

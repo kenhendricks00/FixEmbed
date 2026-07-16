@@ -184,7 +184,9 @@ def validate_serialized_card(
     codes: list[str] = []
     text_nodes = _text_nodes(root)
     rendered_text = _normalized("\n".join(text_nodes))
-    header_text = _normalized("\n".join(_text_nodes(root_children[0])))
+    header_nodes = _text_nodes(root_children[0])
+    raw_header_text = "\n".join(header_nodes)
+    header_text = _normalized(raw_header_text)
     identity_markers = (
         _normalized(payload.get("authorName")),
         _normalized(payload.get("authorHandle")),
@@ -196,9 +198,16 @@ def validate_serialized_card(
         codes.append("card-missing-header")
 
     header_thumbnails = _thumbnail_urls(root_children[0])
-    if "author" in requires and str(payload.get("authorAvatar") or "").strip():
+    if (
+        "avatar" in requires
+        or ("author" in requires and str(payload.get("authorAvatar") or "").strip())
+    ):
         if not header_thumbnails:
             codes.append("card-missing-avatar")
+    if "author-link" in requires:
+        author_url = str(payload.get("authorUrl") or "").strip()
+        if not author_url or author_url not in raw_header_text:
+            codes.append("card-missing-author-link")
 
     gallery_urls = _gallery_urls(root)
     if any(not _is_https_url(url) for url in (*header_thumbnails, *gallery_urls)):

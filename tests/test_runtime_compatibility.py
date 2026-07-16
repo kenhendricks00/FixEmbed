@@ -245,6 +245,10 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
         self.assertIn("from pixiv_embed import fetch_pixiv_layout", main_source)
+        self.assertIn("from pixiv_relay import start_pixiv_relay", main_source)
+        self.assertIn('os.getenv("PIXIV_RELAY_ENABLED") == "1"', main_source)
+        self.assertIn('getattr(client, "pixiv_relay_runner", None) is None', main_source)
+        self.assertIn("client.pixiv_relay_runner = await start_pixiv_relay()", main_source)
         self.assertIn('elif item.service == "Pixiv":', main_source)
         self.assertIn("fetch_pixiv_layout(", main_source)
         self.assertIn("component_layouts.append((layout, automatic_url))", main_source)

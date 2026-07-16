@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Pixiv first-party reliability**
+- Added a cached bot-local Pixiv metadata path so cards keep the real title, creator, profile link, high-resolution avatar, full gallery, publication time, and stats when Pixiv blocks Worker traffic.
+- Added a restricted, signed FixEmbed relay contract for future Worker recovery without exposing a general-purpose URL proxy; relay startup remains explicitly opt-in until a reachable allocation is configured.
+- Restored creator profile links and higher-resolution creator avatars in Phixiv recovery, validated fallback identity against the requested artwork, and restricted every media URL to trusted HTTPS proxy paths.
+
 #### **Production latency budgets**
 - Added reviewed per-card cold latency budgets to the production Components V2 canaries, with bounded over-budget degradation codes and the expected budget included in privacy-safe reports.
 - Kept a single slow provider sample nonfatal so transient upstream variance stays visible without turning scheduled checks into alert noise.

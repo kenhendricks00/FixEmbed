@@ -65,6 +65,32 @@ async function topGgSignature(body: string, secret: string, timestamp: number): 
     return `t=${timestamp},v1=${[...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
+async function signedRelayResponse(payload: unknown, secret: string): Promise<Response> {
+    const body = JSON.stringify(payload);
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+    );
+    const signature = await crypto.subtle.sign(
+        'HMAC',
+        key,
+        new TextEncoder().encode(body),
+    );
+    const hex = [...new Uint8Array(signature)]
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+    return new Response(body, {
+        status: 200,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-FixEmbed-Signature': `v1=${hex}`,
+        },
+    });
+}
+
 const tests: TestCase[] = [
     {
         name: 'createTimeoutBudget caps provider time against one shared deadline',
@@ -430,7 +456,7 @@ const tests: TestCase[] = [
         run: async () => {
             const originalFetch = globalThis.fetch;
             const requested: string[] = [];
-            globalThis.fetch = async (input) => {
+            globalThis.fetch = async (input, init) => {
                 const url = String(input);
                 requested.push(url);
                 if (url === 'https://pin.it/CjGnCP20L') {
@@ -446,6 +472,7 @@ const tests: TestCase[] = [
                     });
                 }
                 if (url === 'https://www.pinterest.com/christinaebrautaset/') {
+                    assert.equal(init?.redirect, 'manual');
                     return new Response(`<!doctype html><html><body><script>{
                         "owner":{"full_name":"christinabrautaset","username":"christinaebrautaset",
                         "image_medium_url":"https://i.pinimg.com/75x75_RS/ba/ab/af/avatar.jpg"}
@@ -1579,7 +1606,286 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'pixivHandler proxies Phixiv fallback artwork for Discord media components',
+        name: 'pixivHandler uses the FixEmbed relay when official Worker requests are blocked',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            let relayRequestHeaders: Headers | undefined;
+            globalThis.fetch = async (input, init) => {
+                const requestedUrl = String(input);
+                requested.push(requestedUrl);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')
+                    || requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl === 'https://relay.fixembed.test/pixiv/456') {
+                    relayRequestHeaders = new Headers(init?.headers);
+                    return signedRelayResponse({
+                        version: 1,
+                        id: '456',
+                        title: 'Relay Art',
+                        description: 'Recovered directly by FixEmbed.',
+                        authorName: 'Artist Name',
+                        authorHandle: 'artist_handle',
+                        authorId: '42',
+                        authorAvatar: 'https://i.pximg.net/avatar_170.jpg',
+                        timestamp: '2026-07-13T00:00:00.000Z',
+                        stats: { comments: 12, likes: 345, views: 6789, bookmarks: 234 },
+                        images: [
+                            'https://i.pximg.net/page-1.jpg',
+                            'https://i.pximg.net/page-2.jpg',
+                        ],
+                    }, 'test-relay-secret-32-bytes-minimum');
+                }
+                return new Response('unexpected', { status: 500 });
+            };
+            try {
+                const response = await pixivHandler.handle(
+                    'https://www.pixiv.net/artworks/456',
+                    {
+                        ...env,
+                        PIXIV_RELAY_URL: 'https://relay.fixembed.test',
+                        PIXIV_RELAY_SECRET: 'test-relay-secret-32-bytes-minimum',
+                    },
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Relay Art');
+                assert.equal(response.data?.authorName, 'Artist Name');
+                assert.equal(response.data?.authorHandle, '@artist_handle');
+                assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Favatar_170.jpg',
+                );
+                assert.deepEqual(response.data?.images, [
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-1.jpg',
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fi.pximg.net%2Fpage-2.jpg',
+                ]);
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(response.data?.stats, '💬 12 ❤️ 345 👁️ 6.8K 🔖 234');
+                assert.equal(
+                    requested.includes('https://relay.fixembed.test/pixiv/456'),
+                    true,
+                );
+                assert.match(
+                    relayRequestHeaders?.get('X-FixEmbed-Timestamp') || '',
+                    /^\d{10}$/,
+                );
+                assert.match(
+                    relayRequestHeaders?.get('X-FixEmbed-Authorization') || '',
+                    /^v1=[0-9a-f]{64}$/,
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pixivHandler rejects relay payloads with mismatched identity or untrusted media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requestedUrl = String(input);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')
+                    || requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')
+                    || requestedUrl.includes('phixiv.net/')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl === 'https://relay.fixembed.test/pixiv/456') {
+                    return signedRelayResponse({
+                        version: 1,
+                        id: '999',
+                        title: 'Impostor',
+                        authorName: 'Impostor',
+                        authorId: '42',
+                        authorAvatar: 'https://evil.example/avatar.jpg',
+                        images: ['https://evil.example/image.jpg'],
+                    }, 'test-relay-secret-32-bytes-minimum');
+                }
+                return new Response('blocked', { status: 403 });
+            };
+            try {
+                const response = await pixivHandler.handle(
+                    'https://www.pixiv.net/artworks/456',
+                    {
+                        ...env,
+                        PIXIV_RELAY_URL: 'https://relay.fixembed.test',
+                        PIXIV_RELAY_SECRET: 'test-relay-secret-32-bytes-minimum',
+                    },
+                );
+                assert.equal(response.data?.title, 'Pixiv Artwork');
+                assert.equal(response.data?.authorName, undefined);
+                assert.equal(response.data?.authorAvatar, undefined);
+                assert.equal(response.data?.image, undefined);
+                assert.equal(response.data?.images, undefined);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pixivHandler omits blank relay author handles',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requestedUrl = String(input);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')
+                    || requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl === 'https://relay.fixembed.test/pixiv/456') {
+                    return signedRelayResponse({
+                        version: 1,
+                        id: '456',
+                        title: 'Relay Art',
+                        authorName: 'Artist Name',
+                        authorHandle: '   ',
+                        authorId: '42',
+                        authorAvatar: 'https://i.pximg.net/avatar_170.jpg',
+                        images: ['https://i.pximg.net/page-1.jpg'],
+                    }, 'test-relay-secret-32-bytes-minimum');
+                }
+                return new Response('blocked', { status: 403 });
+            };
+            try {
+                const response = await pixivHandler.handle(
+                    'https://www.pixiv.net/artworks/456',
+                    {
+                        ...env,
+                        PIXIV_RELAY_URL: 'https://relay.fixembed.test',
+                        PIXIV_RELAY_SECRET: 'test-relay-secret-32-bytes-minimum',
+                    },
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorHandle, undefined);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pixivHandler preserves creator identity in Phixiv fallback cards',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input, init) => {
+                const requestedUrl = String(input);
+                requested.push(requestedUrl);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return Response.json({
+                        version: '1.0',
+                        type: 'rich',
+                        title: 'Pixiv Artwork',
+                        thumbnail_url: 'https://embed.pixiv.net/decorate.php?illust_id=456',
+                    });
+                }
+                if (requestedUrl.includes('/api/v1/statuses/6674477088768')) {
+                    assert.equal(init?.redirect, 'manual');
+                    return Response.json({
+                        id: '456',
+                        created_at: '2026-07-13T00:00:00.000Z',
+                        account: {
+                            id: '42',
+                            display_name: 'Artist Name',
+                            avatar: 'https://www.phixiv.net/i/user-profile/avatar_50.png',
+                        },
+                    });
+                }
+                assert.equal(init?.redirect, 'manual');
+                return new Response(`
+                    <meta property="og:title" content="Fallback Art by (@artist)">
+                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg?mdate=1783900800">
+                    <meta property="og:description" content="Fallback &amp;#44; caption">
+                    <link rel="alternate" type="application/activity+json"
+                        href="https://www.phixiv.net/users/42/statuses/6674477088768">
+                `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await pixivHandler.handle('https://www.pixiv.net/artworks/456', env);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorName, 'Artist Name');
+                assert.equal(response.data?.authorHandle, undefined);
+                assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Fuser-profile%2Favatar_170.png',
+                );
+                assert.equal(
+                    response.data?.image,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg%3Fmdate%3D1783900800',
+                );
+                assert.equal(response.data?.description, 'Fallback , caption');
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(
+                    requested.some(url => url.includes('/api/v1/statuses/6674477088768')),
+                    true,
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pixivHandler recovers a complete card when Phixiv HTML is blocked',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const requestedUrl = String(input);
+                requested.push(requestedUrl);
+                if (requestedUrl.includes('pixiv.net/ajax/illust/')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl.startsWith('https://www.phixiv.net/api/v1/statuses/')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl.startsWith('https://phixiv.net/api/v1/statuses/29884416')) {
+                    return Response.json({
+                        id: '456',
+                        created_at: '2026-07-13T00:00:00.000Z',
+                        content: [
+                            '<strong><a href="https://www.pixiv.net/en/artworks/456">Activity Art</a></strong>',
+                            'by <a href="https://www.pixiv.net/users/42">Artist Name</a>',
+                            'Recovered caption',
+                        ].join('<br />'),
+                        account: {
+                            id: '42',
+                            display_name: 'Artist Name',
+                            avatar_static: 'https://www.phixiv.net/i/user-profile/avatar_50.png',
+                        },
+                        media_attachments: [{
+                            type: 'image',
+                            url: 'https://www.phixiv.net/i/activity-image.jpg',
+                            preview_url: 'https://www.phixiv.net/i/activity-preview.jpg',
+                        }],
+                    });
+                }
+                return new Response('blocked', { status: 403 });
+            };
+            try {
+                const response = await pixivHandler.handle('https://www.pixiv.net/artworks/456', env);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.title, 'Activity Art');
+                assert.equal(response.data?.description, 'Recovered caption');
+                assert.equal(response.data?.authorName, 'Artist Name');
+                assert.equal(response.data?.authorUrl, 'https://www.pixiv.net/en/users/42');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Fuser-profile%2Favatar_170.png',
+                );
+                assert.equal(
+                    response.data?.image,
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Factivity-image.jpg',
+                );
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(
+                    requested.some(url => url.startsWith('https://phixiv.net/api/v1/statuses/29884416')),
+                    true,
+                );
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'pixivHandler rejects mismatched Phixiv creator identity',
         run: async () => {
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async (input) => {
@@ -1587,22 +1893,32 @@ const tests: TestCase[] = [
                 if (requestedUrl.includes('pixiv.net/ajax/illust/')) {
                     return new Response('blocked', { status: 403 });
                 }
+                if (requestedUrl.startsWith('https://embed.pixiv.net/oembed.php?')) {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (requestedUrl.includes('/api/v1/statuses/123456789')) {
+                    return Response.json({
+                        id: 'different-artwork',
+                        account: {
+                            id: '42',
+                            display_name: 'Impostor',
+                            avatar: 'https://www.phixiv.net/i/user-profile/impostor_50.png',
+                        },
+                    });
+                }
                 return new Response(`
                     <meta property="og:title" content="Fallback Art by (@artist)">
-                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg?mdate=1783900800">
-                    <meta property="og:description" content="Fallback &amp;#44; caption">
+                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg">
+                    <link rel="alternate" type="application/activity+json"
+                        href="https://www.phixiv.net/users/42/statuses/123456789">
                 `, { status: 200, headers: { 'Content-Type': 'text/html' } });
             };
             try {
                 const response = await pixivHandler.handle('https://www.pixiv.net/artworks/456', env);
                 assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorName, 'artist');
                 assert.equal(response.data?.authorUrl, undefined);
-                assert.equal(
-                    response.data?.image,
-                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg%3Fmdate%3D1783900800',
-                );
-                assert.equal(response.data?.description, 'Fallback , caption');
-                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(response.data?.authorAvatar, undefined);
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -2294,16 +2610,23 @@ const tests: TestCase[] = [
                 const translated = await app.request(
                     `/api/embed?url=${source}&mode=gallery&lang=es`, {}, cacheEnv, executionContext,
                 );
+                const conformance = await app.request(
+                    `/api/embed?url=${source}&mode=gallery&_conformance=probe-123`,
+                    {},
+                    cacheEnv,
+                    executionContext,
+                );
                 await Promise.all(pendingWrites.splice(0));
 
                 assert.equal(first.headers.get('X-FixEmbed-Cache'), 'MISS');
                 assert.equal(second.headers.get('X-FixEmbed-Cache'), 'HIT');
                 assert.equal(differentMode.headers.get('X-FixEmbed-Cache'), 'MISS');
                 assert.equal(translated.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(conformance.headers.get('X-FixEmbed-Cache'), null);
                 assert.equal(first.headers.get('Cache-Control'), 'no-store');
                 assert.equal(second.headers.get('Cache-Control'), 'no-store');
                 assert.equal(requestsAfterHit, requestsAfterFirst);
-                assert.ok(upstreamRequests > requestsAfterHit);
+                assert.ok(upstreamRequests > requestsAfterHit + 1);
                 assert.equal(cacheKeys.length, 3);
                 assert.equal(
                     Array.from(entries.values()).every((entry) => (

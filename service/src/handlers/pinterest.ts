@@ -136,7 +136,7 @@ async function fetchCreatorAvatar(creator: ReturnType<typeof creatorMetadata>): 
     if (!username || !/^[A-Za-z0-9_.-]+$/.test(username)) return undefined;
     const profileUrl = `https://www.pinterest.com/${username}/`;
     const response = await fetchWithTimeout(profileUrl, {
-        redirect: 'error',
+        redirect: 'manual',
         headers: {
             'Accept': 'text/html,application/xhtml+xml',
             'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',

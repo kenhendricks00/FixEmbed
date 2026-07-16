@@ -15,6 +15,8 @@ export interface Env {
     FIXEMBED_GUILD_ID?: string;
     FIXEMBED_VOTER_ROLE_ID?: string;
     TOPGG_BOT_ID?: string;
+    PIXIV_RELAY_URL?: string;
+    PIXIV_RELAY_SECRET?: string;
     AI?: Ai;
 }
 

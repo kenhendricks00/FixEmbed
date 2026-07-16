@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from typing import Any, Mapping, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import aiohttp
 import discord
@@ -14,6 +15,7 @@ from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer
 from card_preferences import CardPreferences, apply_caption_preferences
 from timestamp_utils import parse_post_timestamp
+from pixiv_relay import PixivRelayService, UpstreamResponseError
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -22,6 +24,7 @@ PIXIV_USER_API = "https://www.pixiv.net/ajax/user"
 PIXIV_COLOR = 0x0096FA
 FIXEMBED_EMOJI_ID = 1525580543503106148
 PIXIV_EMOJI_ID = 1526268469920792577
+_PIXIV_METADATA_SERVICE = PixivRelayService()
 
 
 def _clean_handle(value: Any) -> str:
@@ -39,8 +42,34 @@ def _clean_description(value: Any) -> str:
     return description.strip()
 
 
+def _format_count(value: int) -> str:
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}".removesuffix(".0") + "M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}".removesuffix(".0") + "K"
+    return f"{value:,}"
+
+
 def _proxy_pixiv_image(source_url: str) -> str:
     return f"https://fixembed.app/proxy/pixiv?url={quote(source_url, safe='')}"
+
+
+def _trusted_pixiv_image(source_url: Any) -> str:
+    if not isinstance(source_url, str) or len(source_url) > 2048:
+        return ""
+    try:
+        parsed = urlparse(source_url)
+    except ValueError:
+        return ""
+    hostname = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or (hostname != "i.pximg.net" and not hostname.endswith(".pximg.net"))
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return ""
+    return source_url
 
 
 def _artwork_id(source_url: str) -> str:
@@ -100,6 +129,63 @@ def _merge_creator_identity(
     if author_id.isdigit():
         data["authorUrl"] = f"https://www.pixiv.net/en/users/{author_id}"
     return data
+
+
+def _local_metadata_card(
+    payload: Mapping[str, Any], artwork_id: str
+) -> dict[str, Any]:
+    """Convert validated local Pixiv metadata into the shared card contract."""
+    if payload.get("version") != 1 or str(payload.get("id") or "") != artwork_id:
+        raise ValueError("Pixiv metadata identity did not match")
+    title = str(payload.get("title") or "").strip()
+    author_name = str(payload.get("authorName") or "").strip()
+    author_id = str(payload.get("authorId") or "").strip()
+    images = payload.get("images")
+    if (
+        not title
+        or not author_name
+        or not author_id.isdigit()
+        or not isinstance(images, list)
+        or not images
+    ):
+        raise ValueError("Pixiv metadata was incomplete")
+
+    trusted_images = [_trusted_pixiv_image(image) for image in images[:10]]
+    if not trusted_images or any(not image for image in trusted_images):
+        raise ValueError("Pixiv metadata media was untrusted")
+
+    card: dict[str, Any] = {
+        "title": title,
+        "description": str(payload.get("description") or "").strip(),
+        "url": f"https://www.pixiv.net/artworks/{artwork_id}",
+        "siteName": "FixEmbed · Pixiv",
+        "authorName": author_name,
+        "authorUrl": f"https://www.pixiv.net/en/users/{author_id}",
+        "images": [_proxy_pixiv_image(image) for image in trusted_images],
+        "timestamp": str(payload.get("timestamp") or "").strip() or None,
+    }
+    author_handle = _clean_handle(payload.get("authorHandle"))
+    if author_handle:
+        card["authorHandle"] = f"@{author_handle}"
+    avatar = _trusted_pixiv_image(payload.get("authorAvatar"))
+    if avatar:
+        card["authorAvatar"] = _proxy_pixiv_image(avatar)
+
+    stats_payload = payload.get("stats")
+    if isinstance(stats_payload, Mapping):
+        stat_parts = []
+        for key, emoji in (
+            ("comments", "💬"),
+            ("likes", "❤️"),
+            ("views", "👁️"),
+            ("bookmarks", "🔖"),
+        ):
+            value = stats_payload.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                stat_parts.append(f"{emoji} {_format_count(value)}")
+        if stat_parts:
+            card["stats"] = " ".join(stat_parts)
+    return card
 
 
 def build_pixiv_layout(
@@ -191,6 +277,19 @@ def build_pixiv_layout(
 
 
 async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
+    artwork_id = _artwork_id(source_url)
+    if artwork_id and int(artwork_id) <= 0xFFFF_FFFF:
+        try:
+            local_metadata = await _PIXIV_METADATA_SERVICE.metadata(artwork_id)
+            return _local_metadata_card(local_metadata, artwork_id)
+        except (
+            aiohttp.ClientError,
+            TimeoutError,
+            UpstreamResponseError,
+            ValueError,
+        ):
+            logging.warning("pixiv_local_metadata_fetch_failed")
+
     api_url = (
         f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
         "&renderer=components-v2"
@@ -205,7 +304,6 @@ async def _fetch_pixiv_payload(source_url: str) -> Mapping[str, Any]:
             raise ValueError("FixEmbed did not return Pixiv metadata")
 
         data = dict(body.get("data") or {})
-        artwork_id = _artwork_id(source_url)
         if artwork_id:
             headers = {
                 "Accept": "application/json",

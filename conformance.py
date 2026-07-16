@@ -47,7 +47,16 @@ SUPPORTED_HOSTS = {
     "pinterest": frozenset({"pinterest.com", "www.pinterest.com", "pin.it"}),
 }
 REQUIREMENTS = frozenset(
-    {"title", "author", "timestamp", "stats", "media", "translation"}
+    {
+        "title",
+        "author",
+        "avatar",
+        "author-link",
+        "timestamp",
+        "stats",
+        "media",
+        "translation",
+    }
 )
 MEDIA_TYPES = frozenset({"image", "carousel", "video", "gif"})
 RENDERERS = frozenset({"components-v2"})
@@ -253,6 +262,14 @@ def _has_text(data: Mapping[str, Any], *fields: str) -> bool:
     return any(isinstance(data.get(field), str) and data[field].strip() for field in fields)
 
 
+def _has_https_url(data: Mapping[str, Any], field: str) -> bool:
+    value = data.get(field)
+    if not isinstance(value, str) or not value.strip():
+        return False
+    parsed = urlparse(value.strip())
+    return parsed.scheme == "https" and bool(parsed.hostname)
+
+
 def _media_matches(data: Mapping[str, Any], media_type: Optional[str]) -> bool:
     images = data.get("images") if isinstance(data.get("images"), list) else []
     images = [item for item in images if isinstance(item, str) and item.strip()]
@@ -297,6 +314,8 @@ def evaluate_payload(
         checks = {
             "title": _has_text(data, "title"),
             "author": _has_text(data, "authorName", "authorHandle"),
+            "avatar": _has_https_url(data, "authorAvatar"),
+            "author-link": _has_https_url(data, "authorUrl"),
             "timestamp": _has_text(data, "timestamp"),
             "stats": _has_text(data, "stats"),
             "media": _media_matches(data, None),
@@ -310,6 +329,8 @@ def evaluate_payload(
         for requirement in (
             "title",
             "author",
+            "avatar",
+            "author-link",
             "timestamp",
             "stats",
             "media",

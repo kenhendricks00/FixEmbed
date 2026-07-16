@@ -123,7 +123,7 @@
       "id": "pixiv-artwork",
       "platform": "pixiv",
       "url": "https://www.pixiv.net/en/artworks/101844438",
-      "requires": ["title", "author", "timestamp", "media"],
+      "requires": ["title", "author", "author-link", "avatar", "timestamp", "media"],
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": true,
