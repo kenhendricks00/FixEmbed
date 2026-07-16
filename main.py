@@ -641,6 +641,154 @@ async def change_status():
     except discord.errors.HTTPException as e:
         logging.error(f"Failed to change status: {e}")
 
+
+async def build_components_v2_link(
+    item,
+    guild_settings,
+    footer_branding,
+    card_preferences,
+    *,
+    premium=False,
+):
+    """Build the same Components V2 card for automatic and command entry points."""
+    media_quality = guild_settings.get("media_quality", "balanced")
+    automatic_url = build_automatic_url(
+        item,
+        media_quality,
+        os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
+    )
+    request_id = new_request_id()
+    async with conversion_telemetry.observe(item.service, request_id):
+        if item.service == "Instagram":
+            layout = await fetch_instagram_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Twitter":
+            fixed_url = build_fixembed_url(item, media_quality)
+            twitter_language = resolve_twitter_language(
+                item.language,
+                guild_settings,
+                premium=premium,
+            )
+            payload = await fetch_twitter_payload(
+                item.canonical_url,
+                twitter_language,
+                item.mode,
+            )
+            layout = build_twitter_layout(
+                payload,
+                fixed_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Reddit":
+            layout = await fetch_reddit_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Threads":
+            layout = await fetch_threads_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Pixiv":
+            layout = await fetch_pixiv_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Bluesky":
+            layout = await fetch_bluesky_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Bilibili":
+            layout = await fetch_bilibili_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "YouTube":
+            layout = await fetch_youtube_community_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Pinterest":
+            layout = await fetch_pinterest_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        else:
+            raise ValueError("unsupported rich-card service")
+    return layout, automatic_url
+
+
+async def send_components_v2_links(interaction, links):
+    """Respond to a user command with modern cards and safe URL fallbacks."""
+    guild_id = interaction.guild.id if interaction.guild else None
+    guild_settings = bot_settings.get(
+        guild_id,
+        {
+            "enabled_services": DEFAULT_ENABLED_SERVICES,
+            "mention_users": True,
+            "delete_original": True,
+            "delivery_mode": "suppress",
+            "media_quality": "balanced",
+        },
+    )
+    premium = await is_guild_premium(guild_id) if guild_id is not None else False
+    footer_branding = get_footer_branding(interaction.guild, guild_settings, premium)
+    card_preferences = preferences_from_settings(guild_settings, premium=premium)
+
+    await interaction.response.defer()
+    for item in links:
+        fallback_url = build_automatic_url(
+            item,
+            guild_settings.get("media_quality", "balanced"),
+            os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
+        )
+        try:
+            layout, fallback_url = await build_components_v2_link(
+                item,
+                guild_settings,
+                footer_branding,
+                card_preferences,
+                premium=premium,
+            )
+        except Exception as error:
+            logging.warning(
+                "Components V2 command card failed for %s: %s",
+                item.service,
+                type(error).__name__,
+            )
+            await interaction.followup.send(fallback_url)
+            continue
+
+        try:
+            await interaction.followup.send(view=layout)
+        except discord.HTTPException as error:
+            logging.warning(
+                "Components V2 command delivery failed for %s: %s",
+                item.service,
+                type(error).__name__,
+            )
+            await interaction.followup.send(fallback_url)
+
 @client.tree.command(
     name='activate',
     description="Activate link processing in this channel or another channel")
@@ -756,7 +904,7 @@ async def help_command(interaction: discord.Interaction):
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def fix_link(interaction: discord.Interaction, link: str):
-    """Convert one or more social media links to embed-friendly versions."""
+    """Convert one or more social media links to Components V2 cards."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     links = extract_supported_links(link)
 
@@ -764,17 +912,13 @@ async def fix_link(interaction: discord.Interaction, link: str):
         await interaction.response.send_message(get_text(lang, "no_supported_link"), ephemeral=True)
         return
 
-    fixed_links = [f"[{item.display_text}]({build_fixembed_url(item)})" for item in links]
-    chunks = chunk_lines(fixed_links)
-    await interaction.response.send_message(chunks[0])
-    for chunk in chunks[1:]:
-        await interaction.followup.send(chunk)
+    await send_components_v2_links(interaction, links)
 
 @client.tree.context_menu(name='Fix Embed')
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def fix_embed_context(interaction: discord.Interaction, message: discord.Message):
-    """Convert social media links in a message to embed-friendly versions."""
+    """Convert social media links in a message to Components V2 cards."""
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     links = extract_supported_links(message.content)
 
@@ -782,11 +926,7 @@ async def fix_embed_context(interaction: discord.Interaction, message: discord.M
         await interaction.response.send_message(get_text(lang, "no_links_found"), ephemeral=True)
         return
 
-    fixed_links = [f"[{item.display_text}]({build_fixembed_url(item)})" for item in links]
-    chunks = chunk_lines(fixed_links)
-    await interaction.response.send_message(chunks[0])
-    for chunk in chunks[1:]:
-        await interaction.followup.send(chunk)
+    await send_components_v2_links(interaction, links)
 
 async def debug_info(interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
     settings = bot_settings.get(
@@ -1924,86 +2064,15 @@ async def on_message(message):
                         media_quality,
                         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
                     )
-                    request_id = new_request_id()
                     if item.service in SERVICE_NAMES:
                         try:
-                            async with conversion_telemetry.observe(
-                                item.service, request_id
-                            ):
-                                if item.service == "Instagram":
-                                    layout = await fetch_instagram_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Twitter":
-                                    fixed_url = build_fixembed_url(item, media_quality)
-                                    twitter_language = resolve_twitter_language(
-                                        item.language, guild_settings, premium=premium
-                                    )
-                                    payload = await fetch_twitter_payload(
-                                        item.canonical_url,
-                                        twitter_language,
-                                        item.mode,
-                                    )
-                                    layout = build_twitter_layout(
-                                        payload,
-                                        fixed_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Reddit":
-                                    layout = await fetch_reddit_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Threads":
-                                    layout = await fetch_threads_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Pixiv":
-                                    layout = await fetch_pixiv_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Bluesky":
-                                    layout = await fetch_bluesky_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Bilibili":
-                                    layout = await fetch_bilibili_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "YouTube":
-                                    layout = await fetch_youtube_community_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                elif item.service == "Pinterest":
-                                    layout = await fetch_pinterest_layout(
-                                        item.canonical_url,
-                                        automatic_url,
-                                        footer_branding,
-                                        card_preferences,
-                                    )
-                                else:
-                                    raise ValueError("unsupported rich-card service")
+                            layout, automatic_url = await build_components_v2_link(
+                                item,
+                                guild_settings,
+                                footer_branding,
+                                card_preferences,
+                                premium=premium,
+                            )
                             component_layouts.append((layout, automatic_url))
                             rich_card_built = True
                         except Exception:
