@@ -143,7 +143,7 @@ export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Bluesky', sampleUrl: 'https://bsky.app/profile/bsky.app/post/3mqafridzgk2e' },
     { platform: 'Pixiv', sampleUrl: 'https://www.pixiv.net/en/artworks/101844438' },
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1nhZ2YHEtL' },
-    { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/post/UgkxB5KI1XNT06XxNO5MRsRoiizikWHv7gAy' },
+    { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/post/UgkxAcAx0FNJNhrLMff_RLjK_d20485xSAyz' },
     { platform: 'Pinterest', sampleUrl: 'https://www.pinterest.com/pin/424605071145119869/' },
 ];
 
