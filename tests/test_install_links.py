@@ -3,6 +3,7 @@ from urllib.parse import parse_qs, urlparse
 
 from install_links import (
     DISCORD_CLIENT_ID,
+    SERVER_INSTALL_PERMISSIONS,
     SERVER_INSTALL_URL,
     USER_INSTALL_URL,
     build_install_controls,
@@ -26,6 +27,8 @@ class InstallLinksTests(unittest.TestCase):
         self.assertEqual(parsed.netloc, "discord.com")
         self.assertEqual(query["client_id"], [DISCORD_CLIENT_ID])
         self.assertEqual(query["integration_type"], ["0"])
+        self.assertEqual(query["scope"], ["bot applications.commands"])
+        self.assertEqual(query["permissions"], [str(SERVER_INSTALL_PERMISSIONS)])
         self.assertNotEqual(SERVER_INSTALL_URL, USER_INSTALL_URL)
 
     def test_install_controls_offer_both_distinct_choices(self):

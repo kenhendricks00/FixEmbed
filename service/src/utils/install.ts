@@ -1,4 +1,5 @@
 export const DISCORD_CLIENT_ID = '1173820242305224764';
+export const SERVER_INSTALL_PERMISSIONS = '274878295040';
 
 export const INSTALL_CONTEXTS = ['user', 'server'] as const;
 export type InstallContext = typeof INSTALL_CONTEXTS[number];
@@ -32,8 +33,12 @@ export function discordInstallUrl(context: InstallContext): string {
     const url = new URL('https://discord.com/oauth2/authorize');
     url.searchParams.set('client_id', DISCORD_CLIENT_ID);
     url.searchParams.set('integration_type', context === 'user' ? '1' : '0');
-    if (context === 'user') {
-        url.searchParams.set('scope', 'applications.commands');
+    url.searchParams.set(
+        'scope',
+        context === 'user' ? 'applications.commands' : 'bot applications.commands',
+    );
+    if (context === 'server') {
+        url.searchParams.set('permissions', SERVER_INSTALL_PERMISSIONS);
     }
     return url.toString();
 }

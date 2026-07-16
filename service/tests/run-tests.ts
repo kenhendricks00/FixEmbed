@@ -3643,6 +3643,14 @@ const tests: TestCase[] = [
             const serverResponse = await app.request('/install/server/home-hero', {}, env);
             assert.equal(serverResponse.status, 302);
             assert.equal(serverResponse.headers.get('location'), discordInstallUrl('server'));
+            assert.equal(
+                new URL(serverResponse.headers.get('location') || '').searchParams.get('scope'),
+                'bot applications.commands',
+            );
+            assert.equal(
+                new URL(serverResponse.headers.get('location') || '').searchParams.get('permissions'),
+                '274878295040',
+            );
 
             assert.equal((await app.request('/install/admin/home-hero', {}, env)).status, 404);
             assert.equal((await app.request('/install/user/unbounded', {}, env)).status, 404);

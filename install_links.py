@@ -8,16 +8,24 @@ import discord
 
 
 DISCORD_CLIENT_ID = "1173820242305224764"
+SERVER_INSTALL_PERMISSIONS = 274878295040
 _DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 
 
-def _discord_install_url(*, integration_type: int, scope: str | None = None) -> str:
+def _discord_install_url(
+    *,
+    integration_type: int,
+    scope: str | None = None,
+    permissions: int | None = None,
+) -> str:
     query = {
         "client_id": DISCORD_CLIENT_ID,
         "integration_type": str(integration_type),
     }
     if scope:
         query["scope"] = scope
+    if permissions is not None:
+        query["permissions"] = str(permissions)
     return f"{_DISCORD_AUTHORIZE_URL}?{urlencode(query)}"
 
 
@@ -25,7 +33,11 @@ USER_INSTALL_URL = _discord_install_url(
     integration_type=1,
     scope="applications.commands",
 )
-SERVER_INSTALL_URL = _discord_install_url(integration_type=0)
+SERVER_INSTALL_URL = _discord_install_url(
+    integration_type=0,
+    scope="bot applications.commands",
+    permissions=SERVER_INSTALL_PERMISSIONS,
+)
 
 
 def build_install_controls() -> tuple[tuple[discord.ui.Button, discord.ui.Button], ...]:

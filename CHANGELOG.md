@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Server install repair**
+- Fixed account/server install controls so server installation requests the required bot and application-command scopes instead of failing with "No scopes were provided."
+- Requests the minimum channel, media, history, emoji, message-management, and thread permissions used by automatic Components V2 delivery.
+
 #### **Product-led installation and discovery**
 - Added distinct personal and server install paths across `/invite`, `/help`, `/about`, and the public website.
 - Made personal installation the primary homepage action while preserving server installation for automatic conversion and settings.
