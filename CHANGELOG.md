@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Confirmed Discord delivery**
+- Waits for queued Discord sends to finish before deleting or suppressing source messages, preserving the original whenever any replacement fails.
+- Bounds every component and fallback send attempt to 15 seconds so a stalled Discord request cannot freeze the delivery queue.
+- Uses a representative Instagram reel for public health checks so status reflects the format users actually depend on.
+
 #### **Resilient live status refreshes**
 - Bounded every public platform-health probe to seven seconds so one stalled upstream cannot hold the entire status report open.
 - Coalesced concurrent status refreshes, reused verified reports for 60 seconds, and preserved a clearly marked recent report when an unexpected refresh fails.

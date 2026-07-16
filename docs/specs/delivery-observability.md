@@ -18,6 +18,12 @@ without retaining Discord identities, content, or destination information.
 
 - Every queued send receives a random correlation ID unrelated to Discord or
   post identity.
+- Source messages are mutated only after every requested replacement reaches a
+  successful terminal outcome. Direct component delivery and link rescue count
+  as success; any terminal failure preserves the source.
+- Every Discord API send attempt has a 15-second deadline. A timed-out component
+  send proceeds to link rescue, while a timed-out final fallback records a
+  complete failure and releases the delivery queue.
 - Exactly one terminal outcome is recorded per completed queue item: direct
   delivery, component-to-link rescue, or complete failure.
 - The latest 200 end-to-end queue/send durations are retained in memory for p95.
@@ -56,6 +62,9 @@ without retaining Discord identities, content, or destination information.
 - A failed component send followed by a successful shareable-link send records
   one link rescue, not a complete failure.
 - A failed final send records one complete failure.
+- A stalled send cannot block later queue items indefinitely.
+- Delete and suppress modes never remove the only usable source when replacement
+  delivery fails.
 - A missing Manage Messages permission is visible as an automatic recovery, not
   misreported as a card-build or platform-health failure.
 - Duplicate terminal calls for one ticket cannot double-count it.
