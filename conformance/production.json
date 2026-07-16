@@ -8,7 +8,8 @@
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
       "allowFallback": true,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "twitter-carousel",
@@ -18,7 +19,8 @@
       "mediaType": "carousel",
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "twitter-gif",
@@ -28,7 +30,8 @@
       "mediaType": "gif",
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "twitter-video",
@@ -38,7 +41,8 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "twitter-translation",
@@ -49,7 +53,8 @@
       "sectionKinds": [],
       "allowFallback": false,
       "renderer": "components-v2",
-      "options": {"lang": "es"}
+      "options": {"lang": "es"},
+      "probeMedia": true
     },
     {
       "id": "twitter-tombstone",
@@ -59,7 +64,8 @@
       "mediaType": "video",
       "sectionKinds": ["tombstone"],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "instagram-reel",
@@ -69,7 +75,8 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": true,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "reddit-post",
@@ -78,7 +85,8 @@
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "threads-post",
@@ -87,7 +95,8 @@
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "bluesky-image",
@@ -97,7 +106,8 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "pixiv-artwork",
@@ -107,7 +117,8 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": true,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "bilibili-video",
@@ -117,7 +128,8 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": true,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "youtube-community-post",
@@ -126,7 +138,8 @@
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     },
     {
       "id": "pinterest-pin",
@@ -136,7 +149,8 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": false,
-      "renderer": "components-v2"
+      "renderer": "components-v2",
+      "probeMedia": true
     }
   ]
 }

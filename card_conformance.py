@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -19,6 +20,16 @@ from youtube_embed import build_youtube_community_layout
 
 
 Builder = Callable[[Mapping[str, Any]], Any]
+
+
+@dataclass(frozen=True)
+class MediaTarget:
+    """One remote resource referenced by a rendered Discord card."""
+
+    kind: str
+    url: str
+
+
 BUILDERS: dict[str, Builder] = {
     "twitter": build_twitter_layout,
     "instagram": build_instagram_layout,
@@ -90,6 +101,20 @@ def _thumbnail_urls(component: object) -> list[str]:
         for child in children:
             urls.extend(_thumbnail_urls(child))
     return urls
+
+
+def extract_media_targets(components: object) -> tuple[MediaTarget, ...]:
+    """Return typed, deduplicated remote targets without card text."""
+    if not isinstance(components, list):
+        return ()
+    targets = (
+        *(MediaTarget("avatar", url) for root in components for url in _thumbnail_urls(root)),
+        *(MediaTarget("media", url) for root in components for url in _gallery_urls(root)),
+    )
+    deduplicated: dict[str, MediaTarget] = {}
+    for target in targets:
+        deduplicated.setdefault(target.url, target)
+    return tuple(deduplicated.values())
 
 
 def _normalized(value: object) -> str:
@@ -255,3 +280,14 @@ def evaluate_components_v2(
         )
     except Exception:
         return ("card-render-failed",)
+
+
+def rendered_media_targets(
+    platform: str,
+    payload: Mapping[str, Any],
+) -> tuple[MediaTarget, ...]:
+    """Build the production card and expose only its remote media targets."""
+    builder = BUILDERS.get(platform)
+    if builder is None:
+        raise ValueError("unsupported renderer platform")
+    return extract_media_targets(builder(payload).to_components())

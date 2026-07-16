@@ -12,7 +12,14 @@ from conformance import (
     parse_manifest,
     run_conformance,
 )
-from card_conformance import BUILDERS, evaluate_components_v2, validate_serialized_card
+from card_conformance import (
+    BUILDERS,
+    MediaTarget,
+    evaluate_components_v2,
+    extract_media_targets,
+    validate_serialized_card,
+)
+from media_conformance import MediaFetchResponse, probe_media_targets
 
 
 def valid_manifest(**case_overrides):
@@ -53,6 +60,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(cases[0].media_type, "carousel")
         self.assertEqual(cases[0].section_kinds, frozenset({"quote"}))
         self.assertFalse(cases[0].allow_fallback)
+        self.assertFalse(cases[0].probe_media)
 
     def test_rejects_duplicate_ids_and_more_than_fifty_cases(self):
         duplicate = valid_manifest()
@@ -95,6 +103,7 @@ class ManifestTests(unittest.TestCase):
             valid_manifest(
                 renderer="components-v2",
                 options={"lang": "ES", "mode": "mosaic"},
+                probeMedia=True,
                 requires=["title", "translation"],
                 mediaType=None,
                 sectionKinds=[],
@@ -103,6 +112,7 @@ class ManifestTests(unittest.TestCase):
 
         self.assertEqual(case.renderer, "components-v2")
         self.assertEqual(case.options, {"lang": "es", "mode": "mosaic"})
+        self.assertTrue(case.probe_media)
         self.assertIn("translation", case.requires)
 
     def test_rejects_unknown_renderer_and_unbounded_api_options(self):
@@ -114,6 +124,8 @@ class ManifestTests(unittest.TestCase):
             {"options": {"mode": "unsupported"}},
             {"options": {"mode": ["gallery"]}},
             {"mediaType": ["video"]},
+            {"probeMedia": "yes"},
+            {"probeMedia": True},
         ):
             with self.subTest(overrides=overrides):
                 with self.assertRaises(ManifestError):
@@ -149,6 +161,7 @@ class ManifestTests(unittest.TestCase):
         by_id = {case.case_id: case for case in cases}
 
         self.assertTrue(all(case.renderer == "components-v2" for case in cases))
+        self.assertTrue(all(case.probe_media for case in cases))
         self.assertEqual(by_id["twitter-carousel"].media_type, "carousel")
         self.assertEqual(by_id["twitter-gif"].media_type, "gif")
         self.assertEqual(by_id["twitter-video"].media_type, "video")
@@ -403,6 +416,38 @@ class ComponentsV2EvaluationTests(unittest.TestCase):
 
         self.assertIn("card-unsafe-media", codes)
 
+    def test_media_target_extraction_is_typed_and_deduplicated(self):
+        components = [
+            {
+                "type": 17,
+                "components": [
+                    {
+                        "type": 9,
+                        "components": [{"type": 10, "content": "Creator"}],
+                        "accessory": {
+                            "type": 11,
+                            "media": {"url": "https://pbs.twimg.com/avatar.jpg"},
+                        },
+                    },
+                    {
+                        "type": 12,
+                        "items": [
+                            {"media": {"url": "https://pbs.twimg.com/post.jpg"}},
+                            {"media": {"url": "https://pbs.twimg.com/post.jpg"}},
+                        ],
+                    },
+                ],
+            }
+        ]
+
+        self.assertEqual(
+            extract_media_targets(components),
+            (
+                MediaTarget("avatar", "https://pbs.twimg.com/avatar.jpg"),
+                MediaTarget("media", "https://pbs.twimg.com/post.jpg"),
+            ),
+        )
+
     def test_unknown_platform_fails_without_exposing_payload_content(self):
         codes = evaluate_components_v2(
             "unknown",
@@ -414,6 +459,117 @@ class ComponentsV2EvaluationTests(unittest.TestCase):
 
         self.assertEqual(codes, ("card-render-failed",))
         self.assertNotIn("private", json.dumps(codes))
+
+
+class MediaReachabilityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_unapproved_hosts_without_fetching_them(self):
+        requested = []
+
+        async def fetch_media(url, _timeout_seconds):
+            requested.append(url)
+            return MediaFetchResponse(206, "image/jpeg", None)
+
+        codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("media", "https://attacker.example/post.jpg"),),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ("media-host-rejected",))
+        self.assertEqual(requested, [])
+
+    async def test_follows_only_allowlisted_https_redirects(self):
+        requested = []
+
+        async def fetch_media(url, _timeout_seconds):
+            requested.append(url)
+            if len(requested) == 1:
+                return MediaFetchResponse(
+                    302,
+                    "text/html",
+                    "https://video.twimg.com/redirected.mp4",
+                )
+            return MediaFetchResponse(206, "video/mp4", None)
+
+        codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("media", "https://pbs.twimg.com/post.mp4"),),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ())
+        self.assertEqual(len(requested), 2)
+
+    async def test_rejects_a_redirect_before_fetching_an_unsafe_destination(self):
+        requested = []
+
+        async def fetch_media(url, _timeout_seconds):
+            requested.append(url)
+            return MediaFetchResponse(
+                302,
+                "text/html",
+                "http://video.twimg.com/internal.mp4",
+            )
+
+        codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("media", "https://pbs.twimg.com/post.mp4"),),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ("media-host-rejected",))
+        self.assertEqual(requested, ["https://pbs.twimg.com/post.mp4"])
+
+    async def test_malformed_redirect_metadata_returns_a_bounded_code(self):
+        async def fetch_media(_url, _timeout_seconds):
+            return MediaFetchResponse(302, "text/html", "https://[invalid")
+
+        codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("media", "https://pbs.twimg.com/post.mp4"),),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ("media-host-rejected",))
+
+    async def test_reports_bounded_type_timeout_and_target_limit_codes(self):
+        async def wrong_type(_url, _timeout_seconds):
+            return MediaFetchResponse(200, "text/html", None)
+
+        wrong_type_codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("avatar", "https://pbs.twimg.com/avatar.jpg"),),
+            fetch_media=wrong_type,
+            timeout_seconds=5,
+        )
+
+        async def timeout(_url, _timeout_seconds):
+            raise asyncio.TimeoutError
+
+        timeout_codes = await probe_media_targets(
+            "twitter",
+            (MediaTarget("media", "https://pbs.twimg.com/post.jpg"),),
+            fetch_media=timeout,
+            timeout_seconds=5,
+        )
+        too_many = tuple(
+            MediaTarget("media", f"https://pbs.twimg.com/{index}.jpg")
+            for index in range(17)
+        )
+        limit_codes = await probe_media_targets(
+            "twitter",
+            too_many,
+            fetch_media=wrong_type,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(wrong_type_codes, ("avatar-type-invalid",))
+        self.assertEqual(timeout_codes, ("media-timeout",))
+        self.assertEqual(limit_codes, ("media-probe-limit",))
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
@@ -500,6 +656,53 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.summary["passed"], 1)
         self.assertIn("lang=es", requested[0])
         self.assertIn("mode=gallery", requested[0])
+
+    async def test_runner_probes_rendered_media_without_reporting_its_url(self):
+        case = parse_manifest(
+            valid_manifest(
+                renderer="components-v2",
+                probeMedia=True,
+                requires=["title", "author", "timestamp", "media"],
+                mediaType="image",
+                sectionKinds=[],
+            )
+        )[0]
+        private_media_url = "https://pbs.twimg.com/private-canary.jpg"
+        media_requests = []
+
+        async def fetch_json(_url, _timeout_seconds):
+            return FetchResponse(
+                status_code=200,
+                duration_ms=5,
+                payload={
+                    "success": True,
+                    "platform": "twitter",
+                    "source": "first-party",
+                    "data": {
+                        "title": "Post",
+                        "authorName": "Creator",
+                        "url": "https://x.com/example/status/123",
+                        "timestamp": "2026-07-15T12:00:00Z",
+                        "image": private_media_url,
+                    },
+                },
+            )
+
+        async def fetch_media(url, _timeout_seconds):
+            media_requests.append(url)
+            return MediaFetchResponse(503, "text/plain", None)
+
+        report = await run_conformance(
+            [case],
+            fetch_json=fetch_json,
+            fetch_media=fetch_media,
+        )
+        serialized = json.dumps(report.to_dict())
+
+        self.assertEqual(media_requests, [private_media_url])
+        self.assertEqual(report.results[0].failure_codes, ("media-http-failed",))
+        self.assertNotIn("private-canary", serialized)
+        self.assertNotIn("pbs.twimg.com", serialized)
 
     async def test_timeout_and_http_failures_are_bounded_and_privacy_safe(self):
         cases = parse_manifest(valid_manifest())

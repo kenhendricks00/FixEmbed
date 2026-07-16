@@ -20,6 +20,8 @@ ordinary unit tests depend on the internet.
 4. Is a failure isolated to one platform or shared across the service?
 5. Did live metadata succeed but the bot's Components V2 layout lose identity,
    media, stats, structured context, footer links, or the source timestamp?
+6. Did an approved Discord-facing CDN or proxy stop returning usable image,
+   GIF, or video bytes for a rendered card?
 
 ## Commands
 
@@ -37,6 +39,8 @@ ordinary unit tests depend on the internet.
   client, privacy-safe report, and CLI.
 - `card_conformance.py`: real platform-layout registry and bounded serialized
   Components V2 checks.
+- `media_conformance.py`: typed media targets, approved CDN policy, bounded
+  byte-range fetches, and privacy-safe reachability outcomes.
 - `conformance/production.json`: reviewed public sample URLs and semantic
   expectations.
 - `tests/test_conformance.py`: offline contract and runner tests.
@@ -48,9 +52,10 @@ ordinary unit tests depend on the internet.
 Each case has a stable, non-sensitive `id`, supported `platform`, public HTTPS
 `url`, a list of semantic `requires`, an optional `mediaType`, optional
 `sectionKinds`, an explicit `allowFallback` flag, and an optional reviewed
-`renderer`. X cases may also supply allowlisted `lang` and `mode` options. Exact
-post text, counts, and media URLs are never copied into reports because those
-values legitimately change.
+`renderer`. A `probeMedia` flag opts a rendered card into bounded media delivery
+checks. X cases may also supply allowlisted `lang` and `mode` options. Exact post
+text, counts, and media URLs are never copied into reports because those values
+legitimately change.
 
 Allowed requirements are `title`, `author`, `timestamp`, `stats`, `media`, and
 `translation`.
@@ -63,6 +68,14 @@ media, stats, requested structured sections, original-link footer, source
 timestamp, and translation marker. Renderer failures use fixed codes and never
 include card text or media URLs in the report.
 
+When `probeMedia` is true, the runner extracts the media and thumbnail targets
+from the serialized card, deduplicates them, and probes at most 16 targets. Each
+request uses HTTPS, a platform-specific CDN suffix allowlist, a one-byte Range
+GET, at most three separately validated redirects, and the normal per-case
+timeout. A successful target must return HTTP 200/206 with an `image/*` or
+`video/*` content type. Failures use bounded codes for rejected hosts, timeouts,
+HTTP failures, invalid content types, target limits, and unexpected probe errors.
+
 ## Privacy and Security Boundaries
 
 - Reports contain only case ID, platform, bounded outcome codes, source mode,
@@ -70,6 +83,8 @@ include card text or media URLs in the report.
   captions, serialized cards, Discord identifiers, or raw exception messages.
 - The manifest accepts only supported HTTPS platform hosts and at most 50 cases.
 - HTTP responses are capped at 1 MiB and use a bounded per-case timeout.
+- Media probes never retain URLs, response bodies, redirect locations, or raw
+  headers; reports expose only bounded outcome codes.
 - Every run adds one opaque request nonce to all API probes so edge caches
   cannot make a stale deployment appear healthy. The nonce is never reported.
 - Normal unit tests inject a fake fetcher and never access the network.
@@ -93,6 +108,8 @@ non-zero when an emergency fallback is serving a canary.
 - Invalid or unsafe manifests fail before any network request.
 - Every supported platform has at least one production case.
 - Every production case builds the same Components V2 layout used by the bot.
+- Every production card proves its rendered remote media is retrievable from an
+  approved public CDN or FixEmbed proxy.
 - Stable X cases cover carousels, GIFs, videos, translations, and tombstones.
 - The public API exposes whether metadata came from first-party or fallback
   handling.
@@ -112,6 +129,4 @@ non-zero when an emergency fallback is serving a canary.
 
 - Add still-live, stable X quote and poll cases when reviewed public samples are
   available; do not substitute fixture-only confidence for production behavior.
-- Add media reachability checks that validate content type and byte-range
-  support without downloading complete media.
 - Feed aggregate canary history into a durable status/SLO store.

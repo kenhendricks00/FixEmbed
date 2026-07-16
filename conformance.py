@@ -17,7 +17,14 @@ import uuid
 
 import aiohttp
 
-from card_conformance import evaluate_components_v2
+from card_conformance import evaluate_components_v2, rendered_media_targets
+from media_conformance import (
+    MEDIA_PROBE_HEADERS,
+    MediaFetchResponse,
+    fetch_media_prefix,
+    fetch_media_prefix_with_session,
+    probe_media_targets,
+)
 
 
 MAX_CASES = 50
@@ -63,6 +70,7 @@ class ConformanceCase:
     allow_fallback: bool
     renderer: Optional[str]
     options: dict[str, str]
+    probe_media: bool
 
 
 @dataclass(frozen=True)
@@ -190,6 +198,11 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
             raise ManifestError("options are only supported for twitter cases")
         if "translation" in requires and "lang" not in options:
             raise ManifestError("translation requirement needs a lang option")
+        probe_media = raw_case.get("probeMedia", False)
+        if not isinstance(probe_media, bool):
+            raise ManifestError("probeMedia must be a boolean")
+        if probe_media and renderer != "components-v2":
+            raise ManifestError("probeMedia requires the components-v2 renderer")
 
         cases.append(
             ConformanceCase(
@@ -202,6 +215,7 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
                 allow_fallback=allow_fallback,
                 renderer=renderer,
                 options=options,
+                probe_media=probe_media,
             )
         )
     return tuple(cases)
@@ -367,11 +381,30 @@ async def fetch_json(url: str, timeout_seconds: float) -> FetchResponse:
             return FetchResponse(response.status, duration_ms, payload)
 
 
+def _add_failure_codes(
+    result: ConformanceResult,
+    codes: Sequence[str],
+) -> ConformanceResult:
+    if not codes:
+        return result
+    return ConformanceResult(
+        result.case_id,
+        result.platform,
+        "failed",
+        result.source,
+        result.duration_ms,
+        tuple(dict.fromkeys((*result.failure_codes, *codes))),
+    )
+
+
 async def run_conformance(
     cases: Sequence[ConformanceCase],
     *,
     base_url: str = DEFAULT_BASE_URL,
     fetch_json: Callable[[str, float], Awaitable[FetchResponse]] = fetch_json,
+    fetch_media: Optional[
+        Callable[[str, float], Awaitable[MediaFetchResponse]]
+    ] = None,
     concurrency: int = DEFAULT_CONCURRENCY,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> ConformanceReport:
@@ -381,6 +414,29 @@ async def run_conformance(
         raise ValueError("timeout must be between 1 and 60 seconds")
     semaphore = asyncio.Semaphore(concurrency)
     probe_id = uuid.uuid4().hex
+    media_session: Optional[aiohttp.ClientSession] = None
+    effective_fetch_media = fetch_media
+    if effective_fetch_media is None and any(case.probe_media for case in cases):
+        media_session = aiohttp.ClientSession(
+            headers=MEDIA_PROBE_HEADERS,
+            auto_decompress=False,
+        )
+
+        async def shared_fetch_media(
+            url: str,
+            media_timeout_seconds: float,
+        ) -> MediaFetchResponse:
+            if media_session is None:
+                raise RuntimeError("media session is unavailable")
+            return await fetch_media_prefix_with_session(
+                media_session,
+                url,
+                media_timeout_seconds,
+            )
+
+        effective_fetch_media = shared_fetch_media
+    if effective_fetch_media is None:
+        effective_fetch_media = fetch_media_prefix
 
     async def run_case(case: ConformanceCase) -> ConformanceResult:
         endpoint = build_api_url(
@@ -417,9 +473,38 @@ async def run_conformance(
                 response.duration_ms,
                 (f"http-{status_class}xx",),
             )
-        return evaluate_payload(case, response.payload, duration_ms=response.duration_ms)
+        result = evaluate_payload(case, response.payload, duration_ms=response.duration_ms)
+        if not case.probe_media or result.status == "failed":
+            return result
+        payload = response.payload
+        data = payload.get("data") if isinstance(payload, Mapping) else None
+        if not isinstance(data, Mapping):
+            return result
+        try:
+            targets = rendered_media_targets(case.platform, data)
+        except Exception:
+            return _add_failure_codes(result, ("card-render-failed",))
 
-    results = tuple(await asyncio.gather(*(run_case(case) for case in cases)))
+        async def bounded_fetch_media(
+            url: str,
+            media_timeout_seconds: float,
+        ) -> MediaFetchResponse:
+            async with semaphore:
+                return await effective_fetch_media(url, media_timeout_seconds)
+
+        media_codes = await probe_media_targets(
+            case.platform,
+            targets,
+            fetch_media=bounded_fetch_media,
+            timeout_seconds=timeout_seconds,
+        )
+        return _add_failure_codes(result, media_codes)
+
+    try:
+        results = tuple(await asyncio.gather(*(run_case(case) for case in cases)))
+    finally:
+        if media_session is not None:
+            await media_session.close()
     counts = Counter(result.status for result in results)
     summary = {status: counts[status] for status in ("passed", "degraded", "failed")}
     generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
