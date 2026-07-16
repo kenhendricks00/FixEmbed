@@ -6,9 +6,9 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { truncateText } from '../utils/fetch.ts';
+import { fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
-import { normalizePostTimestamp } from '../utils/timestamp.ts';
+import { extractPostTimestampFromHtml, normalizePostTimestamp } from '../utils/timestamp.ts';
 
 function decodeThreadsHtml(value: string): string {
     return value
@@ -51,6 +51,21 @@ async function fetchThreadsProfilePic(username: string, fallback = ''): Promise<
         return isThreadsAvatarUrl(candidate) ? candidate : fallbackPic;
     } catch {
         return fallbackPic;
+    }
+}
+
+async function fetchThreadsPostTimestamp(url: string): Promise<string | undefined> {
+    try {
+        const response = await fetchWithTimeout(url, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        }, 5000);
+        if (!response.ok) return undefined;
+        return extractPostTimestampFromHtml(await response.text());
+    } catch {
+        return undefined;
     }
 }
 
@@ -281,10 +296,12 @@ export const threadsHandler: PlatformHandler = {
             if (graphqlResult.success) {
                 const displayUsername = graphqlResult.username || username;
                 const description = graphqlResult.caption || '';
-                const authorAvatar = await fetchThreadsProfilePic(
-                    displayUsername,
-                    graphqlResult.profilePic,
-                );
+                const [authorAvatar, recoveredTimestamp] = await Promise.all([
+                    fetchThreadsProfilePic(displayUsername, graphqlResult.profilePic),
+                    graphqlResult.timestamp
+                        ? Promise.resolve(undefined)
+                        : fetchThreadsPostTimestamp(normalizedUrl),
+                ]);
 
                 // Build stats for oEmbed row
                 const statsStr = formatStats({
@@ -308,7 +325,7 @@ export const threadsHandler: PlatformHandler = {
                         color: platformColors.threads,
                         platform: 'threads',
                         stats: statsStr, // Stats shown via oEmbed author_name
-                        timestamp: graphqlResult.timestamp,
+                        timestamp: graphqlResult.timestamp || recoveredTimestamp,
                     },
                 };
 

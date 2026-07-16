@@ -5,6 +5,7 @@
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
+import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 
 interface RedditPost {
     title: string;
@@ -222,6 +223,7 @@ async function recoverFromRedditEmbed(
                         color: platformColors.reddit,
                         platform: 'reddit',
                         stats: formatStats({ comments, likes: score }),
+                        timestamp: extractPostTimestampFromHtml(html),
                     },
                 };
             }

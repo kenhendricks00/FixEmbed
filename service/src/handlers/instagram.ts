@@ -11,8 +11,8 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { normalizePostTimestamp } from '../utils/timestamp.ts';
-import { parseInstagramUrl, truncateText } from '../utils/fetch.ts';
+import { extractPostTimestampFromHtml, normalizePostTimestamp } from '../utils/timestamp.ts';
+import { fetchWithTimeout, parseInstagramUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
 // ========== VxInstagram Scraper ==========
@@ -355,6 +355,9 @@ export const instagramHandler: PlatformHandler = {
             // First-party FixEmbed path: use Instagram's own embed document and
             // render its metadata ourselves before consulting embed services.
             const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
+            if (nativeResult.data && !nativeResult.data.timestamp) {
+                nativeResult.data.timestamp = await fetchInstagramPostTimestamp(canonicalUrl);
+            }
             const nativeHasRequiredMedia = parsed.type === 'reel'
                 ? Boolean(nativeResult.data?.video)
                 : Boolean(nativeResult.data?.image || nativeResult.data?.video);
@@ -773,6 +776,21 @@ function extractInstagramTimestamp(html: string): string | undefined {
         || html.match(/<meta\b[^>]*(?:itemprop|property)=["'](?:datePublished|uploadDate|article:published_time)["'][^>]*\bcontent=["']([^"']+)["']/i)?.[1]
         || html.match(/<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*(?:itemprop|property)=["'](?:datePublished|uploadDate|article:published_time)["']/i)?.[1];
     return normalizePostTimestamp(dateValue);
+}
+
+async function fetchInstagramPostTimestamp(canonicalUrl: string): Promise<string | undefined> {
+    try {
+        const response = await fetchWithTimeout(canonicalUrl, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        }, 5000);
+        if (!response.ok) return undefined;
+        return extractPostTimestampFromHtml(await response.text());
+    } catch {
+        return undefined;
+    }
 }
 
 async function scrapeEmbedHtml(canonicalUrl: string, parsed: { type: string; shortcode: string }): Promise<HandlerResponse> {

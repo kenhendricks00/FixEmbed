@@ -12,6 +12,7 @@
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 
 interface PixivArtworkResponse {
     error?: boolean;
@@ -188,6 +189,7 @@ async function scrapePhixivHtml(illustId: string): Promise<{
     image?: string;
     description?: string;
     author?: string;
+    timestamp?: string;
     error?: string;
 }> {
     try {
@@ -226,6 +228,7 @@ async function scrapePhixivHtml(illustId: string): Promise<{
             image: ogImage,
             description: ogDesc,
             author,
+            timestamp: extractPostTimestampFromHtml(html),
         };
     } catch (error) {
         console.error('Phixiv scrape error:', error);
@@ -277,6 +280,7 @@ export const pixivHandler: PlatformHandler = {
                         image: proxyPixivImage(scrapeResult.image, env),
                         color: platformColors.pixiv,
                         platform: 'pixiv',
+                        timestamp: scrapeResult.timestamp,
                     },
                 };
             }

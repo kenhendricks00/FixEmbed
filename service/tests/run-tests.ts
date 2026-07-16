@@ -133,6 +133,35 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'threadsHandler recovers the publication time from the public post page',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url === 'https://www.threads.net/@creator') {
+                    return new Response('<meta property="og:image" content="https://scontent.example.cdninstagram.com/avatar.jpg">');
+                }
+                if (url === 'https://www.threads.net/@creator/post/ABC123') {
+                    return new Response('<script>{"taken_at":1783969200}</script>');
+                }
+                return Response.json({
+                    data: { data: { edges: [{ node: { thread_items: [{ post: {
+                        code: 'ABC123',
+                        user: { username: 'creator' },
+                        caption: { text: 'A timestamp recovery post.' },
+                    } }] } }] } },
+                });
+            };
+            try {
+                const response = await threadsHandler.handle(
+                    'https://www.threads.net/@creator/post/ABC123',
+                    env,
+                );
+                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'normalizeTwitterWebsiteCard preserves link preview metadata',
         run: () => {
             const websiteCard = normalizeTwitterWebsiteCard({
@@ -687,6 +716,9 @@ const tests: TestCase[] = [
                         { status: 200 },
                     );
                 }
+                if (url === 'https://www.instagram.com/p/Resolved123/') {
+                    return new Response('<script>{"taken_at":1783969200}</script>', { status: 200 });
+                }
                 throw new Error(`Unexpected request: ${url}`);
             };
             try {
@@ -697,7 +729,8 @@ const tests: TestCase[] = [
                 assert.equal(response.success, true);
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.url, 'https://www.instagram.com/p/Resolved123/');
-                assert.equal(requested.length, 2);
+                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
+                assert.equal(requested.length, 3);
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -729,6 +762,9 @@ const tests: TestCase[] = [
                 if (url.includes('instagram.com/p/DaneAqzR3eV/embed/captioned')) {
                     return new Response('<div class="Caption">A reel caption</div><script>{"display_url":"https:\\/\\/scontent.example.com\\/poster.jpg"}</script>', { status: 200 });
                 }
+                if (url === 'https://www.instagram.com/reel/DaneAqzR3eV/') {
+                    return new Response('<script>{"taken_at":1783695843}</script>', { status: 200 });
+                }
                 if (url.includes('vxinstagram.com/reel/DaneAqzR3eV')) {
                     return new Response('<meta property="og:video" content="https://vxinstagram.com/offload/DaneAqzR3eV/0.mp4">', { status: 200 });
                 }
@@ -741,6 +777,7 @@ const tests: TestCase[] = [
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/video\/instagram\?url=/);
                 assert.equal(response.data?.video?.thumbnail, 'https://scontent.example.com/poster.jpg');
                 assert.equal(response.data?.image, 'https://scontent.example.com/poster.jpg');
+                assert.equal(response.data?.timestamp, '2026-07-10T15:04:03.000Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -823,6 +860,7 @@ const tests: TestCase[] = [
                         <img src="https://preview.redd.it/example.png?width=591&amp;format=png">
                         <div data-testid="upvote"><faceplate-number number="218" pretty></faceplate-number></div>
                         <span>View 75 comments</span>
+                        <script>{&quot;created_timestamp&quot;:1783900800000}</script>
                     `, {
                         status: 200,
                         headers: {
@@ -848,6 +886,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.image, 'https://preview.redd.it/example.png?width=591&format=png');
                 assert.match(response.data?.stats || '', /218/);
                 assert.match(response.data?.stats || '', /75/);
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -869,7 +908,8 @@ const tests: TestCase[] = [
                         '<meta content="BiliFix / vxbilibili.com\n📺53.7萬 👍2.3萬 🪙927 ⭐6931 📤1843"property=og:site_name>'
                         + '<meta content=最棒的更新就得配上最多的bug！ property=og:title>'
                         + '<meta content=http://i1.hdslb.com/video.jpg property=og:image>'
-                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>',
+                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>'
+                        + '<script>{"pubdate":1783987200}</script>',
                         { status: 200 },
                     );
                 }
@@ -895,6 +935,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorUrl, 'https://space.bilibili.com/37093763');
                 assert.equal(response.data?.image, 'https://i1.hdslb.com/video.jpg');
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/proxy\/bilibili\?/);
+                assert.equal(response.data?.timestamp, '2026-07-14T00:00:00.000Z');
                 assert.equal(response.data?.stats, '👁️ 53.7萬 ❤️ 2.3萬 🪙 927 🔖 6931 🔁 1843');
                 assert.equal(requested.some((url) => url.includes('/oembed/video')), true);
                 assert.equal(requested.some((url) => url.includes('lang=zh-cn')), true);
@@ -1088,7 +1129,7 @@ const tests: TestCase[] = [
                 }
                 return new Response(`
                     <meta property="og:title" content="Fallback Art by (@artist)">
-                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg">
+                    <meta property="og:image" content="https://www.phixiv.net/i/fallback.jpg?mdate=1783900800">
                     <meta property="og:description" content="Fallback &amp;#44; caption">
                 `, { status: 200, headers: { 'Content-Type': 'text/html' } });
             };
@@ -1098,9 +1139,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorUrl, undefined);
                 assert.equal(
                     response.data?.image,
-                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg',
+                    'https://fixembed.app/proxy/pixiv?url=https%3A%2F%2Fwww.phixiv.net%2Fi%2Ffallback.jpg%3Fmdate%3D1783900800',
                 );
                 assert.equal(response.data?.description, 'Fallback , caption');
+                assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },

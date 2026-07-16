@@ -13,6 +13,7 @@
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 
 interface BilibiliVideoResponse {
     code?: number;
@@ -130,6 +131,7 @@ async function scrapeVxBilibili(bvid: string): Promise<{
     authorUrl?: string;
     video?: string;
     stats?: string;
+    timestamp?: string;
     error?: string;
 }> {
     try {
@@ -184,6 +186,7 @@ async function scrapeVxBilibili(bvid: string): Promise<{
             authorUrl: oembed?.author_url,
             video: ogVideo,
             stats: biliFixStats(oembed?.provider_name || ogSiteName),
+            timestamp: extractPostTimestampFromHtml(html),
         };
     } catch (error) {
         console.error('vxbilibili scrape error:', error);
@@ -273,6 +276,7 @@ export const bilibiliHandler: PlatformHandler = {
                         color: platformColors.bilibili,
                         platform: 'bilibili',
                         stats: scrapeResult.stats,
+                        timestamp: scrapeResult.timestamp,
                     },
                 };
             }
