@@ -135,7 +135,7 @@ function isFixEmbedPlaceholder(value?: string): boolean {
     return /^@?fixembed(?:\s+service)?$/i.test(value?.trim() || '');
 }
 
-const STATUS_PROBES: StatusProbe[] = [
+export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Twitter/X', sampleUrl: 'https://x.com/jack/status/20' },
     { platform: 'Instagram', sampleUrl: 'https://www.instagram.com/p/CuE2WN4oKyR/' },
     { platform: 'Reddit', sampleUrl: 'https://www.reddit.com/r/programming/comments/1d9m2ta/clean_code_means_good_code_performance_debate/' },
@@ -143,7 +143,7 @@ const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Bluesky', sampleUrl: 'https://bsky.app/profile/bsky.app/post/3mqafridzgk2e' },
     { platform: 'Pixiv', sampleUrl: 'https://www.pixiv.net/en/artworks/101844438' },
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1nhZ2YHEtL' },
-    { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+    { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/post/UgkxB5KI1XNT06XxNO5MRsRoiizikWHv7gAy' },
     { platform: 'Pinterest', sampleUrl: 'https://www.pinterest.com/pin/424605071145119869/' },
 ];
 
@@ -1445,6 +1445,7 @@ app.get('/api/embed', async (c) => {
         return c.json({
             success: true,
             platform: handler.name,
+            source: result.source,
             data: result.data,
         });
     } catch (error) {

@@ -40,6 +40,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Privacy-Safe Conversion Quality**: Reliability highlights local rich-card rate, link fallbacks, recent p95 build latency, and bounded failure categories without retaining links, post content, or member data.
 - **Discord Delivery Diagnostics**: Reliability separates direct sends, component-to-link rescues, complete delivery failures, pending queue depth, and recent p95 delivery latency without retaining channel, message, or member data.
 - **Permission-Aware Delivery**: If delete or suppress mode lacks Manage Messages, FixEmbed keeps the original and still replies with the fixed card; Settings, Debug, and Reliability explain the recovery.
+- **Continuous Embed Conformance**: Scheduled privacy-safe canaries verify author, original timestamp, stats, media type, and structured card sections across every supported platform.
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 
@@ -105,6 +106,16 @@ cp .env.example .env
 docker pull kenhendricks00/fixembed:latest
 docker run --env-file .env -d kenhendricks00/fixembed:latest
 ```
+
+Operators can run the same semantic production canaries used by FixEmbed:
+
+```bash
+python conformance.py --manifest conformance/production.json --fail-on-degraded
+```
+
+The bounded JSON report contains case IDs, platform names, source mode,
+latency, and fixed outcome codes only. It never includes source URLs, post
+content, usernames, or raw upstream errors.
 
 # 💬 Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.

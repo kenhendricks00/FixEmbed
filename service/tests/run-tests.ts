@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import app from '../src/index.ts';
+import app, { STATUS_PROBES } from '../src/index.ts';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
 import { normalizeTwitterWebsiteCard } from '../src/handlers/twitter_graphql.ts';
@@ -1680,13 +1680,14 @@ const tests: TestCase[] = [
                     {},
                     env,
                 );
-                const payload = await response.json() as { data?: {
+                const payload = await response.json() as { source?: string; data?: {
                     description?: string;
                     stats?: string;
                     images?: string[];
                 } };
 
                 assert.equal(response.status, 200);
+                assert.equal(payload.source, 'first-party');
                 assert.equal(payload.data?.description, '');
                 assert.equal(payload.data?.stats, undefined);
                 assert.deepEqual(payload.data?.images, [
@@ -2242,6 +2243,7 @@ const tests: TestCase[] = [
 
                 assert.equal(response.status, 200);
                 assert.equal(body.success, true);
+                assert.equal(body.source, 'fallback');
                 assert.equal(body.data.authorHandle, '@kuriimu0203');
                 assert.equal(
                     body.data.authorAvatar,
@@ -2395,6 +2397,21 @@ const tests: TestCase[] = [
                 assert.equal(response.status, 204);
                 assert.equal(discordCalled, false);
             } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'status probes cover every handler and exercise YouTube community posts',
+        run: () => {
+            assert.equal(STATUS_PROBES.length, 9);
+            assert.equal(
+                new Set(STATUS_PROBES.map((probe) => probe.platform)).size,
+                STATUS_PROBES.length,
+            );
+            for (const probe of STATUS_PROBES) {
+                assert.ok(findHandler(probe.sampleUrl), probe.platform);
+            }
+            const youtube = STATUS_PROBES.find((probe) => probe.platform === 'YouTube');
+            assert.match(youtube?.sampleUrl || '', /youtube\.com\/post\//);
         },
     },
     {

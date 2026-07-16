@@ -71,6 +71,10 @@ GET /api/embed?url=<social-media-url>
 ```
 Returns JSON with structured embed data.
 
+Successful responses include `platform`, `source` (`first-party` or
+`fallback`), and `data`. The source field is suitable for operational health
+checks; clients should continue rendering valid fallback data when available.
+
 ### Platform Routes
 Direct URL patterns for easy use:
 ```

@@ -1,0 +1,53 @@
+name: Production embed canaries
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-embed-canaries
+  cancel-in-progress: false
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Probe production card contracts
+        id: canary
+        continue-on-error: true
+        run: >-
+          python conformance.py
+          --manifest conformance/production.json
+          --output conformance-report.json
+          --fail-on-degraded
+      - name: Publish bounded report to the job summary
+        if: always() && hashFiles('conformance-report.json') != ''
+        run: |
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat conformance-report.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload bounded report
+        if: always() && hashFiles('conformance-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-conformance-report
+          path: conformance-report.json
+          retention-days: 14
+      - name: Enforce canary outcome
+        if: always()
+        run: |
+          if [ "${{ steps.canary.outcome }}" != "success" ]; then
+            echo "Production embed conformance failed. Review the bounded report above."
+            exit 1
+          fi

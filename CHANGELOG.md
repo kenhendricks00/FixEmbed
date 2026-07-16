@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Continuous embed conformance**
+- Added an offline-tested semantic canary runner and reviewed production manifest covering all nine Worker platforms.
+- Scheduled six-hour production checks for author, original timestamp, stats, media type, and structured-section contracts, with bounded privacy-safe reports retained for 14 days.
+- Added first-party/fallback provenance to the public JSON embed API and corrected YouTube health checks to exercise community posts instead of ordinary videos.
+
 #### **Permission-aware delivery recovery**
 - Automatically falls back from delete/suppress to reply mode when Manage Messages is unavailable, preserving the fixed card instead of aborting conversion.
 - Handles permission changes between preflight and Discord API calls without losing queued cards.
