@@ -4,6 +4,7 @@ from delivery_policy import (
     apply_source_message_action,
     format_delivery_mode_status,
     resolve_delivery_mode,
+    should_apply_source_message_action,
 )
 
 
@@ -152,6 +153,28 @@ class DeliveryPolicyTests(unittest.IsolatedAsyncioTestCase):
                 forbidden_errors=(PermissionError,),
                 on_permission_recovery=lambda reason: None,
             )
+
+    def test_source_mutation_waits_for_successful_replacement_delivery(self):
+        for mode in ("delete", "suppress"):
+            with self.subTest(mode=mode):
+                self.assertTrue(
+                    should_apply_source_message_action(
+                        mode,
+                        ("direct", "rescued"),
+                    )
+                )
+
+    def test_failed_or_missing_replacements_preserve_the_source_message(self):
+        for outcomes in ((), ("failed",), ("direct", "failed"), ("unknown",)):
+            with self.subTest(outcomes=outcomes):
+                self.assertFalse(
+                    should_apply_source_message_action("suppress", outcomes)
+                )
+
+    def test_reply_mode_never_mutates_the_source_after_delivery(self):
+        self.assertFalse(
+            should_apply_source_message_action("reply", ("direct",))
+        )
 
 
 if __name__ == "__main__":

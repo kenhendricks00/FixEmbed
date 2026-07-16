@@ -59,6 +59,7 @@ from delivery_policy import (
     apply_source_message_action,
     format_delivery_mode_status,
     resolve_delivery_mode,
+    should_apply_source_message_action,
 )
 from premium_roles import (
     reconcile_supporter_roles,
@@ -230,9 +231,11 @@ async def rate_limited_send(
     fallback_content=None,
 ):
     ticket = delivery_telemetry.queued("card" if view is not None else "link")
+    completion = asyncio.get_running_loop().create_future()
     await SEND_QUEUE.put(
         (
             ticket,
+            completion,
             channel,
             content,
             embed,
@@ -242,11 +245,13 @@ async def rate_limited_send(
             fallback_content,
         )
     )
+    return await asyncio.shield(completion)
 
 async def send_worker():
     while True:
         (
             ticket,
+            completion,
             channel,
             content,
             embed,
@@ -284,14 +289,22 @@ async def send_worker():
                     silent=True,
                 )
 
-            await deliver_with_fallback(
+            outcome = await deliver_with_fallback(
                 ticket,
                 telemetry=delivery_telemetry,
                 primary_send=primary_send,
                 fallback_send=fallback_send if fallback_content else None,
             )
+            if not completion.done():
+                completion.set_result(outcome)
+        except asyncio.CancelledError:
+            if not completion.done():
+                completion.cancel()
+            raise
         except Exception as error:
             delivery_telemetry.failed(ticket, error)
+            if not completion.done():
+                completion.set_result("failed")
         finally:
             SEND_QUEUE.task_done()
 
@@ -2031,6 +2044,7 @@ async def on_message(message):
                     return await message.edit(suppress=True)
 
                 if effective_delivery_mode == "delete":
+                    delivery_outcomes = []
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
                         formatted_links.append(f"Sent by {sender}")
@@ -2044,40 +2058,55 @@ async def on_message(message):
                         replied_user=False,
                     )
                     for chunk in chunk_lines(formatted_links):
-                        await rate_limited_send(
-                            message.channel,
-                            content=chunk,
-                            allowed_mentions=allowed_mentions,
+                        delivery_outcomes.append(
+                            await rate_limited_send(
+                                message.channel,
+                                content=chunk,
+                                allowed_mentions=allowed_mentions,
+                            )
                         )
                     for layout, automatic_url in component_layouts:
-                        await rate_limited_send(
-                            message.channel,
-                            view=layout,
-                            fallback_content=automatic_url,
-                            allowed_mentions=allowed_mentions,
+                        delivery_outcomes.append(
+                            await rate_limited_send(
+                                message.channel,
+                                view=layout,
+                                fallback_content=automatic_url,
+                                allowed_mentions=allowed_mentions,
+                            )
                         )
-                    await apply_source_message_action(
-                        "delete",
-                        delete_message=message.delete,
-                        suppress_message=suppress_source_message,
-                        forbidden_errors=(discord.Forbidden,),
-                        on_permission_recovery=delivery_telemetry.mode_downgraded,
-                    )
+                    if should_apply_source_message_action(
+                        "delete", delivery_outcomes
+                    ):
+                        await apply_source_message_action(
+                            "delete",
+                            delete_message=message.delete,
+                            suppress_message=suppress_source_message,
+                            forbidden_errors=(discord.Forbidden,),
+                            on_permission_recovery=delivery_telemetry.mode_downgraded,
+                        )
                 elif effective_delivery_mode == "suppress":
-                    await apply_source_message_action(
-                        "suppress",
-                        delete_message=message.delete,
-                        suppress_message=suppress_source_message,
-                        forbidden_errors=(discord.Forbidden,),
-                        on_permission_recovery=delivery_telemetry.mode_downgraded,
-                    )
+                    delivery_outcomes = []
                     for chunk in chunk_lines(formatted_links):
-                        await rate_limited_send(message.channel, content=chunk)
+                        delivery_outcomes.append(
+                            await rate_limited_send(message.channel, content=chunk)
+                        )
                     for layout, automatic_url in component_layouts:
-                        await rate_limited_send(
-                            message.channel,
-                            view=layout,
-                            fallback_content=automatic_url,
+                        delivery_outcomes.append(
+                            await rate_limited_send(
+                                message.channel,
+                                view=layout,
+                                fallback_content=automatic_url,
+                            )
+                        )
+                    if should_apply_source_message_action(
+                        "suppress", delivery_outcomes
+                    ):
+                        await apply_source_message_action(
+                            "suppress",
+                            delete_message=message.delete,
+                            suppress_message=suppress_source_message,
+                            forbidden_errors=(discord.Forbidden,),
+                            on_permission_recovery=delivery_telemetry.mode_downgraded,
                         )
                 else:
                     for chunk in chunk_lines(formatted_links):

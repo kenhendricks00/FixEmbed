@@ -151,7 +151,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
         async def fallback_send():
             calls.append("fallback")
 
-        await deliver_with_fallback(
+        outcome = await deliver_with_fallback(
             ticket,
             telemetry=telemetry,
             primary_send=primary_send,
@@ -159,6 +159,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(calls, ["primary"])
+        self.assertEqual(outcome, "direct")
         self.assertEqual(telemetry.snapshot().direct_deliveries, 1)
 
     async def test_delivery_orchestrator_rescues_failed_component_with_link(self):
@@ -172,7 +173,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             return None
 
         with self.assertLogs("fixembed.delivery", level="WARNING"):
-            await deliver_with_fallback(
+            outcome = await deliver_with_fallback(
                 ticket,
                 telemetry=telemetry,
                 primary_send=primary_send,
@@ -180,6 +181,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         snapshot = telemetry.snapshot()
+        self.assertEqual(outcome, "rescued")
         self.assertEqual(snapshot.link_rescues, 1)
         self.assertEqual(snapshot.failed, 0)
 
@@ -194,7 +196,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             raise ResponseError(403)
 
         with self.assertLogs("fixembed.delivery", level="ERROR"):
-            await deliver_with_fallback(
+            outcome = await deliver_with_fallback(
                 ticket,
                 telemetry=telemetry,
                 primary_send=primary_send,
@@ -202,6 +204,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         snapshot = telemetry.snapshot()
+        self.assertEqual(outcome, "failed")
         self.assertEqual(snapshot.link_rescues, 0)
         self.assertEqual(snapshot.failed, 1)
         self.assertEqual(snapshot.primary_failure, "forbidden")
@@ -214,7 +217,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             raise ResponseError(404)
 
         with self.assertLogs("fixembed.delivery", level="ERROR"):
-            await deliver_with_fallback(
+            outcome = await deliver_with_fallback(
                 ticket,
                 telemetry=telemetry,
                 primary_send=primary_send,
@@ -222,6 +225,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         snapshot = telemetry.snapshot()
+        self.assertEqual(outcome, "failed")
         self.assertEqual(snapshot.failed, 1)
         self.assertEqual(snapshot.primary_failure, "not_found")
 

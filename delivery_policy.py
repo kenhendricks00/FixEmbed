@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Optional
 
@@ -13,6 +13,7 @@ DELIVERY_MODE_LABELS = {
     "suppress": "Suppress original",
     "reply": "Keep original and reply",
 }
+SUCCESSFUL_DELIVERY_OUTCOMES = frozenset({"direct", "rescued"})
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,21 @@ def format_delivery_mode_status(decision: DeliveryModeDecision) -> str:
             "message and reply with the fixed card."
         )
     return "\n".join(lines)
+
+
+def should_apply_source_message_action(
+    mode: str,
+    delivery_outcomes: Sequence[str],
+) -> bool:
+    """Mutate the source only after every replacement reached Discord."""
+    if mode == "reply":
+        return False
+    if mode not in {"delete", "suppress"}:
+        raise ValueError("unsupported delivery mode")
+    return bool(delivery_outcomes) and all(
+        outcome in SUCCESSFUL_DELIVERY_OUTCOMES
+        for outcome in delivery_outcomes
+    )
 
 
 async def apply_source_message_action(

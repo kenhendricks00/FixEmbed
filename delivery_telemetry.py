@@ -12,7 +12,7 @@ import time
 from collections import Counter, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal, Optional
 
 
 DELIVERY_KINDS = frozenset({"card", "link"})
@@ -233,22 +233,25 @@ async def deliver_with_fallback(
     telemetry: DeliveryTelemetry,
     primary_send: Callable[[], Awaitable[object]],
     fallback_send: Optional[Callable[[], Awaitable[object]]],
-) -> None:
+) -> Literal["direct", "rescued", "failed"]:
     """Run one queued send and record exactly one terminal delivery outcome."""
     try:
         await primary_send()
     except Exception as error:
         if fallback_send is None:
             telemetry.failed(ticket, error)
-            return
+            return "failed"
         try:
             await fallback_send()
         except Exception as fallback_error:
             telemetry.failed(ticket, fallback_error)
+            return "failed"
         else:
             telemetry.link_rescued(ticket, error)
+            return "rescued"
     else:
         telemetry.delivered(ticket)
+        return "direct"
 
 
 def format_delivery_health(snapshot: DeliverySnapshot, *, pending: int) -> str:
