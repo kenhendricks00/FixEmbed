@@ -217,6 +217,30 @@ async function fetchBilibiliPostTimestamp(bvid: string): Promise<string | undefi
     }
 
     try {
+        const searchUrl = 'https://api.bilibili.com/x/web-interface/wbi/search/type'
+            + `?search_type=video&keyword=${encodeURIComponent(bvid)}`;
+        const response = await fetchWithTimeout(searchUrl, {
+            headers: {
+                'Accept': 'application/json',
+                'Referer': 'https://search.bilibili.com/',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+            },
+        }, 5000);
+        if (response.ok) {
+            const payload = await response.json() as {
+                code?: number;
+                data?: { result?: Array<{ bvid?: string; pubdate?: number }> };
+            };
+            const match = payload.code === 0
+                ? payload.data?.result?.find(item => item.bvid?.toUpperCase() === bvid.toUpperCase())
+                : undefined;
+            if (match?.pubdate) return new Date(match.pubdate * 1000).toISOString();
+        }
+    } catch {
+        // The mobile page is the final first-party timestamp source.
+    }
+
+    try {
         const response = await fetchWithTimeout(`https://m.bilibili.com/video/${encodeURIComponent(bvid)}`, {
             headers: {
                 'Accept': 'text/html,application/xhtml+xml',

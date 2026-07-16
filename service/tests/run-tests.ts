@@ -948,8 +948,10 @@ const tests: TestCase[] = [
                 if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
                     return new Response('<script>{"pubdate":1783987200}</script>', { status: 200 });
                 }
-                if (url.includes('api.bilibili.com/x/web-interface/view') && url.includes('platform=html5')) {
-                    return new Response('', { status: 412 });
+                if (url.includes('api.bilibili.com/x/web-interface/wbi/search/type')) {
+                    return Response.json({ code: 0, data: { result: [
+                        { bvid: 'BV1p3Nc6pEoP', pubdate: 1783987200 },
+                    ] } });
                 }
                 if (url.includes('vxbilibili.com/oembed/video')) {
                     return new Response(JSON.stringify({
