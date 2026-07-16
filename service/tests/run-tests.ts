@@ -14,6 +14,7 @@ import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts'
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
+import { extractPostTimestampFromHtml } from '../src/utils/timestamp.ts';
 import {
     docsHtml,
     indexHtml,
@@ -64,6 +65,28 @@ async function topGgSignature(body: string, secret: string, timestamp: number): 
 }
 
 const tests: TestCase[] = [
+    {
+        name: 'extractPostTimestampFromHtml recognizes bounded platform publication fields',
+        run: () => {
+            assert.equal(
+                extractPostTimestampFromHtml('<script>{"datePublished":"2026-06-19T16:00:00-07:00"}</script>'),
+                '2026-06-19T23:00:00.000Z',
+            );
+            assert.equal(
+                extractPostTimestampFromHtml('&quot;created_timestamp&quot;:1717690529477'),
+                '2024-06-06T16:15:29.477Z',
+            );
+            assert.equal(
+                extractPostTimestampFromHtml('<script>{"pubdate":1743681148}</script>'),
+                '2025-04-03T11:52:28.000Z',
+            );
+            assert.equal(
+                extractPostTimestampFromHtml('<meta property="og:image" content="https://i.pximg.net/img.jpg?mdate=1665435823">'),
+                '2022-10-10T21:03:43.000Z',
+            );
+            assert.equal(extractPostTimestampFromHtml('timestamp="1784202091997"'), undefined);
+        },
+    },
     {
         name: 'threadsHandler preserves full post text and creator identity metadata',
         run: async () => {
@@ -1040,7 +1063,10 @@ const tests: TestCase[] = [
                     },
                 },
             };
-            const html = `<script>var ytInitialData = ${JSON.stringify(renderer)};</script>`;
+            const html = [
+                `<script>var ytInitialData = ${JSON.stringify(renderer)};</script>`,
+                '<script type="application/ld+json">{"datePublished":"2026-06-19T16:00:00-07:00"}</script>',
+            ].join('');
 
             const data = parseYouTubeCommunityPostHtml(
                 html,
@@ -1048,6 +1074,7 @@ const tests: TestCase[] = [
             );
 
             assert.equal(data?.description, longText);
+            assert.equal(data?.timestamp, '2026-06-19T23:00:00.000Z');
         },
     },
     {
