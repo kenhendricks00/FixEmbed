@@ -197,6 +197,26 @@ async function scrapeVxBilibili(bvid: string): Promise<{
 
 async function fetchBilibiliPostTimestamp(bvid: string): Promise<string | undefined> {
     try {
+        const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}&platform=html5`;
+        const response = await fetchWithTimeout(apiUrl, {
+            headers: {
+                'Accept': 'application/json',
+                'Referer': `https://www.bilibili.com/video/${bvid}`,
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+            },
+        }, 5000);
+        if (response.ok) {
+            const payload = await response.json() as BilibiliVideoResponse;
+            const timestamp = payload.data?.pubdate
+                ? new Date(payload.data.pubdate * 1000).toISOString()
+                : undefined;
+            if (timestamp) return timestamp;
+        }
+    } catch {
+        // The mobile page remains available when Bilibili blocks this API shape.
+    }
+
+    try {
         const response = await fetchWithTimeout(`https://m.bilibili.com/video/${encodeURIComponent(bvid)}`, {
             headers: {
                 'Accept': 'text/html,application/xhtml+xml',

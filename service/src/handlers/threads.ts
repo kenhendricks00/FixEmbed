@@ -369,6 +369,7 @@ export const threadsHandler: PlatformHandler = {
                             image: data.thumbnail_url,
                             color: platformColors.threads,
                             platform: 'threads',
+                            timestamp: deriveMetaShortcodeTimestamp(postCode),
                         },
                     };
                 }
@@ -391,6 +392,7 @@ export const threadsHandler: PlatformHandler = {
                     authorAvatar,
                     color: platformColors.threads,
                     platform: 'threads',
+                    timestamp: deriveMetaShortcodeTimestamp(postCode),
                 },
             };
         } catch (error) {

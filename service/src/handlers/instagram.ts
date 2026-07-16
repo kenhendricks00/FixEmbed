@@ -356,12 +356,13 @@ export const instagramHandler: PlatformHandler = {
         }
 
         try {
+            const shortcodeTimestamp = deriveMetaShortcodeTimestamp(parsed.shortcode);
             // First-party FixEmbed path: use Instagram's own embed document and
             // render its metadata ourselves before consulting embed services.
             const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
             if (nativeResult.data && !nativeResult.data.timestamp) {
                 nativeResult.data.timestamp = await fetchInstagramPostTimestamp(canonicalUrl);
-                nativeResult.data.timestamp ||= deriveMetaShortcodeTimestamp(parsed.shortcode);
+                nativeResult.data.timestamp ||= shortcodeTimestamp;
             }
             const nativeHasRequiredMedia = parsed.type === 'reel'
                 ? Boolean(nativeResult.data?.video)
@@ -391,7 +392,7 @@ export const instagramHandler: PlatformHandler = {
                         authorUrl: metadata?.authorUrl,
                         authorAvatar: metadata?.authorAvatar,
                         stats: metadata?.stats,
-                        timestamp: metadata?.timestamp,
+                        timestamp: metadata?.timestamp || shortcodeTimestamp,
                         video: {
                             url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(vxResult.video)}`,
                             width: 720,
@@ -438,7 +439,7 @@ export const instagramHandler: PlatformHandler = {
                         authorHandle = embedInfo.data.authorHandle;
                         authorUrl = embedInfo.data.authorUrl;
                         authorAvatar = embedInfo.data.authorAvatar;
-                        timestamp = embedInfo.data.timestamp || deriveMetaShortcodeTimestamp(parsed.shortcode);
+                        timestamp = embedInfo.data.timestamp || shortcodeTimestamp;
                     }
                 } catch (e) {
                     console.warn('Failed to fetch carousel metadata:', e);
@@ -489,7 +490,7 @@ export const instagramHandler: PlatformHandler = {
                         authorHandle,
                         authorUrl,
                         authorAvatar,
-                        timestamp,
+                        timestamp: timestamp || shortcodeTimestamp,
                         image: vxResult.image, // This is the composite carousel image from vxinstagram
                         color: platformColors.instagram,
                         platform: 'instagram',

@@ -29,7 +29,7 @@ interface PixivArtworkResponse {
         createDate?: string;
         urls?: { regular?: string; original?: string };
         profileImageUrl?: string;
-        userIllusts?: Record<string, { profileImageUrl?: string }>;
+        userIllusts?: Record<string, { profileImageUrl?: string } | null>;
     };
 }
 
@@ -80,7 +80,7 @@ function findPixivProfileImage(
 ): string | undefined {
     return artwork.profileImageUrl
         || artwork.userIllusts?.[illustId]?.profileImageUrl
-        || Object.values(artwork.userIllusts || {}).find(work => work.profileImageUrl)?.profileImageUrl;
+        || Object.values(artwork.userIllusts || {}).find(work => work?.profileImageUrl)?.profileImageUrl;
 }
 
 async function fetchPixivArtwork(illustId: string, env: Env): Promise<HandlerResponse | null> {

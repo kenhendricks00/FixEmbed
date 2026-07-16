@@ -168,6 +168,33 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'threadsHandler keeps shortcode time when GraphQL falls back to oEmbed',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url === 'https://www.threads.net/api/graphql') {
+                    return Response.json({ data: { data: { edges: [] } } });
+                }
+                if (url.includes('threads.net/oembed/')) {
+                    return Response.json({ author_name: 'zuck', title: 'An older thread' });
+                }
+                if (url === 'https://www.threads.net/@zuck') {
+                    return new Response('<meta property="og:image" content="https://cdn.example/avatar.jpg">');
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await threadsHandler.handle(
+                    'https://www.threads.net/@zuck/post/Cu8M4wXLZQx',
+                    env,
+                );
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.timestamp, '2023-07-21T01:16:38.791Z');
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'normalizeTwitterWebsiteCard preserves link preview metadata',
         run: () => {
             const websiteCard = normalizeTwitterWebsiteCard({
@@ -465,7 +492,7 @@ const tests: TestCase[] = [
                     viewCount: 500, commentCount: 2, createDate: '2026-07-13T19:00:00.000Z',
                     urls: { regular: 'https://i.pximg.net/img-original/artwork.jpg' },
                     userIllusts: {
-                        '123': {},
+                        '123': null,
                         '122': { profileImageUrl: 'https://i.pximg.net/user-profile/avatar.jpg' },
                     },
                 } }), { status: 200 });
@@ -920,6 +947,9 @@ const tests: TestCase[] = [
                 }
                 if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
                     return new Response('<script>{"pubdate":1783987200}</script>', { status: 200 });
+                }
+                if (url.includes('api.bilibili.com/x/web-interface/view') && url.includes('platform=html5')) {
+                    return new Response('', { status: 412 });
                 }
                 if (url.includes('vxbilibili.com/oembed/video')) {
                     return new Response(JSON.stringify({
