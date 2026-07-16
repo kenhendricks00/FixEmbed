@@ -17,6 +17,7 @@ from typing import Literal, Optional
 
 DELIVERY_KINDS = frozenset({"card", "link"})
 DOWNGRADE_REASONS = frozenset({"missing_manage_messages"})
+DEFAULT_DELIVERY_ATTEMPT_TIMEOUT_SECONDS = 15.0
 FAILURE_LABELS = {
     "timeout": "Timeout",
     "forbidden": "Missing permissions",
@@ -233,16 +234,25 @@ async def deliver_with_fallback(
     telemetry: DeliveryTelemetry,
     primary_send: Callable[[], Awaitable[object]],
     fallback_send: Optional[Callable[[], Awaitable[object]]],
+    attempt_timeout_seconds: float = DEFAULT_DELIVERY_ATTEMPT_TIMEOUT_SECONDS,
 ) -> Literal["direct", "rescued", "failed"]:
     """Run one queued send and record exactly one terminal delivery outcome."""
+    if (
+        not math.isfinite(attempt_timeout_seconds)
+        or attempt_timeout_seconds <= 0
+    ):
+        raise ValueError("delivery attempt timeout must be positive and finite")
     try:
-        await primary_send()
+        await asyncio.wait_for(primary_send(), timeout=attempt_timeout_seconds)
     except Exception as error:
         if fallback_send is None:
             telemetry.failed(ticket, error)
             return "failed"
         try:
-            await fallback_send()
+            await asyncio.wait_for(
+                fallback_send(),
+                timeout=attempt_timeout_seconds,
+            )
         except Exception as fallback_error:
             telemetry.failed(ticket, fallback_error)
             return "failed"

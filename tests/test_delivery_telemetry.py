@@ -266,6 +266,70 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(telemetry.snapshot().completed, 0)
 
+    async def test_delivery_orchestrator_rescues_a_stalled_primary_send(self):
+        telemetry = DeliveryTelemetry()
+        ticket = telemetry.queued("card")
+        fallback_calls = []
+
+        async def primary_send():
+            await asyncio.Event().wait()
+
+        async def fallback_send():
+            fallback_calls.append("fallback")
+
+        with self.assertLogs("fixembed.delivery", level="WARNING"):
+            outcome = await deliver_with_fallback(
+                ticket,
+                telemetry=telemetry,
+                primary_send=primary_send,
+                fallback_send=fallback_send,
+                attempt_timeout_seconds=0.01,
+            )
+
+        self.assertEqual(outcome, "rescued")
+        self.assertEqual(fallback_calls, ["fallback"])
+        self.assertEqual(telemetry.snapshot().primary_failure, "timeout")
+
+    async def test_delivery_orchestrator_bounds_a_stalled_link_fallback(self):
+        telemetry = DeliveryTelemetry()
+        ticket = telemetry.queued("card")
+
+        async def primary_send():
+            raise ResponseError(500)
+
+        async def fallback_send():
+            await asyncio.Event().wait()
+
+        with self.assertLogs("fixembed.delivery", level="ERROR"):
+            outcome = await deliver_with_fallback(
+                ticket,
+                telemetry=telemetry,
+                primary_send=primary_send,
+                fallback_send=fallback_send,
+                attempt_timeout_seconds=0.01,
+            )
+
+        self.assertEqual(outcome, "failed")
+        self.assertEqual(telemetry.snapshot().primary_failure, "timeout")
+
+    async def test_delivery_orchestrator_rejects_an_invalid_timeout(self):
+        telemetry = DeliveryTelemetry()
+        ticket = telemetry.queued("link")
+
+        async def primary_send():
+            return None
+
+        with self.assertRaisesRegex(ValueError, "positive and finite"):
+            await deliver_with_fallback(
+                ticket,
+                telemetry=telemetry,
+                primary_send=primary_send,
+                fallback_send=None,
+                attempt_timeout_seconds=0,
+            )
+
+        self.assertEqual(telemetry.snapshot().completed, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
