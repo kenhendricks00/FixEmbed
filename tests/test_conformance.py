@@ -217,6 +217,10 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([result.case_id for result in report.results], ["x-carousel", "x-second"])
         self.assertIn("url=https%3A%2F%2Fx.com%2Fexample%2Fstatus%2F123", requested[0][0])
         self.assertIn("%3Flang%3Den", requested[1][0])
+        first_probe = requested[0][0].split("_conformance=", 1)[1]
+        second_probe = requested[1][0].split("_conformance=", 1)[1]
+        self.assertTrue(first_probe)
+        self.assertEqual(first_probe, second_probe)
         self.assertEqual(requested[0][1], 7)
         self.assertEqual(report.summary, {"passed": 2, "degraded": 0, "failed": 0})
 

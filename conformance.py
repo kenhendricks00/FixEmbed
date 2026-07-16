@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 from typing import Any, Optional
 from urllib.parse import urlencode, urlparse
+import uuid
 
 import aiohttp
 
@@ -255,14 +256,17 @@ def evaluate_payload(
     )
 
 
-def build_api_url(base_url: str, source_url: str) -> str:
+def build_api_url(base_url: str, source_url: str, *, probe_id: Optional[str] = None) -> str:
     parsed = urlparse(base_url)
     local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     if parsed.scheme != "https" and not local_http:
         raise ValueError("conformance base URL must use HTTPS")
     if not parsed.hostname:
         raise ValueError("conformance base URL is invalid")
-    return f"{base_url.rstrip('/')}/api/embed?{urlencode({'url': source_url})}"
+    query = {"url": source_url}
+    if probe_id:
+        query["_conformance"] = probe_id
+    return f"{base_url.rstrip('/')}/api/embed?{urlencode(query)}"
 
 
 async def fetch_json(url: str, timeout_seconds: float) -> FetchResponse:
@@ -300,9 +304,10 @@ async def run_conformance(
     if not 1 <= timeout_seconds <= 60:
         raise ValueError("timeout must be between 1 and 60 seconds")
     semaphore = asyncio.Semaphore(concurrency)
+    probe_id = uuid.uuid4().hex
 
     async def run_case(case: ConformanceCase) -> ConformanceResult:
-        endpoint = build_api_url(base_url, case.source_url)
+        endpoint = build_api_url(base_url, case.source_url, probe_id=probe_id)
         async with semaphore:
             try:
                 response = await fetch_json(endpoint, timeout_seconds)

@@ -57,6 +57,8 @@ must match the Worker's bounded section vocabulary.
   captions, Discord identifiers, or raw exception messages.
 - The manifest accepts only supported HTTPS platform hosts and at most 50 cases.
 - HTTP responses are capped at 1 MiB and use a bounded per-case timeout.
+- Every run adds one opaque request nonce to all API probes so edge caches
+  cannot make a stale deployment appear healthy. The nonce is never reported.
 - Normal unit tests inject a fake fetcher and never access the network.
 - Production traffic is opt-in through the CLI or scheduled canary workflow.
 
