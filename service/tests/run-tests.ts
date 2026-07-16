@@ -14,7 +14,7 @@ import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts'
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
-import { extractPostTimestampFromHtml } from '../src/utils/timestamp.ts';
+import { deriveMetaShortcodeTimestamp, extractPostTimestampFromHtml } from '../src/utils/timestamp.ts';
 import {
     docsHtml,
     indexHtml,
@@ -84,6 +84,15 @@ const tests: TestCase[] = [
                 extractPostTimestampFromHtml('<meta property="og:image" content="https://i.pximg.net/img.jpg?mdate=1665435823">'),
                 '2022-10-10T21:03:43.000Z',
             );
+            assert.equal(
+                extractPostTimestampFromHtml('https://i.pximg.net/img-original/img/2022/10/11/06/03/43/101844438_p0.png'),
+                '2022-10-10T21:03:43.000Z',
+            );
+            assert.equal(
+                deriveMetaShortcodeTimestamp('Cu8M4wXLZQx'),
+                '2023-07-21T01:16:38.791Z',
+            );
+            assert.equal(deriveMetaShortcodeTimestamp('not valid!'), undefined);
             assert.equal(extractPostTimestampFromHtml('timestamp="1784202091997"'), undefined);
         },
     },
@@ -133,7 +142,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'threadsHandler recovers the publication time from the public post page',
+        name: 'threadsHandler recovers publication time from the post shortcode',
         run: async () => {
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async (input) => {
@@ -141,12 +150,9 @@ const tests: TestCase[] = [
                 if (url === 'https://www.threads.net/@creator') {
                     return new Response('<meta property="og:image" content="https://scontent.example.cdninstagram.com/avatar.jpg">');
                 }
-                if (url === 'https://www.threads.net/@creator/post/ABC123') {
-                    return new Response('<script>{"taken_at":1783969200}</script>');
-                }
                 return Response.json({
                     data: { data: { edges: [{ node: { thread_items: [{ post: {
-                        code: 'ABC123',
+                        code: 'Cu8M4wXLZQx',
                         user: { username: 'creator' },
                         caption: { text: 'A timestamp recovery post.' },
                     } }] } }] } },
@@ -154,10 +160,10 @@ const tests: TestCase[] = [
             };
             try {
                 const response = await threadsHandler.handle(
-                    'https://www.threads.net/@creator/post/ABC123',
+                    'https://www.threads.net/@creator/post/Cu8M4wXLZQx',
                     env,
                 );
-                assert.equal(response.data?.timestamp, '2026-07-13T19:00:00.000Z');
+                assert.equal(response.data?.timestamp, '2023-07-21T01:16:38.791Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -763,7 +769,7 @@ const tests: TestCase[] = [
                     return new Response('<div class="Caption">A reel caption</div><script>{"display_url":"https:\\/\\/scontent.example.com\\/poster.jpg"}</script>', { status: 200 });
                 }
                 if (url === 'https://www.instagram.com/reel/DaneAqzR3eV/') {
-                    return new Response('<script>{"taken_at":1783695843}</script>', { status: 200 });
+                    return new Response('', { status: 429 });
                 }
                 if (url.includes('vxinstagram.com/reel/DaneAqzR3eV')) {
                     return new Response('<meta property="og:video" content="https://vxinstagram.com/offload/DaneAqzR3eV/0.mp4">', { status: 200 });
@@ -777,7 +783,7 @@ const tests: TestCase[] = [
                 assert.match(response.data?.video?.url || '', /^https:\/\/fixembed\.app\/video\/instagram\?url=/);
                 assert.equal(response.data?.video?.thumbnail, 'https://scontent.example.com/poster.jpg');
                 assert.equal(response.data?.image, 'https://scontent.example.com/poster.jpg');
-                assert.equal(response.data?.timestamp, '2026-07-10T15:04:03.000Z');
+                assert.equal(response.data?.timestamp, '2026-07-10T15:03:33.951Z');
             } finally { globalThis.fetch = originalFetch; }
         },
     },
@@ -908,10 +914,12 @@ const tests: TestCase[] = [
                         '<meta content="BiliFix / vxbilibili.com\n📺53.7萬 👍2.3萬 🪙927 ⭐6931 📤1843"property=og:site_name>'
                         + '<meta content=最棒的更新就得配上最多的bug！ property=og:title>'
                         + '<meta content=http://i1.hdslb.com/video.jpg property=og:image>'
-                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>'
-                        + '<script>{"pubdate":1783987200}</script>',
+                        + '<meta content="https://media.vxbilibili.com/video/BV1p3Nc6pEoP/1"property=og:video>',
                         { status: 200 },
                     );
+                }
+                if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
+                    return new Response('<script>{"pubdate":1783987200}</script>', { status: 200 });
                 }
                 if (url.includes('vxbilibili.com/oembed/video')) {
                     return new Response(JSON.stringify({

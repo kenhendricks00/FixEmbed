@@ -17,6 +17,28 @@ export function normalizePostTimestamp(value: unknown): string | undefined {
     return Number.isNaN(milliseconds) ? undefined : new Date(milliseconds).toISOString();
 }
 
+/** Recover Meta's approximate creation time from an Instagram/Threads shortcode. */
+export function deriveMetaShortcodeTimestamp(shortcode: string): string | undefined {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const clean = shortcode.split(/[/?#]/, 1)[0];
+    if (!clean || clean.length > 32) return undefined;
+
+    let mediaId = 0n;
+    for (const character of clean) {
+        const index = alphabet.indexOf(character);
+        if (index < 0) return undefined;
+        mediaId = mediaId * 64n + BigInt(index);
+    }
+
+    const milliseconds = Number(mediaId >> 23n) + 1_314_220_021_721;
+    const earliest = Date.parse('2011-08-24T21:07:01.721Z');
+    const latest = Date.parse('2100-01-01T00:00:00.000Z');
+    if (!Number.isSafeInteger(milliseconds) || milliseconds < earliest || milliseconds > latest) {
+        return undefined;
+    }
+    return new Date(milliseconds).toISOString();
+}
+
 /** Extract a publication time from bounded fields used by supported platform pages. */
 export function extractPostTimestampFromHtml(html: string): string | undefined {
     if (!html) return undefined;
@@ -54,5 +76,12 @@ export function extractPostTimestampFromHtml(html: string): string | undefined {
     if (timeElement) return normalizePostTimestamp(timeElement);
 
     const mediaModified = decoded.match(/[?&]mdate=(\d{9,13})(?:[&#"']|$)/i)?.[1];
-    return normalizePostTimestamp(mediaModified);
+    if (mediaModified) return normalizePostTimestamp(mediaModified);
+
+    const pixivAssetDate = decoded.match(
+        /\/img\/(\d{4})\/(\d{2})\/(\d{2})\/(\d{2})\/(\d{2})\/(\d{2})\//,
+    );
+    if (!pixivAssetDate) return undefined;
+    const [, year, month, day, hour, minute, second] = pixivAssetDate;
+    return normalizePostTimestamp(`${year}-${month}-${day}T${hour}:${minute}:${second}+09:00`);
 }

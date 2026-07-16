@@ -13,6 +13,7 @@
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { formatNumber, platformColors, getBrandedSiteName } from '../utils/embed.ts';
+import { fetchWithTimeout } from '../utils/fetch.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 
 interface BilibiliVideoResponse {
@@ -194,6 +195,22 @@ async function scrapeVxBilibili(bvid: string): Promise<{
     }
 }
 
+async function fetchBilibiliPostTimestamp(bvid: string): Promise<string | undefined> {
+    try {
+        const response = await fetchWithTimeout(`https://m.bilibili.com/video/${encodeURIComponent(bvid)}`, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'Referer': `https://www.bilibili.com/video/${bvid}`,
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+            },
+        }, 5000);
+        if (!response.ok) return undefined;
+        return extractPostTimestampFromHtml(await response.text());
+    } catch {
+        return undefined;
+    }
+}
+
 export const bilibiliHandler: PlatformHandler = {
     name: 'bilibili',
     patterns: [
@@ -250,6 +267,7 @@ export const bilibiliHandler: PlatformHandler = {
             const scrapeResult = await scrapeVxBilibili(bvid);
 
             if (scrapeResult.success && (scrapeResult.title || scrapeResult.image)) {
+                scrapeResult.timestamp ||= await fetchBilibiliPostTimestamp(bvid);
                 // Ensure image URL uses HTTPS
                 let imageUrl = scrapeResult.image;
                 if (imageUrl && imageUrl.startsWith('http://')) {

@@ -6,9 +6,9 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import { truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
-import { extractPostTimestampFromHtml, normalizePostTimestamp } from '../utils/timestamp.ts';
+import { deriveMetaShortcodeTimestamp, normalizePostTimestamp } from '../utils/timestamp.ts';
 
 function decodeThreadsHtml(value: string): string {
     return value
@@ -51,21 +51,6 @@ async function fetchThreadsProfilePic(username: string, fallback = ''): Promise<
         return isThreadsAvatarUrl(candidate) ? candidate : fallbackPic;
     } catch {
         return fallbackPic;
-    }
-}
-
-async function fetchThreadsPostTimestamp(url: string): Promise<string | undefined> {
-    try {
-        const response = await fetchWithTimeout(url, {
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml',
-                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
-            },
-        }, 5000);
-        if (!response.ok) return undefined;
-        return extractPostTimestampFromHtml(await response.text());
-    } catch {
-        return undefined;
     }
 }
 
@@ -296,12 +281,11 @@ export const threadsHandler: PlatformHandler = {
             if (graphqlResult.success) {
                 const displayUsername = graphqlResult.username || username;
                 const description = graphqlResult.caption || '';
-                const [authorAvatar, recoveredTimestamp] = await Promise.all([
-                    fetchThreadsProfilePic(displayUsername, graphqlResult.profilePic),
-                    graphqlResult.timestamp
-                        ? Promise.resolve(undefined)
-                        : fetchThreadsPostTimestamp(normalizedUrl),
-                ]);
+                const authorAvatar = await fetchThreadsProfilePic(
+                    displayUsername,
+                    graphqlResult.profilePic,
+                );
+                const recoveredTimestamp = deriveMetaShortcodeTimestamp(postCode);
 
                 // Build stats for oEmbed row
                 const statsStr = formatStats({

@@ -11,7 +11,11 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { extractPostTimestampFromHtml, normalizePostTimestamp } from '../utils/timestamp.ts';
+import {
+    deriveMetaShortcodeTimestamp,
+    extractPostTimestampFromHtml,
+    normalizePostTimestamp,
+} from '../utils/timestamp.ts';
 import { fetchWithTimeout, parseInstagramUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, platformColors, getBrandedSiteName } from '../utils/embed.ts';
 
@@ -357,6 +361,7 @@ export const instagramHandler: PlatformHandler = {
             const nativeResult = await scrapeEmbedHtml(canonicalUrl, parsed);
             if (nativeResult.data && !nativeResult.data.timestamp) {
                 nativeResult.data.timestamp = await fetchInstagramPostTimestamp(canonicalUrl);
+                nativeResult.data.timestamp ||= deriveMetaShortcodeTimestamp(parsed.shortcode);
             }
             const nativeHasRequiredMedia = parsed.type === 'reel'
                 ? Boolean(nativeResult.data?.video)
@@ -433,7 +438,7 @@ export const instagramHandler: PlatformHandler = {
                         authorHandle = embedInfo.data.authorHandle;
                         authorUrl = embedInfo.data.authorUrl;
                         authorAvatar = embedInfo.data.authorAvatar;
-                        timestamp = embedInfo.data.timestamp;
+                        timestamp = embedInfo.data.timestamp || deriveMetaShortcodeTimestamp(parsed.shortcode);
                     }
                 } catch (e) {
                     console.warn('Failed to fetch carousel metadata:', e);
