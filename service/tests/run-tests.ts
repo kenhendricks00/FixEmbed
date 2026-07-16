@@ -1263,6 +1263,66 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'bilibiliHandler starts BiliFix oEmbed while fallback HTML is in flight',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let releaseHtml: (() => void) | undefined;
+            let markHtmlStarted: (() => void) | undefined;
+            let oembedStarted = false;
+            const htmlGate = new Promise<void>((resolve) => { releaseHtml = resolve; });
+            const htmlStarted = new Promise<void>((resolve) => { markHtmlStarted = resolve; });
+
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('api.bilibili.com/x/web-interface/view')) {
+                    return new Response('Precondition Failed', { status: 412 });
+                }
+                if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
+                    return new Response('blocked', { status: 412 });
+                }
+                if (url.includes('vxbilibili.com/video/')) {
+                    markHtmlStarted?.();
+                    await htmlGate;
+                    return new Response(
+                        '<meta content="Fallback video" property=og:title>'
+                        + '<meta content=https://i1.hdslb.com/video.jpg property=og:image>'
+                        + '<meta content=2026-07-14T08:00:00+08:00 property=article:published_time>',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('vxbilibili.com/oembed/video')) {
+                    oembedStarted = true;
+                    return Response.json({
+                        title: 'Fallback video',
+                        author_name: 'Fallback creator',
+                        author_url: 'https://space.bilibili.com/37093763',
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const responsePromise = bilibiliHandler.handle(
+                    'https://www.bilibili.com/video/BV1p3Nc6pEoP/',
+                    env,
+                );
+                await htmlStarted;
+                const startedBeforeHtmlCompleted = oembedStarted;
+                releaseHtml?.();
+                const response = await responsePromise;
+
+                assert.equal(startedBeforeHtmlCompleted, true);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorName, 'Fallback creator');
+                assert.equal(response.data?.timestamp, '2026-07-14T00:00:00.000Z');
+            } finally {
+                releaseHtml?.();
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'Bilibili media proxy rejects URLs outside trusted video hosts',
         run: async () => {
             const response = await app.request(

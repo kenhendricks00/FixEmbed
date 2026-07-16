@@ -246,12 +246,22 @@ async function scrapeVxBilibili(bvid: string): Promise<{
 }> {
     try {
         const vxUrl = `https://www.vxbilibili.com/video/${bvid}`;
-        const response = await fetch(vxUrl, {
+        const pagePromise = fetchWithTimeout(vxUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
                 'Accept': 'text/html',
             },
-        });
+        }, 4000);
+        const oembedPromise = fetchWithTimeout(
+            `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-cn`,
+            { headers: { 'Accept': 'application/json' } },
+            2000,
+        ).then(async (oembedResponse): Promise<BiliFixOEmbedResponse | undefined> => {
+            if (!oembedResponse.ok) return undefined;
+            return oembedResponse.json() as Promise<BiliFixOEmbedResponse>;
+        }).catch(() => undefined);
+
+        const [response, oembed] = await Promise.all([pagePromise, oembedPromise]);
 
         if (!response.ok) {
             return { success: false, error: `vxbilibili returned ${response.status}` };
@@ -264,19 +274,6 @@ async function scrapeVxBilibili(bvid: string): Promise<{
         const ogDesc = metaContent(html, 'og:description');
         const ogVideo = metaContent(html, 'og:video') || metaContent(html, 'og:video:url');
         const ogSiteName = metaContent(html, 'og:site_name');
-
-        let oembed: BiliFixOEmbedResponse | undefined;
-        try {
-            const oembedResponse = await fetch(
-                `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-cn`,
-                { headers: { 'Accept': 'application/json' } },
-            );
-            if (oembedResponse.ok) {
-                oembed = await oembedResponse.json() as BiliFixOEmbedResponse;
-            }
-        } catch {
-            // Open Graph still provides a useful media card when oEmbed is unavailable.
-        }
 
         // Older BiliFix pages included the author in the title.
         let author = oembed?.author_name;
