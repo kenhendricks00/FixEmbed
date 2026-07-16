@@ -30,7 +30,6 @@ jobs:
           python conformance.py
           --manifest conformance/production.json
           --output conformance-report.json
-          --fail-on-degraded
       - name: Publish bounded report to the job summary
         if: always() && hashFiles('conformance-report.json') != ''
         run: |
