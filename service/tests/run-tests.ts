@@ -2812,7 +2812,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'status probes cover every handler and exercise YouTube community posts',
+        name: 'status probes cover every handler and exercise healthy platform samples',
         run: () => {
             assert.equal(STATUS_PROBES.length, 9);
             assert.equal(
@@ -2824,6 +2824,11 @@ const tests: TestCase[] = [
             }
             const youtube = STATUS_PROBES.find((probe) => probe.platform === 'YouTube');
             assert.match(youtube?.sampleUrl || '', /youtube\.com\/post\//);
+            const instagram = STATUS_PROBES.find((probe) => probe.platform === 'Instagram');
+            assert.equal(
+                instagram?.sampleUrl,
+                'https://www.instagram.com/p/DadSNf5EdUy/',
+            );
         },
     },
     {
