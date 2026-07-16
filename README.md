@@ -36,7 +36,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
 - **User-Friendly Configuration**: Easy setup with customizable settings for individual servers.
 - **Reliable Performance**: Ensures consistent embed functionality across all platforms.
-- **Live Reliability Diagnostics**: View current first-party/fallback mode and latency in Discord, with a public status dashboard and safe stale-data handling during brief probe failures.
+- **Live Reliability Diagnostics**: View current first-party/fallback mode and latency in Discord, with a public status dashboard, bounded platform probes, coalesced refreshes, and safe stale-data handling during brief probe failures.
 - **Privacy-Safe Conversion Quality**: Reliability highlights local rich-card rate, link fallbacks, recent p95 build latency, and bounded failure categories without retaining links, post content, or member data.
 - **Discord Delivery Diagnostics**: Reliability separates direct sends, component-to-link rescues, complete delivery failures, pending queue depth, and recent p95 delivery latency without retaining channel, message, or member data.
 - **Permission-Aware Delivery**: If delete or suppress mode lacks Manage Messages, FixEmbed keeps the original and still replies with the fixed card; Settings, Debug, and Reliability explain the recovery.

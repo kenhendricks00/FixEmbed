@@ -115,10 +115,13 @@ def parse_reliability_payload(payload: Any) -> ReliabilityReport:
     elif any(row.status == "degraded" for row in rows):
         overall_status = "degraded"
 
+    worker_stale = payload.get("stale") is True
     return ReliabilityReport(
         overall_status=overall_status,
         updated_at=parse_post_timestamp(payload.get("updatedAt")),
         platforms=tuple(rows),
+        stale=worker_stale,
+        error_code="status_refresh_failed" if worker_stale else None,
     )
 
 

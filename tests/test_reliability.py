@@ -63,6 +63,15 @@ class ReliabilityPayloadTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_reliability_payload({"platforms": [{"platform": "Unknown"}]})
 
+    def test_preserves_worker_stale_recovery_marker(self):
+        payload = {**STATUS_PAYLOAD, "stale": True}
+
+        report = parse_reliability_payload(payload)
+
+        self.assertTrue(report.available)
+        self.assertTrue(report.stale)
+        self.assertEqual(report.error_code, "status_refresh_failed")
+
     def test_formats_live_health_without_mixing_in_local_process_counters(self):
         report = parse_reliability_payload(STATUS_PAYLOAD)
 

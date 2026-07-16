@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Resilient live status refreshes**
+- Bounded every public platform-health probe to seven seconds so one stalled upstream cannot hold the entire status report open.
+- Coalesced concurrent status refreshes, reused verified reports for 60 seconds, and preserved a clearly marked recent report when an unexpected refresh fails.
+
 #### **SparkedHost deployment integrity**
 - Added a deterministic SparkedHost archive containing every root Python module and required runtime metadata, with per-file sizes and SHA-256 checksums in an embedded manifest.
 - Made CI build, self-verify, and retain the complete deployment artifact so missing modules cannot hide behind partial manual uploads.

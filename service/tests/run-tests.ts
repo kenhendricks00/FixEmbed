@@ -14,6 +14,11 @@ import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts'
 import { threadsHandler } from '../src/handlers/threads.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
+import {
+    StatusProbeTimeoutError,
+    StatusReportCache,
+    withStatusProbeDeadline,
+} from '../src/utils/status_report_cache.ts';
 import { deriveMetaShortcodeTimestamp, extractPostTimestampFromHtml } from '../src/utils/timestamp.ts';
 import {
     docsHtml,
@@ -3393,6 +3398,141 @@ const tests: TestCase[] = [
                 assert.equal(response.status, 204);
                 assert.equal(discordCalled, false);
             } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'status report cache reuses a recent verified refresh',
+        run: async () => {
+            let now = 1_000;
+            let refreshes = 0;
+            const cache = new StatusReportCache<{ revision: number }>({
+                freshTtlMs: 60_000,
+                staleTtlMs: 900_000,
+                now: () => now,
+            });
+
+            const first = await cache.get(async () => ({ revision: ++refreshes }));
+            now += 59_999;
+            const second = await cache.get(async () => ({ revision: ++refreshes }));
+
+            assert.deepEqual(first, {
+                value: { revision: 1 },
+                state: 'miss',
+                stale: false,
+            });
+            assert.deepEqual(second, {
+                value: { revision: 1 },
+                state: 'hit',
+                stale: false,
+            });
+            assert.equal(refreshes, 1);
+        },
+    },
+    {
+        name: 'status report cache coalesces concurrent upstream refreshes',
+        run: async () => {
+            let finishRefresh!: (value: { revision: number }) => void;
+            let refreshes = 0;
+            const cache = new StatusReportCache<{ revision: number }>();
+            const refresh = () => {
+                refreshes += 1;
+                return new Promise<{ revision: number }>((resolve) => {
+                    finishRefresh = resolve;
+                });
+            };
+
+            const first = cache.get(refresh);
+            const second = cache.get(refresh);
+            finishRefresh({ revision: 1 });
+
+            assert.deepEqual(await first, {
+                value: { revision: 1 },
+                state: 'miss',
+                stale: false,
+            });
+            assert.deepEqual(await second, {
+                value: { revision: 1 },
+                state: 'coalesced',
+                stale: false,
+            });
+            assert.equal(refreshes, 1);
+        },
+    },
+    {
+        name: 'status report cache serves recent verified data after refresh failure',
+        run: async () => {
+            let now = 1_000;
+            const cache = new StatusReportCache<{ revision: number }>({
+                freshTtlMs: 60_000,
+                staleTtlMs: 900_000,
+                now: () => now,
+            });
+            await cache.get(async () => ({ revision: 1 }));
+            now += 60_001;
+
+            const recovered = await cache.get(() => {
+                throw new Error('upstream unavailable');
+            });
+
+            assert.deepEqual(recovered, {
+                value: { revision: 1 },
+                state: 'stale',
+                stale: true,
+            });
+            now += 900_000;
+            await assert.rejects(
+                cache.get(async () => { throw new Error('still unavailable'); }),
+                /still unavailable/,
+            );
+        },
+    },
+    {
+        name: 'status probe deadline bounds a handler that never settles',
+        run: async () => {
+            await assert.rejects(
+                withStatusProbeDeadline(new Promise(() => {}), 5),
+                StatusProbeTimeoutError,
+            );
+        },
+    },
+    {
+        name: '/api/status reuses one verified probe fan-out within the refresh window',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalProbes = STATUS_PROBES.splice(0);
+            let upstreamRequests = 0;
+            STATUS_PROBES.push({
+                platform: 'Twitter/X',
+                sampleUrl: 'https://x.com/status_cache/status/1234567890',
+            });
+            globalThis.fetch = async () => {
+                upstreamRequests += 1;
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '1234567890',
+                    text: 'Status cache health sample',
+                    lang: 'en',
+                    user: { name: 'Status Cache', screen_name: 'status_cache' },
+                    created_at: '2026-07-16T00:00:00.000Z',
+                });
+            };
+
+            try {
+                const first = await app.request('/api/status', {}, env);
+                const requestsAfterFirst = upstreamRequests;
+                const second = await app.request('/api/status', {}, env);
+                const secondPayload = await second.json() as { stale?: boolean };
+
+                assert.equal(first.status, 200);
+                assert.equal(first.headers.get('X-FixEmbed-Status-Cache'), 'MISS');
+                assert.equal(second.headers.get('X-FixEmbed-Status-Cache'), 'HIT');
+                assert.equal(second.headers.get('Cache-Control'), 'no-store');
+                assert.equal(secondPayload.stale, false);
+                assert.equal(upstreamRequests, requestsAfterFirst);
+            } finally {
+                globalThis.fetch = originalFetch;
+                STATUS_PROBES.splice(0, STATUS_PROBES.length, ...originalProbes);
+            }
         },
     },
     {

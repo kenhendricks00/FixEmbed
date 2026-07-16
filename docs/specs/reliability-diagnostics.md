@@ -15,15 +15,24 @@ and Discord-delivery health.
   covers platform/provider health; Debug covers Discord permissions and bot
   runtime state.
 - No new `/troubleshoot` command is added.
-- Live reports are cached briefly to avoid probe storms. A recent successful
-  report may be shown as stale during a temporary refresh failure.
+- The Worker coalesces concurrent report refreshes inside each warm isolate and
+  reuses a verified report for 60 seconds to avoid public probe storms. Each
+  platform probe has a seven-second deadline so one stalled handler cannot
+  hold the aggregate report open.
+- A recent successful report remains available for at most 15 minutes as
+  explicitly marked stale data when an unexpected aggregate refresh fails.
+  The Python client preserves that marker instead of presenting recovered data
+  as a fresh live check.
 - Missing health data must be labeled unavailable; it must never be presented
   as operational.
 
 ## Tech Stack and Structure
 
-- `reliability.py`: validated status contract, short-lived cache, stale-data
-  policy, HTTP adapter, and Discord-safe formatting.
+- `reliability.py`: validated status contract, Worker stale-marker handling,
+  short-lived bot cache, stale-data policy, HTTP adapter, and Discord-safe
+  formatting.
+- `service/src/utils/status_report_cache.ts`: bounded refresh coalescing,
+  fresh-report reuse, recent-stale recovery, and probe deadline enforcement.
 - `main.py`: Components V2 Reliability page, refresh action, public dashboard
   link, process-local card and delivery sections, and `/status` integration.
 - `tests/test_reliability.py`: pure parsing, caching, failure, and formatting

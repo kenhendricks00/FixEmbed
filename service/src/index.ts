@@ -21,6 +21,11 @@ import {
 } from './utils/embed.ts';
 import { indexHtml, scriptJs, stylesCss, privacyHtml, tosHtml, docsHtml, supportHtml, statusHtml } from './utils/static_site.ts';
 import { assessProbeResult, type PlatformStatus } from './utils/status.ts';
+import {
+    StatusProbeTimeoutError,
+    StatusReportCache,
+    withStatusProbeDeadline,
+} from './utils/status_report_cache.ts';
 import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
 
@@ -39,6 +44,18 @@ interface PlatformStatusRow {
 interface StatusProbe {
     platform: string;
     sampleUrl: string;
+}
+
+interface PublicStatusReport {
+    updatedAt: string;
+    overallStatus: PlatformStatus;
+    notices: Array<{
+        platform: string;
+        level: PlatformStatus;
+        message: string;
+        updatedAt: string;
+    }>;
+    platforms: PlatformStatusRow[];
 }
 
 interface ActivityEmbedData {
@@ -148,6 +165,9 @@ export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Pinterest', sampleUrl: 'https://www.pinterest.com/pin/424605071145119869/' },
 ];
 
+const STATUS_PROBE_TIMEOUT_MS = 7_000;
+const statusReportCache = new StatusReportCache<PublicStatusReport>();
+
 async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformStatusRow> {
     const handler = findHandler(probe.sampleUrl);
     const checkedAt = new Date().toISOString();
@@ -166,7 +186,10 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
 
     const startedAt = Date.now();
     try {
-        const result = await handler.handle(probe.sampleUrl, env);
+        const result = await withStatusProbeDeadline(
+            handler.handle(probe.sampleUrl, env),
+            STATUS_PROBE_TIMEOUT_MS,
+        );
         const latencyMs = Date.now() - startedAt;
         const assessment = assessProbeResult(result, latencyMs);
 
@@ -180,16 +203,42 @@ async function runStatusProbe(env: Env, probe: StatusProbe): Promise<PlatformSta
             responseCode: assessment.responseCode,
         };
     } catch (error) {
+        const timedOut = error instanceof StatusProbeTimeoutError;
         return {
             platform: probe.platform,
             currentLatencyMs: 0,
             status: 'outage',
             mode: 'unavailable',
-            notice: error instanceof Error ? error.message : 'Unknown probe error.',
+            notice: timedOut
+                ? 'The live probe exceeded its response deadline.'
+                : error instanceof Error ? error.message : 'Unknown probe error.',
             checkedAt,
             responseCode: null,
         };
     }
+}
+
+async function buildStatusReport(env: Env): Promise<PublicStatusReport> {
+    const rows = await Promise.all(STATUS_PROBES.map((probe) => runStatusProbe(env, probe)));
+    const hasOutage = rows.some((row) => row.status === 'outage');
+    const hasDegraded = rows.some((row) => row.status === 'degraded');
+    const overallStatus: PlatformStatus = hasOutage ? 'outage' : hasDegraded ? 'degraded' : 'operational';
+
+    const activeNotices = rows
+        .filter((row): row is PlatformStatusRow & { notice: string } => Boolean(row.notice))
+        .map((row) => ({
+            platform: row.platform,
+            level: row.status,
+            message: row.notice,
+            updatedAt: row.checkedAt,
+        }));
+
+    return {
+        updatedAt: new Date().toISOString(),
+        overallStatus,
+        notices: activeNotices,
+        platforms: rows,
+    };
 }
 
 // Middleware
@@ -238,26 +287,20 @@ app.get('/status', (c) => {
 });
 
 app.get('/api/status', async (c) => {
-    const rows = await Promise.all(STATUS_PROBES.map((probe) => runStatusProbe(c.env, probe)));
-    const hasOutage = rows.some((row) => row.status === 'outage');
-    const hasDegraded = rows.some((row) => row.status === 'degraded');
-    const overallStatus: PlatformStatus = hasOutage ? 'outage' : hasDegraded ? 'degraded' : 'operational';
-
-    const activeNotices = rows
-        .filter((row) => row.notice)
-        .map((row) => ({
-            platform: row.platform,
-            level: row.status,
-            message: row.notice,
-            updatedAt: row.checkedAt,
-        }));
-
-    return c.json({
-        updatedAt: new Date().toISOString(),
-        overallStatus,
-        notices: activeNotices,
-        platforms: rows,
-    });
+    try {
+        const result = await statusReportCache.get(() => buildStatusReport(c.env));
+        const response = c.json({ ...result.value, stale: result.stale });
+        response.headers.set('Cache-Control', 'no-store');
+        response.headers.set('X-FixEmbed-Status-Cache', result.state.toUpperCase());
+        return response;
+    } catch (error) {
+        console.error('status_report_refresh_failed', {
+            errorType: error instanceof Error ? error.name : 'UnknownError',
+        });
+        const response = c.json({ error: 'Live status is temporarily unavailable.' }, 503);
+        response.headers.set('Cache-Control', 'no-store');
+        return response;
+    }
 });
 
 app.get('/donate', (c) => {
