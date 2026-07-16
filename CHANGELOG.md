@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Production latency budgets**
+- Added reviewed per-card cold latency budgets to the production Components V2 canaries, with bounded over-budget degradation codes and the expected budget included in privacy-safe reports.
+- Kept a single slow provider sample nonfatal so transient upstream variance stays visible without turning scheduled checks into alert noise.
+
 #### **Bilibili cold-path latency**
 - Overlapped official mobile-page recovery with the emergency BiliFix request after the direct Bilibili API is unavailable.
 - Preserved first-party mobile metadata priority while allowing the fallback card to make progress during blocked official requests.

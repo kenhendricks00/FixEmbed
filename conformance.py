@@ -32,6 +32,8 @@ MAX_RESPONSE_BYTES = 1_048_576
 DEFAULT_BASE_URL = "https://fixembed.app"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 DEFAULT_CONCURRENCY = 3
+MIN_LATENCY_BUDGET_MS = 100
+MAX_LATENCY_BUDGET_MS = 60_000
 
 SUPPORTED_HOSTS = {
     "twitter": frozenset({"x.com", "www.x.com", "twitter.com", "www.twitter.com"}),
@@ -52,6 +54,7 @@ RENDERERS = frozenset({"components-v2"})
 SECTION_KINDS = frozenset(
     {"poll", "quote", "community-note", "article", "link-card", "tombstone"}
 )
+DEGRADATION_CODES = frozenset({"fallback-used", "latency-budget-exceeded"})
 CASE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
@@ -71,6 +74,7 @@ class ConformanceCase:
     renderer: Optional[str]
     options: dict[str, str]
     probe_media: bool
+    latency_budget_ms: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +92,7 @@ class ConformanceResult:
     source: str
     duration_ms: int
     failure_codes: tuple[str, ...]
+    latency_budget_ms: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,7 @@ class ConformanceReport:
                     "status": result.status,
                     "source": result.source,
                     "durationMs": result.duration_ms,
+                    "latencyBudgetMs": result.latency_budget_ms,
                     "codes": list(result.failure_codes),
                 }
                 for result in self.results
@@ -203,6 +209,19 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
             raise ManifestError("probeMedia must be a boolean")
         if probe_media and renderer != "components-v2":
             raise ManifestError("probeMedia requires the components-v2 renderer")
+        latency_budget_ms = raw_case.get("latencyBudgetMs")
+        if latency_budget_ms is not None and (
+            isinstance(latency_budget_ms, bool)
+            or not isinstance(latency_budget_ms, int)
+            or not (
+                MIN_LATENCY_BUDGET_MS
+                <= latency_budget_ms
+                <= MAX_LATENCY_BUDGET_MS
+            )
+        ):
+            raise ManifestError(
+                "latencyBudgetMs must be an integer between 100 and 60000"
+            )
 
         cases.append(
             ConformanceCase(
@@ -216,6 +235,7 @@ def parse_manifest(raw: object) -> tuple[ConformanceCase, ...]:
                 renderer=renderer,
                 options=options,
                 probe_media=probe_media,
+                latency_budget_ms=latency_budget_ms,
             )
         )
     return tuple(cases)
@@ -317,8 +337,10 @@ def evaluate_payload(
                 )
             )
 
-    only_allowed_fallback = codes == ["fallback-used"]
-    status = "degraded" if only_allowed_fallback else "failed" if codes else "passed"
+    if case.latency_budget_ms is not None and duration_ms > case.latency_budget_ms:
+        codes.append("latency-budget-exceeded")
+    only_degradations = bool(codes) and set(codes).issubset(DEGRADATION_CODES)
+    status = "degraded" if only_degradations else "failed" if codes else "passed"
     return ConformanceResult(
         case.case_id,
         case.platform,
@@ -326,6 +348,7 @@ def evaluate_payload(
         str(source),
         max(0, int(duration_ms)),
         tuple(codes),
+        case.latency_budget_ms,
     )
 
 
@@ -394,6 +417,7 @@ def _add_failure_codes(
         result.source,
         result.duration_ms,
         tuple(dict.fromkeys((*result.failure_codes, *codes))),
+        result.latency_budget_ms,
     )
 
 

@@ -52,7 +52,7 @@ class ChunkedResponseTests(unittest.IsolatedAsyncioTestCase):
 
 class ManifestTests(unittest.TestCase):
     def test_parses_bounded_semantic_contract(self):
-        cases = parse_manifest(valid_manifest())
+        cases = parse_manifest(valid_manifest(latencyBudgetMs=2500))
 
         self.assertEqual(len(cases), 1)
         self.assertEqual(cases[0].case_id, "x-carousel")
@@ -61,6 +61,13 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(cases[0].section_kinds, frozenset({"quote"}))
         self.assertFalse(cases[0].allow_fallback)
         self.assertFalse(cases[0].probe_media)
+        self.assertEqual(cases[0].latency_budget_ms, 2500)
+
+    def test_rejects_invalid_latency_budgets(self):
+        for latency_budget in (True, "2500", 99, 60_001, 1.5):
+            with self.subTest(latency_budget=latency_budget):
+                with self.assertRaisesRegex(ManifestError, "latencyBudgetMs"):
+                    parse_manifest(valid_manifest(latencyBudgetMs=latency_budget))
 
     def test_rejects_duplicate_ids_and_more_than_fifty_cases(self):
         duplicate = valid_manifest()
@@ -162,6 +169,7 @@ class ManifestTests(unittest.TestCase):
 
         self.assertTrue(all(case.renderer == "components-v2" for case in cases))
         self.assertTrue(all(case.probe_media for case in cases))
+        self.assertTrue(all(case.latency_budget_ms is not None for case in cases))
         self.assertEqual(by_id["twitter-carousel"].media_type, "carousel")
         self.assertEqual(by_id["twitter-gif"].media_type, "gif")
         self.assertEqual(by_id["twitter-video"].media_type, "video")
@@ -213,6 +221,31 @@ class ContractEvaluationTests(unittest.TestCase):
         self.assertIn("fallback-disallowed", disallowed.failure_codes)
         self.assertEqual(allowed.status, "degraded")
         self.assertEqual(allowed.failure_codes, ("fallback-used",))
+
+    def test_reports_over_budget_latency_as_a_nonfatal_degradation(self):
+        case = parse_manifest(valid_manifest(latencyBudgetMs=100))[0]
+
+        within_budget = evaluate_payload(case, self.payload, duration_ms=100)
+        over_budget = evaluate_payload(case, self.payload, duration_ms=101)
+
+        self.assertEqual(within_budget.status, "passed")
+        self.assertEqual(over_budget.status, "degraded")
+        self.assertEqual(over_budget.failure_codes, ("latency-budget-exceeded",))
+        self.assertEqual(over_budget.latency_budget_ms, 100)
+
+    def test_allowed_fallback_can_also_report_latency_degradation(self):
+        case = parse_manifest(
+            valid_manifest(allowFallback=True, latencyBudgetMs=100)
+        )[0]
+        self.payload["source"] = "fallback"
+
+        result = evaluate_payload(case, self.payload, duration_ms=101)
+
+        self.assertEqual(result.status, "degraded")
+        self.assertEqual(
+            result.failure_codes,
+            ("fallback-used", "latency-budget-exceeded"),
+        )
 
     def test_reports_bounded_codes_for_missing_fields_and_wrong_media(self):
         self.payload["data"] = {
@@ -573,6 +606,35 @@ class MediaReachabilityTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_serializes_reviewed_latency_budget_and_overage_code(self):
+        case = parse_manifest(
+            valid_manifest(
+                latencyBudgetMs=100,
+                requires=["title"],
+                mediaType=None,
+                sectionKinds=[],
+            )
+        )[0]
+
+        async def fetch_json(_url, _timeout_seconds):
+            return FetchResponse(
+                status_code=200,
+                duration_ms=101,
+                payload={
+                    "success": True,
+                    "platform": "twitter",
+                    "source": "first-party",
+                    "data": {"title": "Post"},
+                },
+            )
+
+        report = await run_conformance([case], fetch_json=fetch_json)
+        serialized_result = report.to_dict()["results"][0]
+
+        self.assertEqual(serialized_result["status"], "degraded")
+        self.assertEqual(serialized_result["latencyBudgetMs"], 100)
+        self.assertEqual(serialized_result["codes"], ["latency-budget-exceeded"])
+
     async def test_builds_encoded_api_url_and_preserves_manifest_order(self):
         cases = parse_manifest(
             {

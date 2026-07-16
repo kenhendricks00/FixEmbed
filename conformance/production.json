@@ -8,6 +8,7 @@
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
       "allowFallback": true,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -19,6 +20,7 @@
       "mediaType": "carousel",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -30,6 +32,7 @@
       "mediaType": "gif",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -41,6 +44,7 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -52,6 +56,7 @@
       "mediaType": "carousel",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 6000,
       "renderer": "components-v2",
       "options": {"lang": "es"},
       "probeMedia": true
@@ -64,6 +69,7 @@
       "mediaType": "video",
       "sectionKinds": ["tombstone"],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -75,6 +81,7 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": true,
+      "latencyBudgetMs": 4000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -85,6 +92,7 @@
       "requires": ["title", "author", "timestamp", "stats"],
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -95,6 +103,7 @@
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 6000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -106,6 +115,7 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -117,6 +127,7 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": true,
+      "latencyBudgetMs": 4000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -128,6 +139,7 @@
       "mediaType": "video",
       "sectionKinds": [],
       "allowFallback": true,
+      "latencyBudgetMs": 6000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -138,6 +150,7 @@
       "requires": ["title", "author", "timestamp"],
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 2000,
       "renderer": "components-v2",
       "probeMedia": true
     },
@@ -149,6 +162,7 @@
       "mediaType": "image",
       "sectionKinds": [],
       "allowFallback": false,
+      "latencyBudgetMs": 5000,
       "renderer": "components-v2",
       "probeMedia": true
     }
