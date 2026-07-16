@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Permission-aware delivery recovery**
+- Automatically falls back from delete/suppress to reply mode when Manage Messages is unavailable, preserving the fixed card instead of aborting conversion.
+- Handles permission changes between preflight and Discord API calls without losing queued cards.
+- Shows configured versus effective delivery behavior in Delivery settings and Debug, with privacy-safe aggregate recovery counts in Reliability.
+
 #### **Discord delivery observability**
 - Added bounded, process-local direct-delivery, link-rescue, complete-failure, pending-depth, and recent p95 delivery diagnostics.
 - Replaced free-form queue exception logs with structured, privacy-safe events using fixed categories and random correlation IDs.

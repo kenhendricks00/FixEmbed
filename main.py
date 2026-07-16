@@ -54,6 +54,11 @@ from delivery_telemetry import (
     deliver_with_fallback,
     format_delivery_health,
 )
+from delivery_policy import (
+    apply_source_message_action,
+    format_delivery_mode_status,
+    resolve_delivery_mode,
+)
 from premium_roles import (
     reconcile_supporter_roles,
     sync_supporter_role,
@@ -1166,10 +1171,18 @@ class DeliveryMethodSettingsView(SettingsPageView):
 
     def render(self):
         mode = self.settings.get("delivery_mode", "suppress")
+        permissions = self.interaction.channel.permissions_for(
+            self.interaction.guild.me
+        )
+        delivery_decision = resolve_delivery_mode(
+            mode,
+            legacy_delete_original=self.settings.get("delete_original", True),
+            can_manage_messages=permissions.manage_messages,
+        )
         self.render_page(
             title=get_text(self.lang, "delivery_method_title"),
-            description=DeliverySelect.MODES[mode],
-            status=f"**Current mode:** {mode.title()}",
+            description=DeliverySelect.MODES[delivery_decision.configured_mode],
+            status=format_delivery_mode_status(delivery_decision),
             controls=((DeliverySelect(self),),),
             footer="Delivery",
         )
@@ -1299,6 +1312,12 @@ class DebugSettingsView(StaticSettingsView):
             ("Manage messages", permissions.manage_messages),
         )
         status = "\n".join(f"{'\u2705' if allowed else '\u274c'} {name}" for name, allowed in checks)
+        delivery_decision = resolve_delivery_mode(
+            settings.get("delivery_mode", "suppress"),
+            legacy_delete_original=settings.get("delete_original", True),
+            can_manage_messages=permissions.manage_messages,
+        )
+        status += "\n\n" + format_delivery_mode_status(delivery_decision)
         status += f"\n\n**Shard:** {interaction.guild.shard_id + 1}  ·  **Version:** {VERSION}\n**Uptime:** {str(discord.utils.utcnow() - client.launch_time).split('.')[0]}"
         super().__init__(interaction, settings, title="Debug Information", description="Permission and runtime diagnostics for this server.", status=status, footer="Diagnostics")
 
@@ -1987,7 +2006,22 @@ async def on_message(message):
                             )
                     processed_link_cache[dedup_key] = time.time()
             if formatted_links or component_layouts:
-                if delivery_mode == "delete" or (delivery_mode not in {"delete", "suppress", "reply"} and delete_original):
+                permissions = message.channel.permissions_for(message.guild.me)
+                delivery_decision = resolve_delivery_mode(
+                    delivery_mode,
+                    legacy_delete_original=delete_original,
+                    can_manage_messages=permissions.manage_messages,
+                )
+                effective_delivery_mode = delivery_decision.effective_mode
+                if delivery_decision.downgrade_reason:
+                    delivery_telemetry.mode_downgraded(
+                        delivery_decision.downgrade_reason
+                    )
+
+                async def suppress_source_message():
+                    return await message.edit(suppress=True)
+
+                if effective_delivery_mode == "delete":
                     if not premium:
                         sender = message.author.mention if mention_users else message.author.display_name
                         formatted_links.append(f"Sent by {sender}")
@@ -2013,9 +2047,21 @@ async def on_message(message):
                             fallback_content=automatic_url,
                             allowed_mentions=allowed_mentions,
                         )
-                    await message.delete()
-                elif delivery_mode == "suppress":
-                    await message.edit(suppress=True)
+                    await apply_source_message_action(
+                        "delete",
+                        delete_message=message.delete,
+                        suppress_message=suppress_source_message,
+                        forbidden_errors=(discord.Forbidden,),
+                        on_permission_recovery=delivery_telemetry.mode_downgraded,
+                    )
+                elif effective_delivery_mode == "suppress":
+                    await apply_source_message_action(
+                        "suppress",
+                        delete_message=message.delete,
+                        suppress_message=suppress_source_message,
+                        forbidden_errors=(discord.Forbidden,),
+                        on_permission_recovery=delivery_telemetry.mode_downgraded,
+                    )
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
                     for layout, automatic_url in component_layouts:

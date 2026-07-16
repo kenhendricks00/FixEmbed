@@ -126,6 +126,20 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No completed sends yet · 4 pending", text)
         self.assertNotIn("100.0%", text)
 
+    def test_permission_mode_downgrades_are_bounded_and_visible(self):
+        telemetry = DeliveryTelemetry()
+        telemetry.mode_downgraded("missing_manage_messages")
+        telemetry.mode_downgraded("attacker-controlled-reason")
+
+        snapshot = telemetry.snapshot()
+        text = format_delivery_health(snapshot, pending=0)
+
+        self.assertEqual(snapshot.mode_downgrades, 2)
+        self.assertEqual(snapshot.primary_downgrade, "missing_manage_messages")
+        self.assertIn("**Automatic permission recovery:** 2 reply downgrades", text)
+        self.assertIn("Missing Manage Messages", text)
+        self.assertNotIn("attacker-controlled", text)
+
     async def test_delivery_orchestrator_records_direct_success(self):
         telemetry = DeliveryTelemetry()
         ticket = telemetry.queued("card")

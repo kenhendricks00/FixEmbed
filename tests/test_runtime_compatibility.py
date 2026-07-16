@@ -101,6 +101,18 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertNotIn("Queue send failed:", main_source)
         self.assertNotIn("Queue fallback send failed:", main_source)
 
+    def test_automatic_delivery_mode_fallback_keeps_cards_sendable(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        self.assertIn("from delivery_policy import (", main_source)
+        self.assertIn("delivery_decision = resolve_delivery_mode(", main_source)
+        self.assertIn("effective_delivery_mode = delivery_decision.effective_mode", main_source)
+        self.assertIn("delivery_telemetry.mode_downgraded(", main_source)
+        self.assertIn("await apply_source_message_action(", main_source)
+        self.assertIn('if effective_delivery_mode == "delete":', main_source)
+        self.assertIn('elif effective_delivery_mode == "suppress":', main_source)
+        self.assertGreaterEqual(main_source.count("format_delivery_mode_status("), 2)
+
     def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(

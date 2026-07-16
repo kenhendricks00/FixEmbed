@@ -16,6 +16,7 @@ from typing import Optional
 
 
 DELIVERY_KINDS = frozenset({"card", "link"})
+DOWNGRADE_REASONS = frozenset({"missing_manage_messages"})
 FAILURE_LABELS = {
     "timeout": "Timeout",
     "forbidden": "Missing permissions",
@@ -46,6 +47,8 @@ class DeliverySnapshot:
     p95_ms: int
     sample_count: int
     primary_failure: Optional[str]
+    mode_downgrades: int
+    primary_downgrade: Optional[str]
 
     @property
     def completed(self) -> int:
@@ -112,6 +115,7 @@ class DeliveryTelemetry:
         self._durations_ms: deque[int] = deque(maxlen=self.sample_size)
         self._rescued_failures: Counter[str] = Counter()
         self._fatal_failures: Counter[str] = Counter()
+        self._mode_downgrades: Counter[str] = Counter()
 
     def queued(self, kind: object) -> DeliveryTicket:
         candidate = str(kind or "")
@@ -156,6 +160,11 @@ class DeliveryTelemetry:
             error=error,
         )
 
+    def mode_downgraded(self, reason: object) -> None:
+        candidate = str(reason or "")
+        reason_label = candidate if candidate in DOWNGRADE_REASONS else "other"
+        self._mode_downgrades[reason_label] += 1
+
     def _complete(self, ticket: DeliveryTicket) -> bool:
         if ticket.completed:
             return False
@@ -194,6 +203,17 @@ class DeliveryTelemetry:
             if failures
             else None
         )
+        primary_downgrade = (
+            max(
+                self._mode_downgrades.items(),
+                key=lambda item: (
+                    item[1],
+                    item[0] == "missing_manage_messages",
+                ),
+            )[0]
+            if self._mode_downgrades
+            else None
+        )
         return DeliverySnapshot(
             total_queued=self._total_queued,
             direct_deliveries=self._direct_deliveries,
@@ -202,6 +222,8 @@ class DeliveryTelemetry:
             p95_ms=_percentile_95(list(self._durations_ms)),
             sample_count=len(self._durations_ms),
             primary_failure=primary_failure,
+            mode_downgrades=sum(self._mode_downgrades.values()),
+            primary_downgrade=primary_downgrade,
         )
 
 
@@ -255,5 +277,18 @@ def format_delivery_health(snapshot: DeliverySnapshot, *, pending: int) -> str:
         lines = [
             f"**Discord delivery:** No completed sends yet · {pending_count} pending"
         ]
+    if snapshot.mode_downgrades:
+        downgrade_label = (
+            "reply downgrade" if snapshot.mode_downgrades == 1 else "reply downgrades"
+        )
+        reason_label = (
+            "Missing Manage Messages"
+            if snapshot.primary_downgrade == "missing_manage_messages"
+            else "Unavailable configured capability"
+        )
+        lines.append(
+            f"**Automatic permission recovery:** {snapshot.mode_downgrades} "
+            f"{downgrade_label} · {reason_label}"
+        )
     lines.append("-# Process-scoped aggregates; no channel, message, or member data retained.")
     return "\n".join(lines)
