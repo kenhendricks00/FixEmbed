@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "twitter-text",
+      "platform": "twitter",
+      "url": "https://x.com/jack/status/20",
+      "requires": ["title", "author", "timestamp", "stats"],
+      "sectionKinds": [],
+      "allowFallback": true
+    },
+    {
+      "id": "instagram-reel",
+      "platform": "instagram",
+      "url": "https://www.instagram.com/reel/DaneAqzR3eV/",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "video",
+      "sectionKinds": [],
+      "allowFallback": true
+    },
+    {
+      "id": "reddit-post",
+      "platform": "reddit",
+      "url": "https://www.reddit.com/r/programming/comments/1d9m2ta/clean_code_means_good_code_performance_debate/",
+      "requires": ["title", "author", "timestamp", "stats"],
+      "sectionKinds": [],
+      "allowFallback": false
+    },
+    {
+      "id": "threads-post",
+      "platform": "threads",
+      "url": "https://www.threads.net/@zuck/post/Cu8M4wXLZQx",
+      "requires": ["title", "author", "timestamp"],
+      "sectionKinds": [],
+      "allowFallback": false
+    },
+    {
+      "id": "bluesky-image",
+      "platform": "bluesky",
+      "url": "https://bsky.app/profile/bsky.app/post/3mqafridzgk2e",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "image",
+      "sectionKinds": [],
+      "allowFallback": false
+    },
+    {
+      "id": "pixiv-artwork",
+      "platform": "pixiv",
+      "url": "https://www.pixiv.net/en/artworks/101844438",
+      "requires": ["title", "author", "timestamp", "media"],
+      "mediaType": "image",
+      "sectionKinds": [],
+      "allowFallback": true
+    },
+    {
+      "id": "bilibili-video",
+      "platform": "bilibili",
+      "url": "https://www.bilibili.com/video/BV1nhZ2YHEtL",
+      "requires": ["title", "author", "timestamp", "stats", "media"],
+      "mediaType": "video",
+      "sectionKinds": [],
+      "allowFallback": true
+    },
+    {
+      "id": "youtube-community-post",
+      "platform": "youtube",
+      "url": "https://www.youtube.com/post/UgkxB5KI1XNT06XxNO5MRsRoiizikWHv7gAy",
+      "requires": ["title", "author", "timestamp"],
+      "sectionKinds": [],
+      "allowFallback": false
+    },
+    {
+      "id": "pinterest-pin",
+      "platform": "pinterest",
+      "url": "https://www.pinterest.com/pin/424605071145119869/",
+      "requires": ["title", "author", "timestamp", "media"],
+      "mediaType": "image",
+      "sectionKinds": [],
+      "allowFallback": false
+    }
+  ]
+}
