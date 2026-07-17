@@ -79,6 +79,9 @@ export interface TwitterTweetData {
         name: string;
         screen_name: string;
         profile_image_url_https: string;
+        verified?: boolean;
+        is_blue_verified?: boolean;
+        verified_type?: string;
     };
     created_at: string;
     favorite_count?: number;
@@ -203,7 +206,16 @@ function normalizeUser(node: Record<string, any>): TwitterTweetData['user'] | nu
     const name = core.name ?? legacy.name;
     const avatar = rawUser.avatar?.image_url ?? legacy.profile_image_url_https;
     if (typeof screenName !== 'string' || typeof name !== 'string' || typeof avatar !== 'string') return null;
-    return { name, screen_name: screenName, profile_image_url_https: avatar };
+    const verification = record(rawUser.verification);
+    const verifiedType = verification.verified_type ?? rawUser.verified_type ?? legacy.verified_type;
+    return {
+        name,
+        screen_name: screenName,
+        profile_image_url_https: avatar,
+        verified: rawUser.verified === true || legacy.verified === true,
+        is_blue_verified: rawUser.is_blue_verified === true,
+        verified_type: typeof verifiedType === 'string' ? verifiedType : undefined,
+    };
 }
 
 function normalizeQuote(value: unknown): TwitterQuote | undefined {

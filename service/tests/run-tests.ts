@@ -2226,6 +2226,8 @@ const tests: TestCase[] = [
                                     core: { user_results: { result: {
                                         core: { name: 'Primary Author', screen_name: 'primary' },
                                         avatar: { image_url: 'https://pbs.twimg.com/profile_images/primary.jpg' },
+                                        is_blue_verified: true,
+                                        verification: { verified_type: 'Business' },
                                     } } },
                                     legacy: {
                                         id_str: '2000000000000000000',
@@ -2260,6 +2262,8 @@ const tests: TestCase[] = [
                                         core: { user_results: { result: {
                                             core: { name: 'Quoted Author', screen_name: 'quoted' },
                                             avatar: { image_url: 'https://pbs.twimg.com/profile_images/quoted.jpg' },
+                                            is_blue_verified: true,
+                                            verification: { verified_type: 'Government' },
                                         } } },
                                         legacy: {
                                             id_str: '1999999999999999999',
@@ -2313,6 +2317,7 @@ const tests: TestCase[] = [
                     'https://pbs.twimg.com/media/root-one.jpg',
                     'https://pbs.twimg.com/media/root-two.jpg',
                 ]);
+                assert.equal(response.data?.authorVerification, 'organization');
                 assert.deepEqual(response.data?.sections?.map((section) => section.kind), [
                     'poll', 'quote', 'community-note', 'article',
                 ]);
@@ -2326,6 +2331,7 @@ const tests: TestCase[] = [
                     authorHandle: '@quoted',
                     authorUrl: 'https://x.com/quoted',
                     authorAvatar: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                    authorVerification: 'government',
                     images: undefined,
                     video: {
                         url: 'https://video.twimg.com/quoted-gif.mp4',
@@ -3187,6 +3193,10 @@ const tests: TestCase[] = [
                                 name: 'Kuriimu',
                                 screen_name: 'kuriimu0203',
                                 avatar_url: 'https://pbs.twimg.com/profile_images/avatar_normal.jpg',
+                                verification: {
+                                    verified: true,
+                                    type: 'individual',
+                                },
                             },
                             replies: 12,
                             retweets: 34,
@@ -3225,6 +3235,10 @@ const tests: TestCase[] = [
                                     name: 'Quoted Author',
                                     screen_name: 'quoted',
                                     avatar_url: 'https://pbs.twimg.com/profile_images/quoted_normal.jpg',
+                                    verification: {
+                                        verified: true,
+                                        type: 'organization',
+                                    },
                                 },
                                 media: {
                                     photos: [{
@@ -3252,6 +3266,7 @@ const tests: TestCase[] = [
                 assert.equal(body.success, true);
                 assert.equal(body.source, 'fallback');
                 assert.equal(body.data.authorHandle, '@kuriimu0203');
+                assert.equal(body.data.authorVerification, 'premium');
                 assert.equal(
                     body.data.authorAvatar,
                     'https://pbs.twimg.com/profile_images/avatar.jpg',
@@ -3262,6 +3277,7 @@ const tests: TestCase[] = [
                 assert.equal(body.data.video.url, 'https://video.twimg.com/video.mp4');
                 assert.equal(body.data.video.mediaType, 'gif');
                 assert.deepEqual(body.data.sections.map((section: any) => section.kind), ['poll', 'quote']);
+                assert.equal(body.data.sections[1].authorVerification, 'organization');
                 assert.deepEqual(body.data.sections[1].images, ['https://pbs.twimg.com/media/quoted.jpg']);
                 assert.match(body.data.stats, /56/);
             } finally {

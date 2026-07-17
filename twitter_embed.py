@@ -21,6 +21,15 @@ FIXEMBED_EMOJI_ID = 1525580543503106148
 TWITTER_EMOJI_ID = 1526268173589155921
 
 
+def _verification_emoji(value: Any) -> str:
+    emoji_name = {
+        "government": "x_government",
+        "premium": "x_premium",
+        "organization": "x_organization",
+    }.get(str(value or "").strip().casefold())
+    return f" {application_emoji(emoji_name)}" if emoji_name else ""
+
+
 def _clean_handle(value: Any) -> str:
     return str(value or "").strip().lstrip("@")
 
@@ -79,13 +88,14 @@ def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any
     handle = _clean_handle(section.get("authorHandle"))
     author_url = str(section.get("authorUrl") or "").strip()
     avatar = _high_resolution_avatar(section.get("authorAvatar"))
+    verification = _verification_emoji(section.get("authorVerification"))
 
     if handle and author_url:
-        identity = f"**{name}** ([@{handle}]({author_url}))"
+        identity = f"**{name}**{verification} ([@{handle}]({author_url}))"
     elif handle:
-        identity = f"**{name}** (@{handle})"
+        identity = f"**{name}**{verification} (@{handle})"
     else:
-        identity = f"**{name}**"
+        identity = f"**{name}**{verification}"
 
     quote_url = str(section.get("url") or "").strip()
     quote_label = f"[Quote from]({quote_url})" if quote_url else "Quote from"
@@ -142,14 +152,15 @@ def build_twitter_layout(
     handle = _clean_handle(payload.get("authorHandle"))
     author_url = str(payload.get("authorUrl") or "").strip()
     author_avatar = _high_resolution_avatar(payload.get("authorAvatar"))
+    verification = _verification_emoji(payload.get("authorVerification"))
     source_url = str(payload.get("url") or "").strip()
 
     if handle and author_url:
-        identity = f"**{name}** ([@{handle}]({author_url}))"
+        identity = f"**{name}**{verification} ([@{handle}]({author_url}))"
     elif handle:
-        identity = f"**{name}** (@{handle})"
+        identity = f"**{name}**{verification} (@{handle})"
     else:
-        identity = f"**{name}**"
+        identity = f"**{name}**{verification}"
 
     preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()

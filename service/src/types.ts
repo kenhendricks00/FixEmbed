@@ -32,6 +32,8 @@ export type Platform =
     | 'bilibili'
     | 'pinterest';
 
+export type XVerificationBadge = 'premium' | 'organization' | 'government';
+
 // Embed data returned by handlers
 export interface EmbedData {
     // Basic info
@@ -47,6 +49,7 @@ export interface EmbedData {
     authorHandle?: string;
     authorUrl?: string;
     authorAvatar?: string;
+    authorVerification?: XVerificationBadge;
 
     // Media
     image?: string;
@@ -72,6 +75,7 @@ export interface EmbedSection {
     authorHandle?: string;
     authorUrl?: string;
     authorAvatar?: string;
+    authorVerification?: XVerificationBadge;
     images?: string[];
     video?: VideoEmbed;
 }

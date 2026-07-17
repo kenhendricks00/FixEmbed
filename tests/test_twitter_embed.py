@@ -56,6 +56,7 @@ class TwitterEmbedTests(unittest.TestCase):
             "authorHandle": "@BerntBornich",
             "authorUrl": "https://x.com/BerntBornich",
             "authorAvatar": "https://pbs.twimg.com/profile_images/123/avatar_normal.jpg",
+            "authorVerification": "premium",
             "stats": "💬 1.2K  🔁 2.9K  ❤️ 23.8K  👁️ 8.39M",
             "timestamp": "2026-07-09T16:20:00.000Z",
             "video": {
@@ -75,6 +76,10 @@ class TwitterEmbedTests(unittest.TestCase):
         self.assertEqual(container["type"], 17)
         self.assertEqual(container["accent_color"], 0x5865F2)
         self.assertIn("Bernt Bornich", header["components"][0]["content"])
+        self.assertIn(
+            "<:x_premium:1527644259308798113>",
+            header["components"][0]["content"],
+        )
         self.assertIn("[@BerntBornich]", header["components"][0]["content"])
         self.assertIn(payload["description"], header["components"][0]["content"])
         self.assertEqual(
@@ -176,6 +181,7 @@ class TwitterEmbedTests(unittest.TestCase):
                     "authorHandle": "@quoted",
                     "authorUrl": "https://x.com/quoted",
                     "authorAvatar": "https://pbs.twimg.com/profile_images/456/avatar_normal.jpg",
+                    "authorVerification": "organization",
                     "images": ["https://pbs.twimg.com/quoted-one.jpg"],
                     "video": {
                         "url": "https://video.twimg.com/quoted-gif.mp4",
@@ -193,13 +199,15 @@ class TwitterEmbedTests(unittest.TestCase):
 
         self.assertIn(
             "> <:quote:1526256046786609164> [Quote from](https://x.com/quoted/status/456) "
-            "**Quoted Author** ([@quoted](https://x.com/quoted))",
+            "**Quoted Author** <:x_organization:1527642128300118129> "
+            "([@quoted](https://x.com/quoted))",
             quote_text,
         )
         self.assertIn("> The quoted post body.", quote_text)
         self.assertNotIn("\n>\n", quote_text)
         self.assertIn(
-            "**Quoted Author** ([@quoted](https://x.com/quoted))\n> \u200b\n"
+            "**Quoted Author** <:x_organization:1527642128300118129> "
+            "([@quoted](https://x.com/quoted))\n> \u200b\n"
             "> The quoted post body.\n> \u200b\n> Second quoted paragraph.",
             quote_text,
         )

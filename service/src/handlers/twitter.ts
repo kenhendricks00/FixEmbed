@@ -10,6 +10,7 @@ import type {
     HandlerResponse,
     PlatformHandler,
     VideoEmbed,
+    XVerificationBadge,
 } from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
@@ -52,6 +53,10 @@ interface FxTwitterTweet {
         name?: string;
         screen_name?: string;
         avatar_url?: string;
+        verification?: {
+            verified?: boolean;
+            type?: string;
+        };
     };
     replies?: number;
     retweets?: number;
@@ -71,6 +76,33 @@ interface FxTwitterTweet {
         videos?: FxTwitterMedia[];
         external?: FxTwitterMedia;
     };
+}
+
+type TwitterVerificationUser = {
+    verified?: boolean;
+    is_blue_verified?: boolean;
+    verified_type?: string;
+    verification?: {
+        verified?: boolean;
+        type?: string;
+    };
+};
+
+function twitterVerificationBadge(user?: TwitterVerificationUser): XVerificationBadge | undefined {
+    const type = String(user?.verified_type ?? user?.verification?.type ?? '').toLowerCase();
+    if (type === 'government') return 'government';
+    if (type === 'business' || type === 'organization') return 'organization';
+    if (
+        type === 'individual'
+        || type === 'blue'
+        || type === 'premium'
+        || user?.is_blue_verified === true
+        || user?.verified === true
+        || user?.verification?.verified === true
+    ) {
+        return 'premium';
+    }
+    return undefined;
 }
 
 function highResolutionTwitterAvatar(avatarUrl: string): string {
@@ -151,6 +183,7 @@ function fxTwitterQuoteSection(tweet: FxTwitterTweet): EmbedSection | undefined 
         authorHandle: `@${author.screen_name}`,
         authorUrl: `https://x.com/${author.screen_name}`,
         authorAvatar: author.avatar_url ? highResolutionTwitterAvatar(author.avatar_url) : undefined,
+        authorVerification: twitterVerificationBadge(author),
         images: quoteMedia.images || (quoteMedia.image ? [quoteMedia.image] : undefined),
         video: quoteMedia.video,
     };
@@ -234,6 +267,7 @@ async function fetchFxTwitterFallback(
                 authorHandle: `@${author.screen_name}`,
                 authorUrl: `https://x.com/${author.screen_name}`,
                 authorAvatar: highResolutionTwitterAvatar(author.avatar_url),
+                authorVerification: twitterVerificationBadge(author),
                 image: image || video?.thumbnail,
                 images,
                 video,
@@ -414,6 +448,7 @@ export const twitterHandler: PlatformHandler = {
                         authorAvatar: highResolutionTwitterAvatar(
                             tweet.quote.user.profile_image_url_https,
                         ),
+                        authorVerification: twitterVerificationBadge(tweet.quote.user),
                         images: quotePhotos.length ? quotePhotos : undefined,
                         video: quoteVideo,
                     });
@@ -470,6 +505,7 @@ export const twitterHandler: PlatformHandler = {
                     authorHandle: `@${handle}`,
                     authorUrl: `https://x.com/${handle}`,
                     authorAvatar: highResolutionTwitterAvatar(tweet.user.profile_image_url_https),
+                    authorVerification: twitterVerificationBadge(tweet.user),
                     image,
                     images,
                     video,

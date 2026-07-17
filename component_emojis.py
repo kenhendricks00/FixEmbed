@@ -15,6 +15,9 @@ APPLICATION_EMOJI_IDS: Final[dict[str, int]] = {
     "like": 1526255244483362866,
     "repost": 1526255036072591450,
     "comment": 1526254715250282506,
+    "x_government": 1527644261208690778,
+    "x_premium": 1527644259308798113,
+    "x_organization": 1527642128300118129,
 }
 
 
