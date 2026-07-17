@@ -1,5 +1,16 @@
 ## Unreleased
 
+## v1.5.0 (07/17/2026)
+
+#### **Release highlights**
+- Completed FixEmbed's modern Discord Components V2 overhaul across every supported social platform, settings, and informational commands.
+- Brought first-party X cards to feature parity with rich quote posts, playable videos, looping GIFs, complete carousels, verification badges, translations, polls, articles, Community Notes, link cards, and original publication times.
+- Added Pinterest support and expanded first-party recovery for Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, and YouTube Community Posts.
+- Introduced server-customizable Premium controls, private content-free analytics, server branding, automatic X translations, and bot/webhook conversion while keeping media quality and reliability improvements free.
+- Added privacy-safe conversion and delivery diagnostics, live platform health, production conformance canaries, latency budgets, permission-aware delivery recovery, and complete SparkedHost deployment bundles.
+- Added product-led personal/server installation surfaces, refreshed App Discovery marketing assets, and an onboarding DM for new server owners.
+- Relicensed FixEmbed under AGPL-3.0-or-later with visible source and creator attribution across public surfaces.
+
 #### **Server install repair**
 - Fixed account/server install controls so server installation requests the required bot and application-command scopes instead of failing with "No scopes were provided."
 - Requests the minimum channel, media, history, emoji, message-management, and thread permissions used by automatic Components V2 delivery.

@@ -69,7 +69,7 @@ from premium_roles import (
 )
 
 # Version number
-VERSION = "1.4.8"
+VERSION = "1.5.0"
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
