@@ -53,7 +53,7 @@ def comparison_copy(
     summary: str,
     active: bool,
 ) -> None:
-    x = 520
+    x = 600
     draw.text((x, 108), title[0], font=font(33, bold=True), fill=WHITE)
     draw.text((x, 150), title[1], font=font(33, bold=True), fill=title_second_color)
 
@@ -76,7 +76,7 @@ def comparison_copy(
 def before_scene(frame: Image.Image, before: Image.Image, alpha: float) -> None:
     layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    card_with_shadow(layer, before, position=(48, 108), bounds=(410, 390))
+    card_with_shadow(layer, before, position=(128, 108), bounds=(410, 390))
     comparison_copy(
         draw,
         title=("The embed worked.", "But it stopped short."),
@@ -97,7 +97,7 @@ def before_scene(frame: Image.Image, before: Image.Image, alpha: float) -> None:
 def after_scene(frame: Image.Image, after: Image.Image, alpha: float) -> None:
     layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    card_with_shadow(layer, after, position=(48, 95), bounds=(412, 418))
+    card_with_shadow(layer, after, position=(128, 95), bounds=(412, 418))
     comparison_copy(
         draw,
         title=("Then FixEmbed", "brings it to life."),
