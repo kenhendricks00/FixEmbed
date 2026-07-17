@@ -19,7 +19,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 > You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`). FixEmbed will leave that message alone (no edits or deletions).
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/header.png">
+<img src="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/main/assets/marketing/fixembed-before-after-v3.gif">
 </p>
 
 **Commands:**
