@@ -21,9 +21,10 @@ without retaining Discord identities, content, or destination information.
 - Source messages are mutated only after every requested replacement reaches a
   successful terminal outcome. Direct component delivery and link rescue count
   as success; any terminal failure preserves the source.
-- Every Discord API send attempt has a 15-second deadline. A timed-out component
-  send proceeds to link rescue, while a timed-out final fallback records a
-  complete failure and releases the delivery queue.
+- Rich Components V2 sends have a 30-second deadline so Discord can process
+  larger remote-media galleries. Plain-link sends and fallback attempts retain
+  a 15-second deadline, so a stalled request still cannot block the queue
+  indefinitely.
 - Exactly one terminal outcome is recorded per completed queue item: direct
   delivery, component-to-link rescue, or complete failure.
 - The latest 200 end-to-end queue/send durations are retained in memory for p95.

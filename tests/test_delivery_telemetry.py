@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import patch
 
 from delivery_telemetry import (
     DeliveryTelemetry,
@@ -161,6 +162,35 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, ["primary"])
         self.assertEqual(outcome, "direct")
         self.assertEqual(telemetry.snapshot().direct_deliveries, 1)
+
+    async def test_delivery_orchestrator_gives_v2_cards_more_time_than_link_fallbacks(self):
+        telemetry = DeliveryTelemetry()
+        ticket = telemetry.queued("card")
+        observed_timeouts = []
+
+        async def primary_send():
+            raise ResponseError(500)
+
+        async def fallback_send():
+            return None
+
+        async def observe_wait_for(awaitable, *, timeout):
+            observed_timeouts.append(timeout)
+            return await awaitable
+
+        with (
+            patch("delivery_telemetry.asyncio.wait_for", side_effect=observe_wait_for),
+            self.assertLogs("fixembed.delivery", level="WARNING"),
+        ):
+            outcome = await deliver_with_fallback(
+                ticket,
+                telemetry=telemetry,
+                primary_send=primary_send,
+                fallback_send=fallback_send,
+            )
+
+        self.assertEqual(outcome, "rescued")
+        self.assertEqual(observed_timeouts, [30.0, 15.0])
 
     async def test_delivery_orchestrator_rescues_failed_component_with_link(self):
         telemetry = DeliveryTelemetry()
