@@ -136,6 +136,11 @@ query Clip($slug: ID!) {
     broadcaster { displayName login profileImageURL(width: 300) }
     curator { displayName login }
     game { displayName }
+    playbackAccessToken(params: {
+      platform: "web"
+      playerBackend: "mediaplayer"
+      playerType: "site"
+    }) { signature value }
     videoQualities { sourceURL quality frameRate }
   }
 }`;
@@ -180,7 +185,17 @@ async function handleClip(input: Extract<TwitchInput, { kind: 'clip' }>): Promis
             .filter((item): item is Record<string, unknown> => Boolean(item))
             .sort((left, right) => (finiteNumber(right.quality) || 0) - (finiteNumber(left.quality) || 0))
         : [];
-    const videoUrl = trustedTwitchMedia(qualities[0]?.sourceURL);
+    const accessToken = object(clip.playbackAccessToken);
+    const sourceUrl = trustedTwitchMedia(qualities[0]?.sourceURL);
+    const signature = text(accessToken?.signature);
+    const token = text(accessToken?.value);
+    let videoUrl: string | undefined;
+    if (sourceUrl && signature && token) {
+        const signedUrl = new URL(sourceUrl);
+        signedUrl.searchParams.set('sig', signature);
+        signedUrl.searchParams.set('token', token);
+        videoUrl = trustedTwitchMedia(signedUrl.toString());
+    }
     const thumbnail = trustedTwitchMedia(clip.thumbnailURL);
     const video: VideoEmbed | undefined = videoUrl ? {
         url: videoUrl,

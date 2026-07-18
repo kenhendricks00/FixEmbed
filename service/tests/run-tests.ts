@@ -550,6 +550,87 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'tiktokHandler recovers a missing post avatar from the first-party profile page',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requested = String(input);
+                if (requested.startsWith('https://www.tiktok.com/oembed?url=')) {
+                    return Response.json({
+                        title: 'A TikTok caption',
+                        author_name: 'Creator Name',
+                        author_unique_id: 'creator',
+                        thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/cover.jpeg',
+                    });
+                }
+                if (requested === 'https://www.tiktok.com/@creator') {
+                    return new Response(`
+                        <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+                        {
+                            "__DEFAULT_SCOPE__": {
+                                "webapp.user-detail": {
+                                    "userInfo": {
+                                        "user": {
+                                            "uniqueId": "creator",
+                                            "avatarLarger": "https://p16-sign.tiktokcdn-us.com/profile.jpeg"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        </script>
+                    `, { headers: { 'Content-Type': 'text/html' } });
+                }
+                assert.equal(
+                    requested,
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                );
+                return new Response(`
+                    <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+                    {
+                        "__DEFAULT_SCOPE__": {
+                            "webapp.video-detail": {
+                                "itemInfo": {
+                                    "itemStruct": {
+                                        "id": "7421234567890123456",
+                                        "desc": "A TikTok caption",
+                                        "createTime": "1721133000",
+                                        "video": {
+                                            "width": 576,
+                                            "height": 1024,
+                                            "duration": 14,
+                                            "cover": "https://p16-sign.tiktokcdn-us.com/cover.jpeg",
+                                            "playAddr": "https://v16-webapp-prime.us.tiktok.com/video.mp4"
+                                        },
+                                        "author": {
+                                            "uniqueId": "creator",
+                                            "nickname": "Creator Name"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    </script>
+                `, { headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://p16-sign.tiktokcdn-us.com/profile.jpeg',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'tiktokHandler uses bounded FxTikTok ActivityPub only as an emergency fallback',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -691,9 +772,11 @@ const tests: TestCase[] = [
                 assert.equal(String(input), 'https://gql.twitch.tv/gql');
                 assert.equal(new Headers(init?.headers).get('Client-ID'), 'kimne78kx3ncx6brgo4mv6wki5h1ko');
                 const request = JSON.parse(String(init?.body)) as {
+                    query?: string;
                     variables?: { slug?: string };
                 };
                 assert.equal(request.variables?.slug, 'GoodGoodWaffleTwitchRaid');
+                assert.match(request.query || '', /playbackAccessToken/);
                 return Response.json({ data: { clip: {
                     slug: 'GoodGoodWaffleTwitchRaid',
                     title: 'We go crazy with the flick for the win :)',
@@ -708,6 +791,10 @@ const tests: TestCase[] = [
                     },
                     curator: { displayName: 'Clipper', login: 'clipper' },
                     game: { displayName: 'Apex Legends' },
+                    playbackAccessToken: {
+                        signature: 'clip-signature',
+                        value: '{"authorization":{"forbidden":false}}',
+                    },
                     videoQualities: [{
                         sourceURL: 'https://d1ndex63qxojbr.cloudfront.net/clip/index.mp4',
                         quality: '720',
@@ -724,9 +811,15 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorName, 'TSoonami');
                 assert.equal(response.data?.description, 'Apex Legends · Clipped by Clipper · 30s');
                 assert.equal(response.data?.stats, '👁️ 224 views');
+                const mediaUrl = new URL(response.data?.video?.url || '');
                 assert.equal(
-                    response.data?.video?.url,
+                    mediaUrl.origin + mediaUrl.pathname,
                     'https://d1ndex63qxojbr.cloudfront.net/clip/index.mp4',
+                );
+                assert.equal(mediaUrl.searchParams.get('sig'), 'clip-signature');
+                assert.equal(
+                    mediaUrl.searchParams.get('token'),
+                    '{"authorization":{"forbidden":false}}',
                 );
             } finally {
                 globalThis.fetch = originalFetch;

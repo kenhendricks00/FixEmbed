@@ -47,6 +47,12 @@ type TikTokItem = {
     isContentClassified?: unknown;
 };
 
+type TikTokProfile = {
+    uniqueId?: unknown;
+    avatarLarger?: unknown;
+    avatarMedium?: unknown;
+};
+
 type FxTikTokActivity = {
     id?: unknown;
     url?: unknown;
@@ -216,6 +222,34 @@ async function fetchTikTokOEmbed(parsed: ParsedTikTokUrl): Promise<TikTokOEmbed 
         6_000,
     );
     return response.ok ? await response.json() as TikTokOEmbed : undefined;
+}
+
+async function fetchTikTokProfileAvatar(handle: string): Promise<string | undefined> {
+    if (!/^[\w.-]+$/.test(handle)) return undefined;
+    const response = await fetchWithTimeout(`https://www.tiktok.com/@${handle}`, {
+        redirect: 'manual',
+        headers: {
+            'Accept': 'text/html,application/xhtml+xml',
+            'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+        },
+    }, 4_000);
+    if (!response.ok) return undefined;
+    const html = await readTextLimited(response, MAX_TIKTOK_HTML_BYTES);
+    const script = html.match(
+        /<script\b[^>]*\bid=["']__UNIVERSAL_DATA_FOR_REHYDRATION__["'][^>]*>([\s\S]*?)<\/script>/i,
+    )?.[1];
+    if (!script) return undefined;
+    const hydrated = JSON.parse(script) as {
+        __DEFAULT_SCOPE__?: {
+            'webapp.user-detail'?: {
+                userInfo?: { user?: TikTokProfile };
+            };
+        };
+    };
+    const profile = hydrated.__DEFAULT_SCOPE__?.['webapp.user-detail']?.userInfo?.user;
+    if (text(profile?.uniqueId).toLowerCase() !== handle.toLowerCase()) return undefined;
+    return trustedTikTokMedia(profile?.avatarLarger)
+        || trustedTikTokMedia(profile?.avatarMedium);
 }
 
 function positiveDimension(value: unknown, fallback: number): number {
@@ -408,7 +442,13 @@ export const tiktokHandler: PlatformHandler = {
             const oEmbed = oEmbedResult.status === 'fulfilled' ? oEmbedResult.value : undefined;
             if (item) {
                 const data = firstPartyData(parsed, item, oEmbed);
-                if (data) return { success: true, source: 'first-party', data };
+                if (data) {
+                    if (!data.authorAvatar) {
+                        const handle = text(data.authorHandle).replace(/^@/, '');
+                        data.authorAvatar = await fetchTikTokProfileAvatar(handle);
+                    }
+                    return { success: true, source: 'first-party', data };
+                }
             }
 
             const fallback = await fetchFxTikTokFallback(parsed, oEmbed);
