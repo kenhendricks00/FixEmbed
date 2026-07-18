@@ -19,6 +19,16 @@ distinct carousel image exposed by the source.
 - Use the plain-link card only when the native Components V2 send genuinely
   fails.
 
+## Video relay contract
+
+- Keep Reels as remote video Media Gallery items. Do not upload them as message
+  attachments.
+- Forward Discord byte-range requests to the recovered Instagram video.
+- Preserve the upstream `206`, `Content-Range`, and `Content-Length` response
+  so Discord can initialize inline playback.
+- Advertise the response as an inline MP4 and retain the remote-video fallback
+  when media recovery fails.
+
 ## Relay contract
 
 - Accept only HTTPS URLs on `cdninstagram.com`, `fbcdn.net`, or their
@@ -36,6 +46,9 @@ distinct carousel image exposed by the source.
 - The Python regression tests trace the ordered carousel from the extracted
   image list through restricted relay normalization, concurrent download, and
   the final `attachment://` Media Gallery items.
+- The affected Reel regression traces the recovered remote video through
+  video-first normalization and into the Components V2 Media Gallery while
+  ensuring its poster remains fallback metadata only.
 - The Worker tests verify trusted image streaming, untrusted-host rejection,
   and unsafe-redirect rejection.
 - The live acceptance test posts a ten-image Instagram carousel in Discord and

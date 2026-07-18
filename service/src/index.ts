@@ -772,25 +772,34 @@ app.get('/video/instagram', async (c) => {
         const response = await fetch(videoUrl, {
             headers: {
                 'User-Agent': 'TelegramBot (like TwitterBot)',
+                'Accept': 'video/*,*/*',
+                'Range': c.req.header('Range') || 'bytes=0-',
             },
         });
 
-        if (!response.ok) {
+        if (!response.ok && response.status !== 206) {
             return c.redirect(videoUrl, 302);
         }
 
         // Stream the video back with proper headers
         const headers = new Headers();
-        headers.set('Content-Type', 'video/mp4');
+        headers.set('Content-Type', response.headers.get('Content-Type') || 'video/mp4');
         headers.set('Accept-Ranges', 'bytes');
+        headers.set('Cache-Control', 'public, max-age=3600');
+        headers.set('Content-Disposition', 'inline; filename="instagram-video.mp4"');
+        headers.set('X-Content-Type-Options', 'nosniff');
 
         const contentLength = response.headers.get('Content-Length');
+        const contentRange = response.headers.get('Content-Range');
         if (contentLength) {
             headers.set('Content-Length', contentLength);
         }
+        if (contentRange) {
+            headers.set('Content-Range', contentRange);
+        }
 
         return new Response(response.body, {
-            status: 200,
+            status: response.status,
             headers,
         });
     } catch (error) {

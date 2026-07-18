@@ -388,18 +388,23 @@ class InstagramEmbedTests(unittest.TestCase):
             )
         )
 
-    def test_fetch_delivery_preserves_video_playback_without_image_uploads(self):
-        video_url = "https://fixembed.app/video/instagram?url=video"
+    def test_fetch_delivery_preserves_affected_reel_as_remote_video(self):
+        reel_url = "https://www.instagram.com/reel/DWm-w02iSXP/"
+        video_url = (
+            "https://fixembed.app/video/instagram?"
+            "url=https%3A%2F%2Fkkinstagram.com%2Freel%2FDWm-w02iSXP%2F"
+        )
+        poster_url = "https://scontent.example.cdninstagram.com/reel-poster.jpg"
         payload = {
-            "url": "https://www.instagram.com/reel/VideoPost/",
+            "url": reel_url,
             "authorHandle": "@creator",
             "video": {
                 "url": video_url,
-                "thumbnail": "https://scontent.example.cdninstagram.com/poster.jpg",
+                "thumbnail": poster_url,
             },
             "images": [
-                "https://scontent.example.cdninstagram.com/poster.jpg",
-                "https://scontent.example.cdninstagram.com/alternate.jpg",
+                poster_url,
+                "https://scontent.example.cdninstagram.com/alternate-poster.jpg",
             ],
         }
 
@@ -424,6 +429,7 @@ class InstagramEmbedTests(unittest.TestCase):
             [item["media"]["url"] for item in gallery["items"]],
             [video_url],
         )
+        self.assertNotIn(poster_url, [item["media"]["url"] for item in gallery["items"]])
 
     def test_components_v2_layout_splits_twenty_images_across_discord_galleries(self):
         image_urls = [

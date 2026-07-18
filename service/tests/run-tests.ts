@@ -2061,6 +2061,50 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'Instagram Reel video relay preserves Discord byte-range playback',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const upstreamUrl = 'https://kkinstagram.com/reel/DWm-w02iSXP/';
+            let forwardedRange: string | null = null;
+            globalThis.fetch = async (input, init) => {
+                assert.equal(String(input), upstreamUrl);
+                forwardedRange = new Headers(init?.headers).get('Range');
+                return new Response('video-chunk', {
+                    status: 206,
+                    headers: {
+                        'Content-Type': 'video/mp4',
+                        'Content-Length': '11',
+                        'Content-Range': 'bytes 0-10/4044060',
+                    },
+                });
+            };
+
+            try {
+                const response = await app.request(
+                    '/video/instagram?url=' + encodeURIComponent(upstreamUrl),
+                    {
+                        headers: { Range: 'bytes=0-10' },
+                    },
+                    env,
+                );
+
+                assert.equal(forwardedRange, 'bytes=0-10');
+                assert.equal(response.status, 206);
+                assert.equal(response.headers.get('Content-Type'), 'video/mp4');
+                assert.equal(response.headers.get('Accept-Ranges'), 'bytes');
+                assert.equal(response.headers.get('Content-Range'), 'bytes 0-10/4044060');
+                assert.equal(response.headers.get('Content-Length'), '11');
+                assert.equal(
+                    response.headers.get('Content-Disposition'),
+                    'inline; filename="instagram-video.mp4"',
+                );
+                assert.equal(await response.text(), 'video-chunk');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'Bilibili media proxy rejects URLs outside trusted video hosts',
         run: async () => {
             const response = await app.request(
