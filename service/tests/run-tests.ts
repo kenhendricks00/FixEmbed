@@ -789,6 +789,77 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'tumblrHandler prefers the complete themed post body and high-resolution media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const bodyPadding = 'Full body detail. '.repeat(140);
+            globalThis.fetch = async (input) => {
+                assert.equal(
+                    String(input),
+                    'https://titleknown.tumblr.com/post/801061841418780672',
+                );
+                return new Response(`
+                    <meta property="og:title" content="TitleKnown">
+                    <meta property="og:description" content="The shortened Tumblr summary...">
+                    <div class="post-left post">
+                        <div class="npf_row">
+                            <a data-big-photo="https://64.media.tumblr.com/post/s1280x1920/poster.png">
+                                <img src="https://64.media.tumblr.com/post/s500x750/poster.png">
+                            </a>
+                        </div>
+                        <p>
+                            The complete opening has a
+                            <a href="https://example.com/detail">linked passage</a>.
+                        </p>
+                        <p>${bodyPadding}</p>
+                        <p>Unsafe <a href="javascript:alert(1)">link label</a> remains text.</p>
+                        <p>Final <i>paragraph</i> from the real post.</p>
+                        <div class="info">377 notes</div>
+                    </div>
+                    <script type="application/ld+json">
+                    {
+                        "@type": "SocialMediaPosting",
+                        "datePublished": "2025-11-24T02:41:43+00:00",
+                        "author": {
+                            "name": "titleknown",
+                            "url": "https://titleknown.tumblr.com/",
+                            "image": {"url": "https://64.media.tumblr.com/avatar.pnj"}
+                        },
+                        "image": "https://64.media.tumblr.com/post/s540x810/poster.png",
+                        "articleBody": "The shortened Tumblr summary..."
+                    }
+                    </script>
+                `, { headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await tumblrHandler.handle(
+                    'https://www.tumblr.com/titleknown/801061841418780672',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.match(
+                    response.data?.description || '',
+                    /\[linked passage\]\(https:\/\/example\.com\/detail\)/,
+                );
+                assert.match(
+                    response.data?.description || '',
+                    /Final \*paragraph\* from the real post\./,
+                );
+                assert.doesNotMatch(
+                    response.data?.description || '',
+                    /shortened Tumblr summary|javascript:/,
+                );
+                assert.match(response.data?.description || '', /Unsafe link label remains text\./);
+                assert.equal(
+                    response.data?.image,
+                    'https://64.media.tumblr.com/post/s1280x1920/poster.png',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitchHandler renders public clip GraphQL metadata with playable video',
         run: async () => {
             const originalFetch = globalThis.fetch;

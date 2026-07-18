@@ -26,6 +26,7 @@ type TumblrJsonLd = {
     '@type'?: unknown;
     datePublished?: unknown;
     articleBody?: unknown;
+    image?: unknown;
     keywords?: unknown;
     author?: JsonLdAuthor;
 };
@@ -153,6 +154,15 @@ function jsonLdImage(author: JsonLdAuthor | undefined): string | undefined {
     return trustedTumblrMedia(raw);
 }
 
+function jsonLdPostImage(value: unknown): string | undefined {
+    const raw = typeof value === 'string'
+        ? value
+        : value && typeof value === 'object' && 'url' in value
+            ? (value as { url?: unknown }).url
+            : undefined;
+    return trustedTumblrMedia(raw);
+}
+
 function trustedTumblrMedia(value: unknown): string | undefined {
     if (typeof value !== 'string') return undefined;
     try {
@@ -170,12 +180,87 @@ function trustedTumblrMedia(value: unknown): string | undefined {
     return undefined;
 }
 
-function tumblrImages(html: string): string[] {
-    const article = html.match(/<article\b[^>]*class=["'][^"']*\bpost\b[^"']*["'][^>]*>([\s\S]*?)<\/article>/i)?.[1] || '';
-    const urls = [...article.matchAll(/<(?:img|source)\b[^>]*(?:data-orig-src|data-src|src)=["']([^"']+)["']/gi)]
+function tumblrPostFragment(html: string): string {
+    const start = html.search(
+        /<(?:article|div)\b[^>]*class=["'][^"']*\bpost\b[^"']*["'][^>]*>/i,
+    );
+    if (start < 0) return '';
+    const tail = html.slice(start);
+    const end = tail.search(
+        /<div\b[^>]*class=["'][^"']*\b(?:info|post-info|post-footer)\b[^"']*["'][^>]*>/i,
+    );
+    return end > 0 ? tail.slice(0, end) : tail.slice(0, 500_000);
+}
+
+function tumblrImages(post: string, jsonLd: TumblrJsonLd | undefined): string[] {
+    const largeUrls = [...post.matchAll(/<a\b[^>]*data-big-photo=["']([^"']+)["']/gi)]
         .map((match) => trustedTumblrMedia(match[1]))
         .filter((url): url is string => Boolean(url));
+    const inlineUrls = [...post.matchAll(/<(?:img|source)\b[^>]*(?:data-orig-src|data-src|src)=["']([^"']+)["']/gi)]
+        .map((match) => trustedTumblrMedia(match[1]))
+        .filter((url): url is string => Boolean(url));
+    const urls = largeUrls.length ? largeUrls : inlineUrls;
+    const fallback = jsonLdPostImage(jsonLd?.image);
+    if (!urls.length && fallback) urls.push(fallback);
     return [...new Set(urls)].slice(0, 10);
+}
+
+function decodeTumblrText(value: string): string {
+    return decodeHtmlEntities(value)
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&#x([0-9a-f]+);/gi, (_match, digits: string) => {
+            const codePoint = Number.parseInt(digits, 16);
+            return Number.isSafeInteger(codePoint) && codePoint <= 0x10FFFF
+                ? String.fromCodePoint(codePoint)
+                : '';
+        })
+        .replace(/&#(\d+);/g, (_match, digits: string) => {
+            const codePoint = Number.parseInt(digits, 10);
+            return Number.isSafeInteger(codePoint) && codePoint <= 0x10FFFF
+                ? String.fromCodePoint(codePoint)
+                : '';
+        });
+}
+
+function safeMarkdownUrl(value: string): string | undefined {
+    try {
+        const parsed = new URL(decodeTumblrText(value));
+        if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return undefined;
+        return parsed.toString().replace(/\)/g, '%29');
+    } catch {
+        return undefined;
+    }
+}
+
+function tumblrBlockMarkdown(value: string): string {
+    const withLinks = value.replace(
+        /<a\b([^>]*)>([\s\S]*?)<\/a>/gi,
+        (_match, attributes: string, label: string) => {
+            const href = attributes.match(/\bhref\s*=\s*(["'])(.*?)\1/i)?.[2];
+            const safeUrl = href ? safeMarkdownUrl(href) : undefined;
+            return safeUrl ? `[${label}](${safeUrl})` : label;
+        },
+    );
+    return decodeTumblrText(
+        withLinks
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<(?:strong|b)\b[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi, '**$1**')
+            .replace(/<(?:em|i)\b[^>]*>([\s\S]*?)<\/(?:em|i)>/gi, '*$1*')
+            .replace(/<[^>]+>/g, ''),
+    )
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
+
+function tumblrPostBody(post: string): string {
+    const blocks = [...post.matchAll(
+        /<(p|h[1-6]|blockquote|li)\b[^>]*>([\s\S]*?)<\/\1>/gi,
+    )]
+        .map((match) => tumblrBlockMarkdown(match[2]))
+        .filter(Boolean);
+    return blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -219,11 +304,13 @@ export const tumblrHandler: PlatformHandler = {
         try {
             const result = await fetchTumblrHtml(parsed.canonical);
             const jsonLd = tumblrJsonLd(result.html);
+            const post = tumblrPostFragment(result.html);
             const title = truncateText(metaContent(result.html, 'og:title') || 'Tumblr post', 300);
             const description = truncateText(
-                metaContent(result.html, 'og:description')
-                || (typeof jsonLd?.articleBody === 'string' ? jsonLd.articleBody : ''),
-                2_500,
+                tumblrPostBody(post)
+                || (typeof jsonLd?.articleBody === 'string' ? jsonLd.articleBody : '')
+                || metaContent(result.html, 'og:description'),
+                2_800,
             );
             const authorName = typeof jsonLd?.author?.name === 'string'
                 ? jsonLd.author.name.trim()
@@ -231,7 +318,7 @@ export const tumblrHandler: PlatformHandler = {
             const authorUrl = typeof jsonLd?.author?.url === 'string' && isTrustedTumblrUrl(jsonLd.author.url)
                 ? jsonLd.author.url
                 : `https://${parsed.blog}.tumblr.com/`;
-            const images = tumblrImages(result.html);
+            const images = tumblrImages(post, jsonLd);
             const noteMatch = result.html.match(/\b([\d,]+)\s+notes?\b/i);
             const notes = noteMatch ? Number(noteMatch[1].replace(/,/g, '')) : 0;
             return {
