@@ -20,15 +20,26 @@ MAX_PROFILE_METADATA_BYTES = 256_000
 MAX_CACHE_ENTRIES = 256
 CACHE_TTL_SECONDS = 300
 NEGATIVE_CACHE_TTL_SECONDS = 30
+DEFAULT_RATE_LIMIT_SECONDS = 60
+MAX_RATE_LIMIT_SECONDS = 900
 MEDIA_HOST_SUFFIXES = ("wixmp.com", "deviantart.net", "deviantart.com")
 
 _payload_cache: OrderedDict[str, tuple[float, Mapping[str, Any]]] = OrderedDict()
 _negative_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
 _inflight: dict[str, asyncio.Task[Mapping[str, Any]]] = {}
+_rate_limited_until = float("-inf")
 
 
 class DeviantArtSourceError(RuntimeError):
     """Raised when DeviantArt cannot provide safe public metadata."""
+
+
+class DeviantArtRateLimitError(DeviantArtSourceError):
+    """Raised with a bounded cooldown when public oEmbed is throttled."""
+
+    def __init__(self, retry_after_seconds: int):
+        super().__init__("DeviantArt rate limited metadata retrieval")
+        self.retry_after_seconds = retry_after_seconds
 
 
 class _ProfileMetadataParser(HTMLParser):
@@ -227,6 +238,14 @@ def normalize_deviantart_oembed_payload(
 
 
 async def _read_oembed_response(response: aiohttp.ClientResponse) -> Mapping[str, Any]:
+    if response.status == 429:
+        try:
+            retry_after = int(response.headers.get("Retry-After", ""))
+        except (TypeError, ValueError):
+            retry_after = DEFAULT_RATE_LIMIT_SECONDS
+        raise DeviantArtRateLimitError(
+            min(MAX_RATE_LIMIT_SECONDS, max(1, retry_after))
+        )
     if response.status != 200:
         raise DeviantArtSourceError(f"DeviantArt returned {response.status}")
     try:
@@ -315,6 +334,8 @@ async def _fetch_deviantart_profile_avatar(
 async def _fetch_deviantart_oembed_payload(
     source_url: str,
 ) -> Mapping[str, Any]:
+    global _rate_limited_until
+
     canonical_url, _ = _source_identity(source_url)
     cached = _payload_cache.get(canonical_url)
     if cached is not None:
@@ -323,6 +344,12 @@ async def _fetch_deviantart_oembed_payload(
             _payload_cache.move_to_end(canonical_url)
             return payload
         _payload_cache.pop(canonical_url, None)
+
+    now = time.monotonic()
+    if now < _rate_limited_until:
+        raise DeviantArtRateLimitError(
+            max(1, int(_rate_limited_until - now))
+        )
 
     cached_error = _negative_cache.get(canonical_url)
     if cached_error is not None:
@@ -341,8 +368,15 @@ async def _fetch_deviantart_oembed_payload(
     try:
         payload = await pending
     except (aiohttp.ClientError, asyncio.TimeoutError, DeviantArtSourceError) as error:
+        error_ttl = NEGATIVE_CACHE_TTL_SECONDS
+        if isinstance(error, DeviantArtRateLimitError):
+            error_ttl = error.retry_after_seconds
+            _rate_limited_until = max(
+                _rate_limited_until,
+                time.monotonic() + error_ttl,
+            )
         _negative_cache[canonical_url] = (
-            time.monotonic() + NEGATIVE_CACHE_TTL_SECONDS,
+            time.monotonic() + error_ttl,
             str(error),
         )
         _negative_cache.move_to_end(canonical_url)

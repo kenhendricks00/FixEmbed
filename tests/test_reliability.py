@@ -118,6 +118,52 @@ class ReliabilityClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, 1)
         self.assertIs(first, second)
 
+    async def test_bot_runtime_check_replaces_blocked_worker_platform_health(self):
+        worker_payload = {
+            **STATUS_PAYLOAD,
+            "platforms": [
+                *STATUS_PAYLOAD["platforms"][:2],
+                {
+                    "platform": "DeviantArt",
+                    "currentLatencyMs": 90,
+                    "status": "outage",
+                    "mode": "unavailable",
+                    "checkedAt": "2026-07-14T12:00:00Z",
+                    "responseCode": 403,
+                },
+            ],
+        }
+
+        async def fetch_json(_url):
+            return worker_payload
+
+        async def local_check():
+            from reliability import PlatformHealth
+
+            return PlatformHealth(
+                service="DeviantArt",
+                status="operational",
+                mode="first-party",
+                latency_ms=120,
+                checked_at=1784030400,
+                response_code=200,
+            )
+
+        client = ReliabilityClient(
+            fetch_json=fetch_json,
+            local_checks=(local_check,),
+        )
+
+        report = await client.get_report()
+        deviantart = next(
+            row for row in report.platforms
+            if row.service == "DeviantArt"
+        )
+
+        self.assertEqual(deviantart.status, "operational")
+        self.assertEqual(deviantart.mode, "first-party")
+        self.assertEqual(deviantart.response_code, 200)
+
     async def test_force_refresh_bypasses_fresh_cache(self):
         clock = MutableClock()
         calls = 0

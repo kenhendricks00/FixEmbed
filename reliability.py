@@ -61,6 +61,52 @@ class ReliabilityReport:
         return bool(self.platforms)
 
 
+async def probe_deviantart_bot_health() -> PlatformHealth:
+    """Probe the same bot-host metadata path used for DeviantArt V2 cards."""
+    from deviantart_source import fetch_deviantart_payload
+
+    started_at = time.monotonic()
+    try:
+        payload = await fetch_deviantart_payload(
+            "https://www.deviantart.com/team/art/"
+            "Fella-Celebrates-100k-971957229"
+        )
+        healthy = bool(
+            payload.get("title")
+            and payload.get("authorName")
+            and payload.get("authorAvatar")
+            and payload.get("image")
+        )
+    except Exception:
+        healthy = False
+    return PlatformHealth(
+        service="DeviantArt",
+        status="operational" if healthy else "outage",
+        mode="first-party" if healthy else "unavailable",
+        latency_ms=min(120_000, int((time.monotonic() - started_at) * 1000)),
+        checked_at=int(time.time()),
+        response_code=200 if healthy else None,
+        notice="" if healthy else "Bot-runtime metadata canary failed.",
+    )
+
+
+def _replace_platform_health(
+    report: ReliabilityReport,
+    local_rows: tuple[PlatformHealth, ...],
+) -> ReliabilityReport:
+    replacements = {row.service: row for row in local_rows}
+    rows = tuple(
+        replacements.pop(row.service, row)
+        for row in report.platforms
+    ) + tuple(replacements.values())
+    overall_status = "operational"
+    if any(row.status == "outage" for row in rows):
+        overall_status = "outage"
+    elif any(row.status == "degraded" for row in rows):
+        overall_status = "degraded"
+    return replace(report, platforms=rows, overall_status=overall_status)
+
+
 def _bounded_text(value: Any, limit: int = 180) -> str:
     return " ".join(str(value or "").split())[:limit]
 
@@ -153,6 +199,10 @@ class ReliabilityClient:
         cache_ttl_seconds: float = 30,
         stale_ttl_seconds: float = 300,
         retry_delay_seconds: float = 15,
+        local_checks: tuple[
+            Callable[[], Awaitable[PlatformHealth]],
+            ...,
+        ] = (),
     ):
         self.status_url = status_url
         self.fetch_json = fetch_json
@@ -160,6 +210,7 @@ class ReliabilityClient:
         self.cache_ttl_seconds = cache_ttl_seconds
         self.stale_ttl_seconds = stale_ttl_seconds
         self.retry_delay_seconds = retry_delay_seconds
+        self.local_checks = local_checks
         self._cached_report: Optional[ReliabilityReport] = None
         self._cached_at = float("-inf")
         self._failure_report: Optional[ReliabilityReport] = None
@@ -191,6 +242,13 @@ class ReliabilityClient:
                 report = parse_reliability_payload(
                     await self.fetch_json(self.status_url)
                 )
+                if self.local_checks:
+                    local_rows = tuple(
+                        await asyncio.gather(
+                            *(check() for check in self.local_checks)
+                        )
+                    )
+                    report = _replace_platform_health(report, local_rows)
             except Exception as error:
                 logging.warning(
                     "reliability_status_fetch_failed",

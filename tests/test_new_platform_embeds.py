@@ -249,3 +249,21 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(signed_avatar, str(serialized_container(
             build_deviantart_layout(payload)
         )))
+
+    def test_escapes_deviation_text_before_rendering_discord_markdown(self):
+        payload = {
+            "title": "[unsafe](https://example.com) @everyone",
+            "description": "**bold** <@123>",
+            "url": "https://www.deviantart.com/team/art/example-123",
+            "authorName": "__Team__",
+            "authorHandle": "@team",
+            "authorUrl": "https://www.deviantart.com/team",
+        }
+
+        rendered = str(serialized_container(build_deviantart_layout(payload)))
+
+        self.assertIn(r"\[unsafe]", rendered)
+        self.assertNotIn("**bold**", rendered)
+        self.assertNotIn("__Team__", rendered)
+        self.assertNotIn("@everyone", rendered)
+        self.assertNotIn("<@123>", rendered)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Optional
 
 import discord
+from discord.utils import escape_markdown, escape_mentions
 
 from card_preferences import CardPreferences
 from deviantart_source import (
@@ -23,14 +24,23 @@ DEVIANTART_SPEC = PlatformCardSpec(
 )
 
 
+def _escape_discord_text(value: Any) -> str:
+    escaped = escape_mentions(escape_markdown(str(value or "")))
+    return escaped.replace("<@", "<@\u200b").replace("<#", "<#\u200b")
+
+
 def build_deviantart_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
+    safe_payload = dict(payload)
+    for field in ("title", "description", "caption", "authorName", "context"):
+        if field in safe_payload:
+            safe_payload[field] = _escape_discord_text(safe_payload[field])
     return build_platform_layout(
-        payload,
+        safe_payload,
         DEVIANTART_SPEC,
         converted_url,
         footer_branding,

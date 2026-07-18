@@ -54,6 +54,7 @@ from reliability import (
     ReliabilityClient,
     ReliabilityReport,
     format_reliability_status,
+    probe_deviantart_bot_health,
 )
 from conversion_telemetry import (
     ConversionTelemetry,
@@ -276,7 +277,9 @@ message_timestamps = deque()
 SEND_QUEUE = asyncio.Queue()
 processed_link_cache = {}
 DEDUP_WINDOW_SECONDS = 10
-reliability_client = ReliabilityClient()
+reliability_client = ReliabilityClient(
+    local_checks=(probe_deviantart_bot_health,),
+)
 conversion_telemetry = ConversionTelemetry(supported_services=SERVICE_NAMES)
 delivery_telemetry = DeliveryTelemetry()
 
