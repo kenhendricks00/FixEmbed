@@ -13,7 +13,7 @@
 <h2> <div align="center"><b> Enhance Your Discord with Proper Embeds for Social Media Links. </b></div> </h2>
 
 # 🛠️ Usage
-Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code>, <code>YouTube community post</code>, <code>Pinterest Pin</code>, <code>TikTok</code>, <code>Tumblr</code>, or <code>Twitch</code> link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
+Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <code>Reddit</code>, <code>Threads</code>, <code>Pixiv</code>, <code>Bluesky</code>, <code>Bilibili</code>, <code>YouTube community post</code>, <code>Pinterest Pin</code>, <code>TikTok</code>, <code>Tumblr</code>, <code>Twitch</code>, or public <code>DeviantArt</code> deviation/Sta.sh link, and the bot will remove your message or just the embed and automatically convert it to its fixed link respectively, replying with the fixed link and label of who sent it.
 
 > [!TIP]
 > You can **suppress** automatic conversion for a specific link by surrounding it with `< >` (e.g., `<https://x.com/status/123...>`). FixEmbed will leave that message alone (no edits or deletions).
@@ -33,7 +33,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Right-click message → Apps → Fix Embed** - Convert links in any message
 
 # 🌟 Why Choose FixEmbed?
-- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube Community Posts, Pinterest Pins, TikTok videos, Tumblr posts, and Twitch clips, VODs, and channels.
+- **Comprehensive Platform Support**: Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube Community Posts, Pinterest Pins, TikTok videos, Tumblr posts, Twitch clips/VODs/channels, and public DeviantArt deviations and Sta.sh links.
 - **Rich Platform-Aware Cards**: Preserves creator identity, platform-specific context, mixed image/video posts, and complete media galleries when the source exposes them.
 - **Sensitive-Media Safety**: Source-marked sensitive or NSFW media is automatically hidden behind Discord spoilers.
 - **User-Installable**: Install to your personal account and use `/fix` or the context menu anywhere—even in servers where the bot isn't added!
@@ -64,6 +64,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - **TikTok Videos**
     - **Tumblr Posts**
     - **Twitch Clips, VODs, and Channels**
+    - **DeviantArt Deviations and Sta.sh Links**
 2. **User-Installable App**:
     - Install FixEmbed to your personal account
     - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere

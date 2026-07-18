@@ -50,6 +50,9 @@ SUPPORTED_HOSTS = {
     ),
     "tumblr": frozenset({"tumblr.com", "www.tumblr.com", "changes.tumblr.com"}),
     "twitch": frozenset({"twitch.tv", "www.twitch.tv", "clips.twitch.tv"}),
+    "deviantart": frozenset(
+        {"deviantart.com", "www.deviantart.com", "sta.sh"}
+    ),
 }
 REQUIREMENTS = frozenset(
     {

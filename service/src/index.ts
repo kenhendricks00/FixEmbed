@@ -169,6 +169,7 @@ export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'TikTok', sampleUrl: 'https://www.tiktok.com/@scout2015/video/6718335390845095173' },
     { platform: 'Tumblr', sampleUrl: 'https://changes.tumblr.com/post/817972810553196544/may-2026' },
     { platform: 'Twitch', sampleUrl: 'https://clips.twitch.tv/GoodGoodWaffleTwitchRaid' },
+    { platform: 'DeviantArt', sampleUrl: 'https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229' },
 ];
 
 const STATUS_PROBE_TIMEOUT_MS = 7_000;
@@ -1610,6 +1611,9 @@ app.get('/:platform/*', async (c) => {
         b23: 'bilibili.com',
         pinterest: 'pinterest.com',
         pin: 'pinterest.com',
+        deviantart: 'deviantart.com',
+        da: 'deviantart.com',
+        stash: 'sta.sh',
     };
 
     const domain = platformDomains[platform.toLowerCase()];

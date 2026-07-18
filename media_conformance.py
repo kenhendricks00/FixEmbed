@@ -45,6 +45,7 @@ MEDIA_HOST_SUFFIXES = {
     ),
     "tumblr": frozenset({"media.tumblr.com", "assets.tumblr.com"}),
     "twitch": frozenset({"jtvnw.net", "cloudfront.net"}),
+    "deviantart": frozenset({"wixmp.com", "deviantart.net", "deviantart.com"}),
 }
 
 

@@ -31,6 +31,15 @@ STATUS_PAYLOAD = {
             "checkedAt": "2026-07-14T12:00:00Z",
             "responseCode": 200,
         },
+        {
+            "platform": "DeviantArt",
+            "currentLatencyMs": 244,
+            "status": "operational",
+            "mode": "first-party",
+            "notice": None,
+            "checkedAt": "2026-07-14T12:00:00Z",
+            "responseCode": 200,
+        },
     ],
 }
 
@@ -58,6 +67,8 @@ class ReliabilityPayloadTests(unittest.TestCase):
         self.assertEqual(report.platforms[0].mode, "first-party")
         self.assertEqual(report.platforms[1].service, "Instagram")
         self.assertEqual(report.platforms[1].latency_ms, 812)
+        self.assertEqual(report.platforms[2].service, "DeviantArt")
+        self.assertEqual(report.platforms[2].mode, "first-party")
 
     def test_rejects_payload_without_any_supported_platform_rows(self):
         with self.assertRaises(ValueError):

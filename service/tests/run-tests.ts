@@ -15,6 +15,7 @@ import { threadsHandler } from '../src/handlers/threads.ts';
 import { tiktokHandler } from '../src/handlers/tiktok.ts';
 import { tumblrHandler } from '../src/handlers/tumblr.ts';
 import { twitchHandler } from '../src/handlers/twitch.ts';
+import { deviantartHandler } from '../src/handlers/deviantart.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
@@ -923,6 +924,145 @@ const tests: TestCase[] = [
                     mediaUrl.searchParams.get('token'),
                     '{"authorization":{"forbidden":false}}',
                 );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler preserves public photo metadata stats and signed media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input, init) => {
+                const url = new URL(String(input));
+                assert.equal(url.origin + url.pathname, 'https://backend.deviantart.com/oembed');
+                assert.equal(
+                    url.searchParams.get('url'),
+                    'https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229',
+                );
+                assert.equal(init?.headers && new Headers(init.headers).get('User-Agent'), 'FixEmbed/1.0 (+https://fixembed.app)');
+                return Response.json({
+                    version: '1.0',
+                    type: 'photo',
+                    title: 'Fella Celebrates 100k',
+                    url: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella.png?token=signed-value',
+                    author_name: 'team',
+                    author_url: 'https://www.deviantart.com/team',
+                    provider_name: 'DeviantArt',
+                    provider_url: 'https://www.deviantart.com',
+                    safety: 'nonadult',
+                    pubdate: '2023-08-08T12:34:56Z',
+                    width: 774,
+                    height: 1032,
+                    thumbnail_url: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella-thumb.jpg?token=thumb',
+                    community: {
+                        statistics: {
+                            _attributes: {
+                                views: '1234',
+                                favorites: '56',
+                                comments: '7',
+                                downloads: '8',
+                            },
+                        },
+                    },
+                    copyright: {
+                        _attributes: {
+                            year: '2023',
+                            owner: 'team',
+                        },
+                    },
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': '1024',
+                    },
+                });
+            };
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.platform, 'deviantart');
+                assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.authorName, 'team');
+                assert.equal(response.data?.authorHandle, '@team');
+                assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella.png?token=signed-value',
+                );
+                assert.equal(response.data?.timestamp, '2023-08-08T12:34:56.000Z');
+                assert.equal(
+                    response.data?.stats,
+                    '👁️ 1.2K views  ❤️ 56 favorites  💬 7 comments  ⬇️ 8 downloads',
+                );
+                assert.equal(response.data?.context, '© 2023 team');
+                assert.equal(response.data?.sensitive, false);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler treats mature video as a spoiler preview and rejects unsafe identity URLs',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => Response.json({
+                type: 'video',
+                title: 'A public animation',
+                url: 'https://attacker.example/not-a-safe-video.mp4',
+                thumbnail_url: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/preview.jpg?token=signed',
+                author_name: 'artist',
+                author_url: 'https://attacker.example/artist',
+                provider_name: 'DeviantArt',
+                safety: 'mature',
+                pubdate: '2024-01-02T03:04:05Z',
+            });
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/artist/art/A-public-animation-123',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorUrl, undefined);
+                assert.equal(response.data?.authorHandle, '@artist');
+                assert.equal(response.data?.video, undefined);
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/preview.jpg?token=signed',
+                );
+                assert.equal(response.data?.sensitive, true);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler bounds rate limits and oversized metadata responses',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            try {
+                globalThis.fetch = async () => new Response(null, { status: 429 });
+                const throttled = await deviantartHandler.handle(
+                    'https://sta.sh/01example',
+                    env,
+                );
+                assert.equal(throttled.success, false);
+                assert.match(throttled.error || '', /rate limited/i);
+                assert.equal(throttled.redirect, 'https://sta.sh/01example');
+
+                globalThis.fetch = async () => new Response('{}', {
+                    headers: { 'Content-Length': '512001' },
+                });
+                const oversized = await deviantartHandler.handle(
+                    'https://sta.sh/01example',
+                    env,
+                );
+                assert.equal(oversized.success, false);
+                assert.match(oversized.error || '', /response too large/i);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -4289,7 +4429,7 @@ const tests: TestCase[] = [
     {
         name: 'status probes cover every handler and exercise representative platform samples',
         run: () => {
-            assert.equal(STATUS_PROBES.length, 12);
+            assert.equal(STATUS_PROBES.length, 13);
             assert.equal(
                 new Set(STATUS_PROBES.map((probe) => probe.platform)).size,
                 STATUS_PROBES.length,
@@ -4309,6 +4449,8 @@ const tests: TestCase[] = [
                 threads?.sampleUrl,
                 'https://www.threads.com/@threads/post/DDKltrOTjJl',
             );
+            const deviantart = STATUS_PROBES.find((probe) => probe.platform === 'DeviantArt');
+            assert.match(deviantart?.sampleUrl || '', /deviantart\.com\/.+\/art\//);
         },
     },
     {
@@ -4447,9 +4589,13 @@ const tests: TestCase[] = [
             assert.match(indexHtml, /<h3>TikTok<\/h3>/);
             assert.match(indexHtml, /<h3>Tumblr<\/h3>/);
             assert.match(indexHtml, /<h3>Twitch<\/h3>/);
+            assert.match(indexHtml, /<h3>DeviantArt<\/h3>/);
+            assert.match(indexHtml, /public deviations and Sta\.sh/i);
             assert.match(indexHtml, /sensitive media is automatically hidden behind Discord spoilers/i);
             assert.match(docsHtml, /TikTok Videos/);
             assert.match(docsHtml, /Tumblr Posts/);
+            assert.match(docsHtml, /DeviantArt Deviations/);
+            assert.match(docsHtml, /sta\.sh/);
             assert.match(docsHtml, /Twitch Clips, VODs, and Channels/);
             assert.match(docsHtml, /Translation modifiers currently apply to X posts only/);
         },

@@ -15,6 +15,7 @@ export { pinterestHandler } from './pinterest.ts';
 export { tiktokHandler } from './tiktok.ts';
 export { tumblrHandler } from './tumblr.ts';
 export { twitchHandler } from './twitch.ts';
+export { deviantartHandler } from './deviantart.ts';
 
 import { twitterHandler } from './twitter.ts';
 import { redditHandler } from './reddit.ts';
@@ -28,6 +29,7 @@ import { pinterestHandler } from './pinterest.ts';
 import { tiktokHandler } from './tiktok.ts';
 import { tumblrHandler } from './tumblr.ts';
 import { twitchHandler } from './twitch.ts';
+import { deviantartHandler } from './deviantart.ts';
 import type { PlatformHandler } from '../types.ts';
 
 // All handlers in priority order
@@ -44,6 +46,7 @@ export const handlers: PlatformHandler[] = [
     tiktokHandler,
     tumblrHandler,
     twitchHandler,
+    deviantartHandler,
 ];
 
 /**

@@ -200,6 +200,18 @@
       "latencyBudgetMs": 7000,
       "renderer": "components-v2",
       "probeMedia": true
+    },
+    {
+      "id": "deviantart-photo",
+      "platform": "deviantart",
+      "url": "https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229",
+      "requires": ["title", "author", "author-link", "timestamp", "stats", "media"],
+      "mediaType": "image",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "latencyBudgetMs": 7000,
+      "renderer": "components-v2",
+      "probeMedia": true
     }
   ]
 }

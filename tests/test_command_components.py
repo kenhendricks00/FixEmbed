@@ -17,6 +17,7 @@ class CommandComponentsTests(unittest.TestCase):
             "Bluesky",
             "Bilibili",
             "YouTube",
+            "DeviantArt",
         )
 
         for language, strings in TRANSLATIONS.items():

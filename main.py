@@ -29,6 +29,7 @@ from pinterest_embed import fetch_pinterest_layout
 from tiktok_embed import fetch_tiktok_layout
 from tumblr_embed import fetch_tumblr_layout
 from twitch_embed import fetch_twitch_layout
+from deviantart_embed import fetch_deviantart_layout
 from embed_footer import FooterBranding, escape_component_text
 from card_preferences import preferences_from_settings
 from premium_controls import (
@@ -159,7 +160,15 @@ SERVICES = {
         ],
         "base_url": "fixembed.app",
         "display_format": "Twitch • {0}"
-    }
+    },
+    "DeviantArt": {
+        "patterns": [
+            r"deviantart\.com/[\w-]+/art/[\w-]+",
+            r"sta\.sh/[\w-]+",
+        ],
+        "base_url": "fixembed.app",
+        "display_format": "DeviantArt • {0}",
+    },
 }
 
 SERVICE_NAMES = list(SERVICES.keys())
@@ -177,6 +186,7 @@ SERVICE_EMOJI_FALLBACKS = {
     "TikTok": "🎵",
     "Tumblr": "🅣",
     "Twitch": "🟣",
+    "DeviantArt": "🎨",
 }
 SERVICE_EMOJI_IDS = {
     "YouTube": 1526267390592290926,
@@ -191,6 +201,7 @@ SERVICE_EMOJI_IDS = {
     "TikTok": 1527868616215629954,
     "Tumblr": 1527868615393546400,
     "Twitch": 1527868614269468852,
+    "DeviantArt": 1528150711089500180,
 }
 LANGUAGE_FLAG_EMOJIS = {
     "en": "🇺🇸",
@@ -804,6 +815,13 @@ async def build_components_v2_link(
             )
         elif item.service == "Twitch":
             layout = await fetch_twitch_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "DeviantArt":
+            layout = await fetch_deviantart_layout(
                 item.canonical_url,
                 automatic_url,
                 footer_branding,
@@ -2094,6 +2112,7 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
     app_commands.Choice(name="TikTok", value="TikTok"),
     app_commands.Choice(name="Tumblr", value="Tumblr"),
     app_commands.Choice(name="Twitch", value="Twitch"),
+    app_commands.Choice(name="DeviantArt", value="DeviantArt"),
 ], action=[
     app_commands.Choice(name="force on", value="on"),
     app_commands.Choice(name="force off", value="off"),

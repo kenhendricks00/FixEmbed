@@ -303,6 +303,7 @@ export const platformColors: Record<string, string> = {
     tiktok: '#FE2C55',
     tumblr: '#35465C',
     twitch: '#9146FF',
+    deviantart: '#05CC47',
 };
 
 /**
@@ -321,6 +322,7 @@ export const platformNames: Record<string, string> = {
     tiktok: '🎵 TikTok',
     tumblr: '🅣 Tumblr',
     twitch: '🟣 Twitch',
+    deviantart: 'DeviantArt',
 };
 
 /**

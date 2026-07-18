@@ -161,6 +161,7 @@ class ManifestTests(unittest.TestCase):
                 "tiktok",
                 "tumblr",
                 "twitch",
+                "deviantart",
             },
         )
         self.assertEqual(set(BUILDERS), platforms)
@@ -182,6 +183,8 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("avatar", by_id["tiktok-video"].requires)
         self.assertIn("stats", by_id["tiktok-video"].requires)
         self.assertTrue(by_id["tiktok-video"].allow_fallback)
+        self.assertEqual(by_id["deviantart-photo"].media_type, "image")
+        self.assertIn("stats", by_id["deviantart-photo"].requires)
         self.assertEqual(
             by_id["twitter-translation"].options,
             {"lang": "es"},
@@ -607,6 +610,24 @@ class MediaReachabilityTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(codes, ())
+
+    async def test_accepts_signed_deviantart_media_from_wixmp(self):
+        requested = []
+
+        async def fetch_media(url, _timeout_seconds):
+            requested.append(url)
+            return MediaFetchResponse(206, "image/jpeg", None)
+
+        signed_url = "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/example.jpg?token=signed"
+        codes = await probe_media_targets(
+            "deviantart",
+            (MediaTarget("media", signed_url),),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ())
+        self.assertEqual(requested, [signed_url])
 
     async def test_rejects_a_redirect_before_fetching_an_unsafe_destination(self):
         requested = []

@@ -33,7 +33,8 @@ export type Platform =
     | 'pinterest'
     | 'tiktok'
     | 'tumblr'
-    | 'twitch';
+    | 'twitch'
+    | 'deviantart';
 
 export type XVerificationBadge = 'premium' | 'organization' | 'government';
 

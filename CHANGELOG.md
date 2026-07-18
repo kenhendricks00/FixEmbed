@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **DeviantArt deviations**
+- Added public DeviantArt deviation and Sta.sh cards across automatic conversion, `/fix`, settings, reliability status, and production conformance.
+- Preserved artwork titles, artist attribution, signed full-size images, publication times, views, favorites, comments, downloads, copyright context, and the dedicated DeviantArt application emoji.
+- Rendered mature artwork behind Discord spoilers and kept public video deviations on a safe official preview until a reliable direct playback source is proven.
+- Documented and ticketed Facebook support as a gated follow-up because current first-party parity requires Meta Page Public Content Access, App Review, and business verification.
+
 #### **TikTok, Tumblr, Twitch, and safer media**
 - Added first-party TikTok video, Tumblr post, and Twitch clip, VOD, and channel cards across automatic conversion, `/fix`, context commands, settings, status probes, and production conformance.
 - Matched TikTok and Tumblr cards to the creator-first Embedded layout with right-side avatars, direct TikTok video or slideshow media, engagement details, and Tumblr tags below galleries.

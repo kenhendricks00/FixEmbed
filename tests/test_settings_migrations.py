@@ -26,6 +26,7 @@ class SettingsMigrationTests(unittest.TestCase):
                 ("TikTok", "enable_tiktok_videos_v1"),
                 ("Tumblr", "enable_tumblr_posts_v1"),
                 ("Twitch", "enable_twitch_links_v1"),
+                ("DeviantArt", "enable_deviantart_deviations_v1"),
             ),
         )
 

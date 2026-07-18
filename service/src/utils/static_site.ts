@@ -7,13 +7,13 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FixEmbed - Fix Discord Embeds for Social Media</title>
     <meta name="description"
-        content="FixEmbed fixes Discord embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
+        content="FixEmbed fixes Discord embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
 
     <!-- Open Graph / Discord Embed -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta property="og:description"
-        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
+        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
     <meta property="og:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
     <meta property="og:url" content="https://fixembed.app">
@@ -24,7 +24,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
-        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
+        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
     <meta name="twitter:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 
@@ -157,7 +157,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
                     <h3>Multi-Platform Support</h3>
                     <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube
-                        community posts, Pinterest Pins, TikTok, Tumblr, and Twitch.</p>
+                        community posts, Pinterest Pins, TikTok, Tumblr, Twitch, and DeviantArt.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-user"></i></div>
@@ -205,7 +205,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Share social media links</h3>
-                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, Pinterest Pins, TikTok, Tumblr, or Twitch.
+                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, Pinterest Pins, TikTok, Tumblr, Twitch, or DeviantArt.
                         </p>
                     </div>
                 </div>
@@ -286,6 +286,11 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="platform-icon"><i class="fab fa-twitch"></i></div>
                     <h3>Twitch</h3>
                     <p>Displays clips, VODs, and channels with Twitch-specific context.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fas fa-palette"></i></div>
+                    <h3>DeviantArt</h3>
+                    <p>Displays public deviations and Sta.sh links with artwork, artist details, stats, timestamps, and mature-content spoilers.</p>
                 </div>
             </div>
         </div>
@@ -2120,7 +2125,7 @@ export const tosHtml = `<!DOCTYPE html>
                     <p>The Service is provided "as is" without warranties of any kind, either express or implied. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
-                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Modifications to Terms</h3>
                     <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the new terms.</p>
@@ -2422,6 +2427,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>TikTok Videos</td><td>tiktok.com, vm.tiktok.com, vt.tiktok.com</td></tr>
                             <tr><td>Tumblr Posts</td><td>tumblr.com, *.tumblr.com</td></tr>
                             <tr><td>Twitch Clips, VODs, and Channels</td><td>twitch.tv, clips.twitch.tv</td></tr>
+                            <tr><td>DeviantArt Deviations</td><td>deviantart.com/*/art/*, sta.sh</td></tr>
                         </tbody>
                     </table>
                     <p style="color: var(--text-secondary); margin-top: 1rem;">Cards preserve mixed media, galleries, creator identity, and platform-specific context when available. Source-marked sensitive media is hidden behind Discord spoilers. Translation modifiers currently apply to X posts only.</p>

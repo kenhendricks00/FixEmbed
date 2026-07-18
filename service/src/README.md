@@ -19,6 +19,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 | TikTok | Video | Supported | Public page data + FxTikTok fallback |
 | Tumblr | Post | Supported | Public post metadata |
 | Twitch | Stream | Supported | Public Twitch metadata |
+| DeviantArt | Deviation | Supported | Official public oEmbed metadata |
 
 ## Features
 
@@ -89,6 +90,8 @@ GET /tiktok/@{username}/video/{id}
 GET /tumblr/{blog}/{id}
 GET /twitch/{channel}
 GET /twitch/videos/{id}
+GET /deviantart/{artist}/art/{slug}
+GET /stash/{token}
 ```
 
 ### Video Proxy

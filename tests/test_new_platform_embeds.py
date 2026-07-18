@@ -1,5 +1,6 @@
 import unittest
 
+from deviantart_embed import build_deviantart_layout
 from tiktok_embed import build_tiktok_layout
 from tumblr_embed import build_tumblr_layout
 from twitch_embed import build_twitch_layout
@@ -13,6 +14,39 @@ def serialized_container(layout):
 
 
 class NewPlatformEmbedTests(unittest.TestCase):
+    def test_deviantart_card_keeps_artist_artwork_stats_time_and_spoiler(self):
+        payload = {
+            "title": "Fella Celebrates 100k",
+            "description": "A milestone artwork.",
+            "url": "https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229",
+            "authorName": "DeviantArt Team",
+            "authorHandle": "@team",
+            "authorUrl": "https://www.deviantart.com/team",
+            "image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella.png?token=signed",
+            "stats": "👁️ 1.2K views  ❤️ 56 favorites  💬 7 comments  ⬇️ 8 downloads",
+            "context": "© 2023 team",
+            "timestamp": "2023-08-08T12:34:56Z",
+            "sensitive": True,
+        }
+
+        container = serialized_container(build_deviantart_layout(payload))
+        rendered = str(container)
+        header = str(container["components"][0])
+        gallery = container["components"][1]
+
+        self.assertIn("DeviantArt Team", header)
+        self.assertIn("@team", header)
+        self.assertIn("Fella Celebrates 100k", header)
+        self.assertIn("A milestone artwork.", header)
+        self.assertIn("<:views:1526255708683636896> 1.2K views", rendered)
+        self.assertIn("<:like:1526255244483362866> 56 favorites", rendered)
+        self.assertIn("<:comment:1526254715250282506> 7 comments", rendered)
+        self.assertIn("© 2023 team", rendered)
+        self.assertIn("<:deviantart:1528150711089500180>", rendered)
+        self.assertIn("<t:", rendered)
+        self.assertEqual(gallery["items"][0]["media"]["url"], payload["image"])
+        self.assertTrue(gallery["items"][0]["spoiler"])
+
     def test_tiktok_card_keeps_creator_caption_thumbnail_and_spoiler(self):
         payload = {
             "title": "A TikTok caption",

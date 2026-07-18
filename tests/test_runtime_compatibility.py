@@ -30,6 +30,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
             "TikTok": 1527868616215629954,
             "Tumblr": 1527868615393546400,
             "Twitch": 1527868614269468852,
+            "DeviantArt": 1528150711089500180,
         }
         for service, emoji_id in expected_ids.items():
             with self.subTest(service=service):
@@ -312,6 +313,7 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
             ("TikTok", "tiktok_embed", "fetch_tiktok_layout"),
             ("Tumblr", "tumblr_embed", "fetch_tumblr_layout"),
             ("Twitch", "twitch_embed", "fetch_twitch_layout"),
+            ("DeviantArt", "deviantart_embed", "fetch_deviantart_layout"),
         ):
             with self.subTest(service=service):
                 self.assertIn(f"from {module_name} import {fetch_name}", main_source)

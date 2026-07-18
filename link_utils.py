@@ -74,6 +74,8 @@ def social_service(url: str) -> Optional[str]:
         "tumblr.com": "Tumblr",
         "twitch.tv": "Twitch",
         "clips.twitch.tv": "Twitch",
+        "deviantart.com": "DeviantArt",
+        "sta.sh": "DeviantArt",
     }
     return hosts.get(hostname)
 
@@ -143,6 +145,27 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     if host == "pin.it" and segments and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0]):
         token = segments[0]
         return "Pinterest", f"https://pin.it/{token}", f"Pinterest • {token}"
+
+    if (
+        parsed.scheme == "https"
+        and host == "deviantart.com"
+        and len(segments) >= 3
+        and segments[1].lower() == "art"
+        and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0])
+        and re.fullmatch(r"[A-Za-z0-9_-]+", segments[2])
+    ):
+        artist, slug = segments[0], segments[2]
+        canonical = f"https://www.deviantart.com/{artist}/art/{slug}"
+        return "DeviantArt", canonical, f"DeviantArt • {artist}"
+
+    if (
+        parsed.scheme == "https"
+        and host == "sta.sh"
+        and len(segments) == 1
+        and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0])
+    ):
+        token = segments[0]
+        return "DeviantArt", f"https://sta.sh/{token}", "DeviantArt • Sta.sh"
 
     if (
         host == "tiktok.com"

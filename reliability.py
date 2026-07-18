@@ -29,6 +29,7 @@ SUPPORTED_PLATFORM_NAMES = {
     "TikTok": "TikTok",
     "Tumblr": "Tumblr",
     "Twitch": "Twitch",
+    "DeviantArt": "DeviantArt",
 }
 VALID_STATUSES = {"operational", "degraded", "outage"}
 VALID_MODES = {"first-party", "fallback", "unavailable"}

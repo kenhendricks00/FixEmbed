@@ -4,6 +4,34 @@ from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, ext
 
 
 class SocialServiceTests(unittest.TestCase):
+    def test_extracts_deviantart_deviations_and_stash_links(self):
+        links = extract_supported_links(
+            "https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229?comment=1 "
+            "https://sta.sh/0123456789abc"
+        )
+
+        self.assertEqual([link.service for link in links], ["DeviantArt", "DeviantArt"])
+        self.assertEqual(
+            [link.canonical_url for link in links],
+            [
+                "https://www.deviantart.com/team/art/Fella-Celebrates-100k-971957229",
+                "https://sta.sh/0123456789abc",
+            ],
+        )
+        self.assertEqual(
+            [link.display_text for link in links],
+            ["DeviantArt • team", "DeviantArt • Sta.sh"],
+        )
+
+    def test_deviantart_profiles_and_lookalike_hosts_are_not_supported(self):
+        links = extract_supported_links(
+            "https://www.deviantart.com/team "
+            "https://deviantart.example/team/art/not-real-123 "
+            "https://sta.sh.example/0123456789abc"
+        )
+
+        self.assertEqual(links, [])
+
     def test_extracts_tiktok_video_and_short_links(self):
         links = extract_supported_links(
             "https://www.tiktok.com/@creator/video/7421234567890123456 "

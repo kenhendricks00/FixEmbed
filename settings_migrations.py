@@ -10,6 +10,7 @@ NEW_SOCIAL_SERVICE_MIGRATIONS = (
     ("TikTok", "enable_tiktok_videos_v1"),
     ("Tumblr", "enable_tumblr_posts_v1"),
     ("Twitch", "enable_twitch_links_v1"),
+    ("DeviantArt", "enable_deviantart_deviations_v1"),
 )
 
 
@@ -71,6 +72,6 @@ async def migrate_pinterest_service_default(db) -> None:
 
 
 async def migrate_new_social_services_default(db) -> None:
-    """Enable TikTok, Tumblr, and Twitch once for existing guilds."""
+    """Enable newly supported social services once for existing guilds."""
     for service, migration_name in NEW_SOCIAL_SERVICE_MIGRATIONS:
         await migrate_service_default(db, service, migration_name)
