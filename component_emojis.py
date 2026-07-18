@@ -17,6 +17,7 @@ APPLICATION_EMOJI_IDS: Final[dict[str, int]] = {
     "comment": 1526254715250282506,
     "share": 1527880479305498744,
     "note": 1527889882746323094,
+    "download": 1528175452559118537,
     "x_government": 1527644261208690778,
     "x_premium": 1527644259308798113,
     "x_organization": 1527642128300118129,
@@ -51,4 +52,10 @@ def format_component_stats(stats: str, platform: Optional[str] = None) -> str:
         rendered = rendered.replace(application_emoji("repost"), application_emoji("share"))
     if platform and platform.casefold() == "tumblr":
         rendered = rendered.replace("\U0001f4dd", application_emoji("note"))
+    if platform and platform.casefold() == "deviantart":
+        rendered = rendered.replace(
+            "\u2b07\ufe0f",
+            application_emoji("download"),
+        )
+        rendered = rendered.replace("\u2b07", application_emoji("download"))
     return rendered

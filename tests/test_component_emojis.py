@@ -19,6 +19,7 @@ class ComponentEmojiTests(unittest.TestCase):
                 "comment": 1526254715250282506,
                 "share": 1527880479305498744,
                 "note": 1527889882746323094,
+                "download": 1528175452559118537,
                 "x_government": 1527644261208690778,
                 "x_premium": 1527644259308798113,
                 "x_organization": 1527642128300118129,
@@ -64,6 +65,17 @@ class ComponentEmojiTests(unittest.TestCase):
         rendered = format_component_stats("\U0001f4dd 377 notes", platform="tumblr")
 
         self.assertEqual(rendered, f"{application_emoji('note')} 377 notes")
+
+    def test_deviantart_uses_uploaded_download_emoji(self):
+        rendered = format_component_stats(
+            "\u2b07\ufe0f 93 downloads",
+            platform="deviantart",
+        )
+
+        self.assertEqual(
+            rendered,
+            f"{application_emoji('download')} 93 downloads",
+        )
 
 
 if __name__ == "__main__":
