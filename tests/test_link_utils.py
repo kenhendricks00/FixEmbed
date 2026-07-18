@@ -4,6 +4,51 @@ from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, ext
 
 
 class SocialServiceTests(unittest.TestCase):
+    def test_extracts_tiktok_video_and_short_links(self):
+        links = extract_supported_links(
+            "https://www.tiktok.com/@creator/video/7421234567890123456 "
+            "https://vm.tiktok.com/ZMexample/"
+        )
+
+        self.assertEqual([link.service for link in links], ["TikTok", "TikTok"])
+        self.assertEqual(
+            links[0].canonical_url,
+            "https://www.tiktok.com/@creator/video/7421234567890123456",
+        )
+        self.assertEqual(links[1].canonical_url, "https://vm.tiktok.com/ZMexample/")
+
+    def test_extracts_both_tumblr_post_url_shapes(self):
+        links = extract_supported_links(
+            "https://changes.tumblr.com/post/817972810553196544/may-2026 "
+            "https://www.tumblr.com/changes/817972810553196544/may-2026"
+        )
+
+        self.assertEqual([link.service for link in links], ["Tumblr", "Tumblr"])
+        self.assertEqual(
+            [link.canonical_url for link in links],
+            [
+                "https://changes.tumblr.com/post/817972810553196544/may-2026",
+                "https://changes.tumblr.com/post/817972810553196544/may-2026",
+            ],
+        )
+
+    def test_extracts_twitch_clips_vods_and_channels(self):
+        links = extract_supported_links(
+            "https://clips.twitch.tv/GoodGoodWaffleTwitchRaid "
+            "https://www.twitch.tv/videos/2819823618 "
+            "https://www.twitch.tv/twitch"
+        )
+
+        self.assertEqual([link.service for link in links], ["Twitch"] * 3)
+        self.assertEqual(
+            [link.canonical_url for link in links],
+            [
+                "https://clips.twitch.tv/GoodGoodWaffleTwitchRaid",
+                "https://www.twitch.tv/videos/2819823618",
+                "https://www.twitch.tv/twitch",
+            ],
+        )
+
     def test_bluesky_handle_ending_in_x_com_is_not_twitter(self):
         url = "https://bsky.app/profile/xbox.com/post/3ld7g4iiaps2n"
         self.assertEqual(social_service(url), "Bluesky")

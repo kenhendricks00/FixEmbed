@@ -11,6 +11,18 @@ TRAILING_PUNCTUATION = ".,!?;:)]}"
 TWITTER_HOSTS = {"twitter.com", "x.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com"}
 PRECONVERTED_HOSTS = {"fixembed.app", "fixupx.com", "fxtwitter.com", "vxtwitter.com", "bskyx.app"}
 EMBED_REVISION = "154"
+TWITCH_RESERVED_PATHS = {
+    "directory",
+    "downloads",
+    "inventory",
+    "jobs",
+    "p",
+    "search",
+    "settings",
+    "subscriptions",
+    "videos",
+    "wallet",
+}
 
 
 @dataclass(frozen=True)
@@ -39,6 +51,8 @@ def _unwrap_fixembed_url(url: str) -> str:
 def social_service(url: str) -> Optional[str]:
     """Return the supported service for a URL based on its hostname."""
     hostname = _hostname(_unwrap_fixembed_url(url))
+    if hostname.endswith(".tumblr.com") and hostname != "www.tumblr.com":
+        return "Tumblr"
     hosts = {
         **{host: "Twitter" for host in TWITTER_HOSTS},
         "instagram.com": "Instagram",
@@ -54,6 +68,12 @@ def social_service(url: str) -> Optional[str]:
         "youtube.com": "YouTube",
         "pinterest.com": "Pinterest",
         "pin.it": "Pinterest",
+        "tiktok.com": "TikTok",
+        "vm.tiktok.com": "TikTok",
+        "vt.tiktok.com": "TikTok",
+        "tumblr.com": "Tumblr",
+        "twitch.tv": "Twitch",
+        "clips.twitch.tv": "Twitch",
     }
     return hosts.get(hostname)
 
@@ -123,6 +143,90 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     if host == "pin.it" and segments and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0]):
         token = segments[0]
         return "Pinterest", f"https://pin.it/{token}", f"Pinterest • {token}"
+
+    if (
+        host == "tiktok.com"
+        and len(segments) >= 3
+        and segments[0].startswith("@")
+        and segments[1].lower() == "video"
+        and segments[2].isdigit()
+    ):
+        handle, post_id = segments[0][1:], segments[2]
+        if re.fullmatch(r"[\w.-]+", handle):
+            return (
+                "TikTok",
+                f"https://www.tiktok.com/@{handle}/video/{post_id}",
+                f"TikTok • @{handle}",
+            )
+
+    if host in {"vm.tiktok.com", "vt.tiktok.com"} and segments:
+        token = segments[0]
+        if re.fullmatch(r"[A-Za-z0-9_-]+", token):
+            return "TikTok", f"https://{host}/{token}/", f"TikTok • {token}"
+
+    if host == "tiktok.com" and len(segments) >= 2 and segments[0].lower() == "t":
+        token = segments[1]
+        if re.fullmatch(r"[A-Za-z0-9_-]+", token):
+            return "TikTok", f"https://www.tiktok.com/t/{token}/", f"TikTok • {token}"
+
+    if host == "tumblr.com" and len(segments) >= 2 and segments[1].isdigit():
+        blog, post_id = segments[0], segments[1]
+        if re.fullmatch(r"[\w-]+", blog):
+            slug = f"/{segments[2]}" if len(segments) >= 3 else ""
+            canonical = f"https://{blog}.tumblr.com/post/{post_id}{slug}"
+            return "Tumblr", canonical, f"Tumblr • @{blog}"
+
+    if (
+        host.endswith(".tumblr.com")
+        and host != "www.tumblr.com"
+        and len(segments) >= 2
+        and segments[0].lower() == "post"
+        and segments[1].isdigit()
+    ):
+        blog = host.removesuffix(".tumblr.com")
+        if re.fullmatch(r"[\w-]+", blog):
+            post_id = segments[1]
+            slug = f"/{segments[2]}" if len(segments) >= 3 else ""
+            canonical = f"https://{blog}.tumblr.com/post/{post_id}{slug}"
+            return "Tumblr", canonical, f"Tumblr • @{blog}"
+
+    if host == "clips.twitch.tv" and segments:
+        slug = segments[0]
+        if re.fullmatch(r"[A-Za-z0-9_-]+", slug):
+            return (
+                "Twitch",
+                f"https://clips.twitch.tv/{slug}",
+                f"Twitch • Clip {slug}",
+            )
+
+    if host == "twitch.tv" and len(segments) >= 3 and segments[1].lower() == "clip":
+        channel, slug = segments[0], segments[2]
+        if re.fullmatch(r"[A-Za-z0-9_]+", channel) and re.fullmatch(r"[A-Za-z0-9_-]+", slug):
+            return (
+                "Twitch",
+                f"https://clips.twitch.tv/{slug}",
+                f"Twitch • Clip {slug}",
+            )
+
+    if host == "twitch.tv" and len(segments) >= 2 and segments[0].lower() == "videos" and segments[1].isdigit():
+        video_id = segments[1]
+        return (
+            "Twitch",
+            f"https://www.twitch.tv/videos/{video_id}",
+            f"Twitch • VOD {video_id}",
+        )
+
+    if host == "twitch.tv" and len(segments) == 1:
+        channel = segments[0]
+        if (
+            channel.casefold() not in TWITCH_RESERVED_PATHS
+            and re.fullmatch(r"[A-Za-z0-9_]+", channel)
+        ):
+            return (
+                "Twitch",
+                f"https://www.twitch.tv/{channel.casefold()}",
+                f"Twitch • @{channel}",
+            )
 
     return None
 
