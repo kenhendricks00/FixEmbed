@@ -38,7 +38,11 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
     def test_automatic_queue_sends_are_silent(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
-        self.assertGreaterEqual(main_source.count("silent=True"), 2)
+        silent_sends = (
+            main_source.count("silent=True")
+            + main_source.count('"silent": True')
+        )
+        self.assertGreaterEqual(silent_sends, 2)
 
     def test_settings_workflow_uses_components_v2_without_legacy_embeds(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
@@ -203,17 +207,18 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("name='invite'", main_source)
         self.assertIn("async def invite(interaction: discord.Interaction):", main_source)
 
-    def test_instagram_uses_components_v2_without_uploading_media(self):
+    def test_instagram_uses_components_v2_with_carousel_attachments(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
         self.assertIn("include_fixembed=False", main_source)
         self.assertNotIn("download_instagram_video", main_source)
         self.assertNotIn("video_file = discord.File(", main_source)
-        self.assertIn("fetch_instagram_layout", main_source)
+        self.assertIn("fetch_instagram_delivery", main_source)
         self.assertIn("component_layouts", main_source)
-        self.assertIn("view=layout", main_source)
+        self.assertIn("view=delivery.view", main_source)
+        self.assertIn("files=delivery.files", main_source)
         self.assertIn('if item.service == "Instagram":', main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
 
     def test_twitter_uses_components_v2_with_existing_link_fallback(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
@@ -224,8 +229,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("twitter_language,", main_source)
         self.assertIn("item.mode,", main_source)
         self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("if is_animated_gif(payload):", main_source)
 
     def test_reddit_uses_components_v2_without_uploading_media(self):
@@ -234,8 +239,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
         self.assertIn('elif item.service == "Reddit":', main_source)
         self.assertIn("fetch_reddit_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_reddit", main_source)
 
     def test_threads_uses_components_v2_without_uploading_media(self):
@@ -244,8 +249,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from threads_embed import fetch_threads_layout", main_source)
         self.assertIn('elif item.service == "Threads":', main_source)
         self.assertIn("fetch_threads_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_threads", main_source)
 
     def test_bluesky_uses_components_v2_without_uploading_media(self):
@@ -254,8 +259,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from bluesky_embed import fetch_bluesky_layout", main_source)
         self.assertIn('elif item.service == "Bluesky":', main_source)
         self.assertIn("fetch_bluesky_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_bluesky", main_source)
 
     def test_pixiv_uses_components_v2_without_uploading_media(self):
@@ -268,8 +273,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("client.pixiv_relay_runner = await start_pixiv_relay()", main_source)
         self.assertIn('elif item.service == "Pixiv":', main_source)
         self.assertIn("fetch_pixiv_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_pixiv", main_source)
 
     def test_bilibili_uses_components_v2_without_uploading_media(self):
@@ -278,8 +283,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from bilibili_embed import fetch_bilibili_layout", main_source)
         self.assertIn('elif item.service == "Bilibili":', main_source)
         self.assertIn("fetch_bilibili_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_bilibili", main_source)
 
     def test_youtube_community_posts_use_components_v2_without_uploading_media(self):
@@ -288,8 +293,8 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from youtube_embed import fetch_youtube_community_layout", main_source)
         self.assertIn('elif item.service == "YouTube":', main_source)
         self.assertIn("fetch_youtube_community_layout(", main_source)
-        self.assertIn("component_layouts.append((layout, automatic_url))", main_source)
-        self.assertIn("fallback_content=automatic_url", main_source)
+        self.assertIn("component_layouts.append(delivery)", main_source)
+        self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("download_youtube", main_source)
 
     def test_pinterest_pins_use_components_v2_without_uploading_media(self):

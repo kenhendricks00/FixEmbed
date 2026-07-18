@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 
 import aiohttp
@@ -8,8 +9,10 @@ import instagram_embed
 from instagram_embed import (
     _upgrade_instagram_avatar,
     build_instagram_card,
+    build_instagram_delivery,
     build_instagram_embed,
     build_instagram_layout,
+    fetch_instagram_delivery,
 )
 
 
@@ -280,6 +283,146 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertEqual(
             [parse_qs(parsed.query)["url"][0] for parsed in parsed_urls],
             image_urls,
+        )
+
+    def test_components_v2_delivery_uploads_complete_carousels_as_attachments(self):
+        payload = {
+            "caption": "A long caption that must not be repeated for every image.",
+            "url": "https://www.instagram.com/p/TenImages/",
+            "authorHandle": "@creator",
+            "images": [
+                f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+                for index in range(1, 11)
+            ],
+        }
+        downloads = [
+            (f"image-{index}".encode(), "image/jpeg")
+            for index in range(1, 11)
+        ]
+
+        delivery = build_instagram_delivery(payload, downloads)
+        components = delivery.layout.to_components()
+        gallery = components[0]["components"][1]
+
+        self.assertEqual(len(delivery.files), 10)
+        self.assertEqual(
+            [file.filename for file in delivery.files],
+            [f"instagram-{index:02d}.jpg" for index in range(1, 11)],
+        )
+        self.assertEqual(
+            [item["media"]["url"] for item in gallery["items"]],
+            [f"attachment://instagram-{index:02d}.jpg" for index in range(1, 11)],
+        )
+        self.assertEqual(
+            [item["description"] for item in gallery["items"]],
+            [f"Instagram image {index} of 10" for index in range(1, 11)],
+        )
+        self.assertNotIn(payload["caption"], gallery["items"][0]["description"])
+
+    def test_fetch_delivery_preserves_extracted_carousel_order(self):
+        image_urls = [
+            f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+            for index in range(1, 11)
+        ]
+        payload = {
+            "caption": "Ten-image carousel",
+            "url": "https://www.instagram.com/p/Da5rB1BFp7l/",
+            "authorHandle": "@creator",
+            "images": image_urls,
+        }
+        downloads = tuple(
+            (f"image-{index}".encode(), "image/jpeg")
+            for index in range(1, 11)
+        )
+
+        with (
+            patch(
+                "instagram_embed._fetch_instagram_payload",
+                AsyncMock(return_value=payload),
+            ),
+            patch(
+                "instagram_embed._download_instagram_carousel",
+                AsyncMock(return_value=downloads),
+            ) as download_carousel,
+        ):
+            delivery = asyncio.run(
+                fetch_instagram_delivery(payload["url"])
+            )
+
+        download_carousel.assert_awaited_once_with(tuple(image_urls))
+        gallery = delivery.layout.to_components()[0]["components"][1]
+        self.assertEqual(
+            [item["media"]["url"] for item in gallery["items"]],
+            [f"attachment://instagram-{index:02d}.jpg" for index in range(1, 11)],
+        )
+
+    def test_fetch_delivery_preserves_single_image_remote_delivery(self):
+        image_url = "https://scontent.example.cdninstagram.com/single.jpg"
+        payload = {
+            "url": "https://www.instagram.com/p/SingleImage/",
+            "authorHandle": "@creator",
+            "image": image_url,
+        }
+
+        with (
+            patch(
+                "instagram_embed._fetch_instagram_payload",
+                AsyncMock(return_value=payload),
+            ),
+            patch(
+                "instagram_embed._download_instagram_carousel",
+                AsyncMock(),
+            ) as download_carousel,
+        ):
+            delivery = asyncio.run(
+                fetch_instagram_delivery(payload["url"])
+            )
+
+        download_carousel.assert_not_awaited()
+        self.assertEqual(delivery.files, ())
+        gallery = delivery.layout.to_components()[0]["components"][1]
+        self.assertEqual(len(gallery["items"]), 1)
+        self.assertTrue(
+            gallery["items"][0]["media"]["url"].startswith(
+                "https://fixembed.app/proxy/instagram?"
+            )
+        )
+
+    def test_fetch_delivery_preserves_video_playback_without_image_uploads(self):
+        video_url = "https://fixembed.app/video/instagram?url=video"
+        payload = {
+            "url": "https://www.instagram.com/reel/VideoPost/",
+            "authorHandle": "@creator",
+            "video": {
+                "url": video_url,
+                "thumbnail": "https://scontent.example.cdninstagram.com/poster.jpg",
+            },
+            "images": [
+                "https://scontent.example.cdninstagram.com/poster.jpg",
+                "https://scontent.example.cdninstagram.com/alternate.jpg",
+            ],
+        }
+
+        with (
+            patch(
+                "instagram_embed._fetch_instagram_payload",
+                AsyncMock(return_value=payload),
+            ),
+            patch(
+                "instagram_embed._download_instagram_carousel",
+                AsyncMock(),
+            ) as download_carousel,
+        ):
+            delivery = asyncio.run(
+                fetch_instagram_delivery(payload["url"])
+            )
+
+        download_carousel.assert_not_awaited()
+        self.assertEqual(delivery.files, ())
+        gallery = delivery.layout.to_components()[0]["components"][1]
+        self.assertEqual(
+            [item["media"]["url"] for item in gallery["items"]],
+            [video_url],
         )
 
     def test_components_v2_layout_splits_twenty_images_across_discord_galleries(self):

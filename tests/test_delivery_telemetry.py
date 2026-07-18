@@ -190,7 +190,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(outcome, "rescued")
-        self.assertEqual(observed_timeouts, [30.0, 15.0])
+        self.assertEqual(observed_timeouts, [15.0, 15.0])
 
     async def test_delivery_orchestrator_rescues_failed_component_with_link(self):
         telemetry = DeliveryTelemetry()

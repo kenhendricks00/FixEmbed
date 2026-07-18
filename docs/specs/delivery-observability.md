@@ -21,10 +21,10 @@ without retaining Discord identities, content, or destination information.
 - Source messages are mutated only after every requested replacement reaches a
   successful terminal outcome. Direct component delivery and link rescue count
   as success; any terminal failure preserves the source.
-- Rich Components V2 sends have a 30-second deadline so Discord can process
-  larger remote-media galleries. Plain-link sends and fallback attempts retain
-  a 15-second deadline, so a stalled request still cannot block the queue
-  indefinitely.
+- Rich Components V2 sends, plain-link sends, and fallback attempts have a
+  15-second deadline. Instagram carousels are attached before delivery, so
+  large galleries no longer need a longer Discord remote-media processing
+  window.
 - Exactly one terminal outcome is recorded per completed queue item: direct
   delivery, component-to-link rescue, or complete failure.
 - The latest 200 end-to-end queue/send durations are retained in memory for p95.

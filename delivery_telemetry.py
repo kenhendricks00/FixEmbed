@@ -17,7 +17,7 @@ from typing import Literal, Optional
 
 DELIVERY_KINDS = frozenset({"card", "link"})
 DOWNGRADE_REASONS = frozenset({"missing_manage_messages"})
-DEFAULT_CARD_DELIVERY_ATTEMPT_TIMEOUT_SECONDS = 30.0
+DEFAULT_CARD_DELIVERY_ATTEMPT_TIMEOUT_SECONDS = 15.0
 DEFAULT_LINK_DELIVERY_ATTEMPT_TIMEOUT_SECONDS = 15.0
 FAILURE_LABELS = {
     "timeout": "Timeout",

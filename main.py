@@ -13,9 +13,10 @@ import sqlite3
 import time
 import ast
 from collections import deque
+from dataclasses import dataclass
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
-from instagram_embed import fetch_instagram_layout
+from instagram_embed import fetch_instagram_delivery
 from twitter_embed import build_twitter_layout, fetch_twitter_payload
 from reddit_embed import fetch_reddit_layout
 from threads_embed import fetch_threads_layout
@@ -77,6 +78,14 @@ from premium_roles import (
 
 # Version number
 VERSION = "1.5.0"
+
+
+@dataclass(frozen=True)
+class ComponentsV2Delivery:
+    view: discord.ui.LayoutView
+    fallback_url: str
+    files: tuple[discord.File, ...] = ()
+
 
 # Service configuration for link processing
 # All services now use the unified FixEmbed service at fixembed.app
@@ -264,7 +273,7 @@ async def rate_limited_send(
     channel,
     content=None,
     embed=None,
-    file=None,
+    files=None,
     allowed_mentions=None,
     view=None,
     fallback_content=None,
@@ -278,7 +287,7 @@ async def rate_limited_send(
             channel,
             content,
             embed,
-            file,
+            files,
             allowed_mentions,
             view,
             fallback_content,
@@ -294,7 +303,7 @@ async def send_worker():
             channel,
             content,
             embed,
-            file,
+            files,
             allowed_mentions,
             view,
             fallback_content,
@@ -312,14 +321,16 @@ async def send_worker():
 
             message_timestamps.append(time.time())
             async def primary_send():
-                return await channel.send(
-                    content=content,
-                    embed=embed,
-                    file=file,
-                    allowed_mentions=allowed_mentions,
-                    view=view,
-                    silent=True,
-                )
+                send_options = {
+                    "content": content,
+                    "embed": embed,
+                    "allowed_mentions": allowed_mentions,
+                    "view": view,
+                    "silent": True,
+                }
+                if files:
+                    send_options["files"] = list(files)
+                return await channel.send(**send_options)
 
             async def fallback_send():
                 return await channel.send(
@@ -699,14 +710,17 @@ async def build_components_v2_link(
         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
     )
     request_id = new_request_id()
+    files: tuple[discord.File, ...] = ()
     async with conversion_telemetry.observe(item.service, request_id):
         if item.service == "Instagram":
-            layout = await fetch_instagram_layout(
+            instagram_delivery = await fetch_instagram_delivery(
                 item.canonical_url,
                 automatic_url,
                 footer_branding,
                 card_preferences,
             )
+            layout = instagram_delivery.layout
+            files = instagram_delivery.files
         elif item.service == "Twitter":
             fixed_url = build_fixembed_url(item, media_quality)
             twitter_language = resolve_twitter_language(
@@ -797,7 +811,11 @@ async def build_components_v2_link(
             )
         else:
             raise ValueError("unsupported rich-card service")
-    return layout, automatic_url
+    return ComponentsV2Delivery(
+        view=layout,
+        fallback_url=automatic_url,
+        files=files,
+    )
 
 
 async def send_components_v2_links(interaction, links):
@@ -825,7 +843,7 @@ async def send_components_v2_links(interaction, links):
             os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
         )
         try:
-            layout, fallback_url = await build_components_v2_link(
+            delivery = await build_components_v2_link(
                 item,
                 guild_settings,
                 footer_branding,
@@ -842,14 +860,17 @@ async def send_components_v2_links(interaction, links):
             continue
 
         try:
-            await interaction.followup.send(view=layout)
+            send_options = {"view": delivery.view}
+            if delivery.files:
+                send_options["files"] = list(delivery.files)
+            await interaction.followup.send(**send_options)
         except discord.HTTPException as error:
             logging.warning(
                 "Components V2 command delivery failed for %s: %s",
                 item.service,
                 type(error).__name__,
             )
-            await interaction.followup.send(fallback_url)
+            await interaction.followup.send(delivery.fallback_url)
 
 @client.tree.command(
     name='activate',
@@ -2164,14 +2185,14 @@ async def on_message(message):
                     )
                     if item.service in SERVICE_NAMES:
                         try:
-                            layout, automatic_url = await build_components_v2_link(
+                            delivery = await build_components_v2_link(
                                 item,
                                 guild_settings,
                                 footer_branding,
                                 card_preferences,
                                 premium=premium,
                             )
-                            component_layouts.append((layout, automatic_url))
+                            component_layouts.append(delivery)
                             rich_card_built = True
                         except Exception:
                             formatted_links.append(automatic_url)
@@ -2232,12 +2253,13 @@ async def on_message(message):
                                 allowed_mentions=allowed_mentions,
                             )
                         )
-                    for layout, automatic_url in component_layouts:
+                    for delivery in component_layouts:
                         delivery_outcomes.append(
                             await rate_limited_send(
                                 message.channel,
-                                view=layout,
-                                fallback_content=automatic_url,
+                                view=delivery.view,
+                                files=delivery.files,
+                                fallback_content=delivery.fallback_url,
                                 allowed_mentions=allowed_mentions,
                             )
                         )
@@ -2257,12 +2279,13 @@ async def on_message(message):
                         delivery_outcomes.append(
                             await rate_limited_send(message.channel, content=chunk)
                         )
-                    for layout, automatic_url in component_layouts:
+                    for delivery in component_layouts:
                         delivery_outcomes.append(
                             await rate_limited_send(
                                 message.channel,
-                                view=layout,
-                                fallback_content=automatic_url,
+                                view=delivery.view,
+                                files=delivery.files,
+                                fallback_content=delivery.fallback_url,
                             )
                         )
                     if should_apply_source_message_action(
@@ -2278,11 +2301,12 @@ async def on_message(message):
                 else:
                     for chunk in chunk_lines(formatted_links):
                         await rate_limited_send(message.channel, content=chunk)
-                    for layout, automatic_url in component_layouts:
+                    for delivery in component_layouts:
                         await rate_limited_send(
                             message.channel,
-                            view=layout,
-                            fallback_content=automatic_url,
+                            view=delivery.view,
+                            files=delivery.files,
+                            fallback_content=delivery.fallback_url,
                         )
 
         except discord.Forbidden as error:

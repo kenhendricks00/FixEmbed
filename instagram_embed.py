@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 from urllib.parse import quote, urlsplit
 
 import aiohttp
@@ -26,6 +28,11 @@ INSTAGRAM_EMOJI_ID = 1526267158793949435
 INSTAGRAM_WEB_APP_ID = "936619743392459"
 INSTAGRAM_PROFILE_API_HOSTS = ("www.instagram.com", "i.instagram.com")
 INSTAGRAM_HD_AVATAR_COOLDOWN_SECONDS = 30 * 60
+INSTAGRAM_AVATAR_ENRICHMENT_TIMEOUT_SECONDS = 1.5
+INSTAGRAM_CAROUSEL_DOWNLOAD_TIMEOUT_SECONDS = 6
+INSTAGRAM_CAROUSEL_MAX_ITEMS = 10
+INSTAGRAM_ATTACHMENT_MAX_FILE_BYTES = 10 * 1024 * 1024
+INSTAGRAM_ATTACHMENT_MAX_TOTAL_BYTES = 25 * 1024 * 1024
 _instagram_avatar_blocked_until = 0.0
 
 
@@ -33,6 +40,12 @@ _instagram_avatar_blocked_until = 0.0
 class InstagramCard:
     embed: discord.Embed
     video_url: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class InstagramDelivery:
+    layout: discord.ui.LayoutView
+    files: tuple[discord.File, ...] = ()
 
 
 def _clean_handle(value: Any) -> str:
@@ -205,6 +218,7 @@ def build_instagram_layout(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    gallery_media_urls: Optional[Sequence[str]] = None,
 ) -> discord.ui.LayoutView:
     """Build an Embedded-style Components V2 card with remotely unfurled media."""
     name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
@@ -247,22 +261,31 @@ def build_instagram_layout(
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
     image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
     fallback_image = str(payload.get("image") or "")
-    media_urls = [video_url] if video_url else [str(url) for url in image_urls if url]
-    if not media_urls and fallback_image:
-        media_urls = [fallback_image]
-    media_urls = [_relay_instagram_media_url(url) for url in media_urls]
+    if gallery_media_urls is not None:
+        media_urls = [str(url) for url in gallery_media_urls if url]
+    else:
+        media_urls = [video_url] if video_url else [str(url) for url in image_urls if url]
+        if not media_urls and fallback_image:
+            media_urls = [fallback_image]
+        media_urls = [_relay_instagram_media_url(url) for url in media_urls]
     if media_urls:
-        description = caption[:1024] or None
+        media_kind = "video" if video_url and gallery_media_urls is None else "image"
+        total_media = len(media_urls)
         for start in range(0, len(media_urls), 10):
             children.append(
                 discord.ui.MediaGallery(
                     *(
                         discord.MediaGalleryItem(
                             url,
-                            description=description,
+                            description=(
+                                f"Instagram {media_kind} {index + 1} of {total_media}"
+                            ),
                             spoiler=payload.get("sensitive") is True,
                         )
-                        for url in media_urls[start:start + 10]
+                        for index, url in enumerate(
+                            media_urls[start:start + 10],
+                            start=start,
+                        )
                     )
                 )
             )
@@ -291,6 +314,101 @@ def build_instagram_layout(
     return view
 
 
+def build_instagram_delivery(
+    payload: Mapping[str, Any],
+    downloaded_images: Sequence[tuple[bytes, str]],
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+) -> InstagramDelivery:
+    """Build a V2 gallery backed by message attachments."""
+    image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
+    if len(downloaded_images) != len(image_urls):
+        raise ValueError("downloaded Instagram image count does not match carousel")
+
+    extensions = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    }
+    files = []
+    attachment_urls = []
+    total_bytes = 0
+    for index, (content, content_type) in enumerate(downloaded_images, start=1):
+        extension = extensions.get(content_type.lower().split(";", 1)[0].strip())
+        if not content or extension is None:
+            raise ValueError("Instagram carousel returned an unsupported image")
+        if len(content) > INSTAGRAM_ATTACHMENT_MAX_FILE_BYTES:
+            raise ValueError("Instagram carousel image exceeds the attachment limit")
+        total_bytes += len(content)
+        if total_bytes > INSTAGRAM_ATTACHMENT_MAX_TOTAL_BYTES:
+            raise ValueError("Instagram carousel exceeds the attachment limit")
+        filename = f"instagram-{index:02d}.{extension}"
+        files.append(discord.File(io.BytesIO(content), filename=filename))
+        attachment_urls.append(f"attachment://{filename}")
+
+    return InstagramDelivery(
+        layout=build_instagram_layout(
+            payload,
+            converted_url,
+            footer_branding,
+            card_preferences,
+            gallery_media_urls=attachment_urls,
+        ),
+        files=tuple(files),
+    )
+
+
+async def _download_instagram_image(
+    session: aiohttp.ClientSession,
+    source_url: str,
+) -> tuple[bytes, str]:
+    if not _is_instagram_avatar_url(source_url):
+        raise ValueError("Instagram carousel returned an untrusted image URL")
+
+    async with session.get(_relay_instagram_media_url(source_url)) as response:
+        response.raise_for_status()
+        content_type = str(response.headers.get("Content-Type") or "")
+        normalized_type = content_type.lower().split(";", 1)[0].strip()
+        if normalized_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+            raise ValueError("Instagram carousel returned an unsupported image")
+        if (
+            response.content_length is not None
+            and response.content_length > INSTAGRAM_ATTACHMENT_MAX_FILE_BYTES
+        ):
+            raise ValueError("Instagram carousel image exceeds the attachment limit")
+
+        content = bytearray()
+        async for chunk in response.content.iter_chunked(64 * 1024):
+            content.extend(chunk)
+            if len(content) > INSTAGRAM_ATTACHMENT_MAX_FILE_BYTES:
+                raise ValueError("Instagram carousel image exceeds the attachment limit")
+        return bytes(content), normalized_type
+
+
+async def _download_instagram_carousel(
+    image_urls: Sequence[str],
+) -> tuple[tuple[bytes, str], ...]:
+    if not 2 <= len(image_urls) <= INSTAGRAM_CAROUSEL_MAX_ITEMS:
+        raise ValueError("Instagram carousel attachment count is unsupported")
+
+    timeout = aiohttp.ClientTimeout(
+        total=INSTAGRAM_CAROUSEL_DOWNLOAD_TIMEOUT_SECONDS,
+    )
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        downloads = await asyncio.gather(
+            *(
+                _download_instagram_image(session, str(image_url))
+                for image_url in image_urls
+            )
+        )
+
+    if sum(len(content) for content, _ in downloads) > INSTAGRAM_ATTACHMENT_MAX_TOTAL_BYTES:
+        raise ValueError("Instagram carousel exceeds the attachment limit")
+    return tuple(downloads)
+
+
 async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
     api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
     timeout = aiohttp.ClientTimeout(total=15)
@@ -301,7 +419,18 @@ async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
 
         if not body.get("success") or body.get("platform") != "instagram":
             raise ValueError("FixEmbed did not return Instagram metadata")
-        return await _upgrade_instagram_avatar(body.get("data") or {}, session)
+        payload = body.get("data") or {}
+        try:
+            return await asyncio.wait_for(
+                _upgrade_instagram_avatar(payload, session),
+                timeout=INSTAGRAM_AVATAR_ENRICHMENT_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logging.warning(
+                "Instagram HD avatar lookup exceeded %.1fs; using metadata avatar",
+                INSTAGRAM_AVATAR_ENRICHMENT_TIMEOUT_SECONDS,
+            )
+            return payload
 
 
 
@@ -322,6 +451,45 @@ async def fetch_instagram_layout(
     """Fetch first-party metadata and return a playable Components V2 card."""
     return build_instagram_layout(
         await _fetch_instagram_payload(source_url), converted_url, footer_branding, card_preferences
+    )
+
+
+async def fetch_instagram_delivery(
+    source_url: str,
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+) -> InstagramDelivery:
+    """Fetch Instagram metadata and prepare a fast Components V2 delivery."""
+    payload = await _fetch_instagram_payload(source_url)
+    video = payload.get("video")
+    video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
+    raw_image_urls = payload.get("images")
+    image_urls = (
+        [str(url) for url in raw_image_urls if url]
+        if isinstance(raw_image_urls, list)
+        else []
+    )
+    if (
+        not video_url
+        and 2 <= len(image_urls) <= INSTAGRAM_CAROUSEL_MAX_ITEMS
+    ):
+        downloads = await _download_instagram_carousel(tuple(image_urls))
+        return build_instagram_delivery(
+            payload,
+            downloads,
+            converted_url,
+            footer_branding,
+            card_preferences,
+        )
+
+    return InstagramDelivery(
+        layout=build_instagram_layout(
+            payload,
+            converted_url,
+            footer_branding,
+            card_preferences,
+        )
     )
 
 

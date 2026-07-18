@@ -16,8 +16,12 @@ class UserCommandComponentsTests(unittest.TestCase):
             "@client.tree.command(\n    name='fix'", 1
         )[0]
         self.assertIn("await interaction.response.defer()", delivery_helper)
-        self.assertIn("await interaction.followup.send(view=layout)", delivery_helper)
+        self.assertIn('send_options = {"view": delivery.view}', delivery_helper)
+        self.assertIn('send_options["files"] = list(delivery.files)', delivery_helper)
+        self.assertNotIn("files=None", delivery_helper)
+        self.assertIn("await interaction.followup.send(**send_options)", delivery_helper)
         self.assertIn("await interaction.followup.send(fallback_url)", delivery_helper)
+        self.assertIn("await interaction.followup.send(delivery.fallback_url)", delivery_helper)
 
 
 if __name__ == "__main__":

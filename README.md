@@ -48,7 +48,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
 - **Fast Repeated Links**: Successful cards are reused briefly at the edge with privacy-safe hashed keys; failures and distinct translation/layout options are never mixed.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
-- **Complete Instagram Carousels**: Components V2 cards preserve up to ten images in one gallery and relay trusted Instagram media through FixEmbed for reliable Discord delivery.
+- **Complete Instagram Carousels**: Components V2 cards preserve up to ten images in source order, normalize trusted Instagram media through FixEmbed, and attach the gallery for fast, reliable Discord delivery.
 
 # 📋 Key Features
 1. **Multi-Platform Support**:

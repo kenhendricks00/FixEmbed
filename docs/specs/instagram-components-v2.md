@@ -9,8 +9,11 @@ distinct carousel image exposed by the source.
 ## Gallery delivery
 
 - Preserve source order and render up to ten items per Discord media gallery.
-- Send trusted Instagram CDN images through
+- Normalize trusted Instagram CDN images through
   `GET /proxy/instagram?url=<encoded HTTPS image URL>`.
+- Download up to ten carousel images concurrently and attach them to the
+  Components V2 message in source order.
+- Keep single images and videos on their existing remote-media paths.
 - Keep non-Instagram media URLs on their existing delivery paths.
 - Keep the original post URL in the footer.
 - Use the plain-link card only when the native Components V2 send genuinely
@@ -30,9 +33,11 @@ distinct carousel image exposed by the source.
 
 ## Regression coverage
 
-- The Python card test verifies that all carousel items serialize to the
-  restricted FixEmbed relay and still decode to the original source URLs.
+- The Python regression tests trace the ordered carousel from the extracted
+  image list through restricted relay normalization, concurrent download, and
+  the final `attachment://` Media Gallery items.
 - The Worker tests verify trusted image streaming, untrusted-host rejection,
   and unsafe-redirect rejection.
 - The live acceptance test posts a ten-image Instagram carousel in Discord and
-  requires one successful Components V2 card with all ten images.
+  requires one successful Components V2 card with all ten images, in order,
+  without waiting for the plain-link rescue timeout.
