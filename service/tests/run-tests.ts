@@ -12,6 +12,9 @@ import { bilibiliHandler } from '../src/handlers/bilibili.ts';
 import { pinterestHandler } from '../src/handlers/pinterest.ts';
 import { blueskyHandler, buildBlueskyContent } from '../src/handlers/bluesky.ts';
 import { threadsHandler } from '../src/handlers/threads.ts';
+import { tiktokHandler } from '../src/handlers/tiktok.ts';
+import { tumblrHandler } from '../src/handlers/tumblr.ts';
+import { twitchHandler } from '../src/handlers/twitch.ts';
 import type { Env } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
@@ -460,6 +463,144 @@ const tests: TestCase[] = [
             assert.equal(findHandler('https://www.youtube.com/watch?v=dQw4w9WgXcQ')?.name, 'youtube');
             assert.equal(findHandler('https://pin.it/CjGnCP20L')?.name, 'pinterest');
             assert.equal(findHandler('https://www.pinterest.com/pin/424605071145119869/')?.name, 'pinterest');
+            assert.equal(findHandler('https://www.tiktok.com/@creator/video/7421234567890123456')?.name, 'tiktok');
+            assert.equal(findHandler('https://changes.tumblr.com/post/817972810553196544/may-2026')?.name, 'tumblr');
+            assert.equal(findHandler('https://www.tumblr.com/changes/817972810553196544/may-2026')?.name, 'tumblr');
+            assert.equal(findHandler('https://clips.twitch.tv/GoodGoodWaffleTwitchRaid')?.name, 'twitch');
+            assert.equal(findHandler('https://www.twitch.tv/videos/2819823618')?.name, 'twitch');
+            assert.equal(findHandler('https://www.twitch.tv/twitch')?.name, 'twitch');
+        },
+    },
+    {
+        name: 'tiktokHandler builds creator context from the official public oEmbed response',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                assert.match(String(input), /^https:\/\/www\.tiktok\.com\/oembed\?url=/);
+                return Response.json({
+                    title: 'A complete TikTok caption #example',
+                    author_name: 'Creator Name',
+                    author_url: 'https://www.tiktok.com/@creator',
+                    author_unique_id: 'creator',
+                    thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/cover.jpeg',
+                    thumbnail_width: 576,
+                    thumbnail_height: 1024,
+                });
+            };
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.authorName, 'Creator Name');
+                assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.image, 'https://p16-sign.tiktokcdn-us.com/cover.jpeg');
+                assert.equal(response.data?.description, 'A complete TikTok caption #example');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'tumblrHandler preserves JSON-LD identity text gallery notes and timestamp',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                assert.equal(
+                    String(input),
+                    'https://changes.tumblr.com/post/817972810553196544/may-2026',
+                );
+                return new Response(`
+                    <meta property="og:title" content="May, 2026">
+                    <meta property="og:description" content="A complete Tumblr post summary.">
+                    <a class="post-notes">887 notes</a>
+                    <article class="post">
+                        <img data-orig-src="https://64.media.tumblr.com/first.jpg">
+                        <img src="https://64.media.tumblr.com/second.jpg">
+                    </article>
+                    <script type="application/ld+json">
+                    {
+                        "@type": "SocialMediaPosting",
+                        "datePublished": "2026-05-29T18:34:20+00:00",
+                        "author": {
+                            "name": "changes",
+                            "url": "https://changes.tumblr.com/",
+                            "image": {"url": "https://64.media.tumblr.com/avatar.pnj"}
+                        },
+                        "articleBody": "A complete Tumblr post summary."
+                    }
+                    </script>
+                `, { headers: { 'Content-Type': 'text/html' } });
+            };
+            try {
+                const response = await tumblrHandler.handle(
+                    'https://changes.tumblr.com/post/817972810553196544/may-2026',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorHandle, '@changes');
+                assert.equal(response.data?.authorAvatar, 'https://64.media.tumblr.com/avatar.pnj');
+                assert.equal(response.data?.timestamp, '2026-05-29T18:34:20.000Z');
+                assert.equal(response.data?.stats, '📝 887 notes');
+                assert.deepEqual(response.data?.images, [
+                    'https://64.media.tumblr.com/first.jpg',
+                    'https://64.media.tumblr.com/second.jpg',
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitchHandler renders public clip GraphQL metadata with playable video',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input, init) => {
+                assert.equal(String(input), 'https://gql.twitch.tv/gql');
+                assert.equal(new Headers(init?.headers).get('Client-ID'), 'kimne78kx3ncx6brgo4mv6wki5h1ko');
+                const request = JSON.parse(String(init?.body)) as {
+                    variables?: { slug?: string };
+                };
+                assert.equal(request.variables?.slug, 'GoodGoodWaffleTwitchRaid');
+                return Response.json({ data: { clip: {
+                    slug: 'GoodGoodWaffleTwitchRaid',
+                    title: 'We go crazy with the flick for the win :)',
+                    createdAt: '2019-10-01T20:15:47Z',
+                    durationSeconds: 30,
+                    viewCount: 224,
+                    thumbnailURL: 'https://static-cdn.jtvnw.net/clip.jpg',
+                    broadcaster: {
+                        displayName: 'TSoonami',
+                        login: 'tsoonami',
+                        profileImageURL: 'https://static-cdn.jtvnw.net/profile.png',
+                    },
+                    curator: { displayName: 'Clipper', login: 'clipper' },
+                    game: { displayName: 'Apex Legends' },
+                    videoQualities: [{
+                        sourceURL: 'https://d1ndex63qxojbr.cloudfront.net/clip/index.mp4',
+                        quality: '720',
+                        frameRate: 60,
+                    }],
+                } } });
+            };
+            try {
+                const response = await twitchHandler.handle(
+                    'https://clips.twitch.tv/GoodGoodWaffleTwitchRaid',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorName, 'TSoonami');
+                assert.equal(response.data?.description, 'Apex Legends · Clipped by Clipper · 30s');
+                assert.equal(response.data?.stats, '👁️ 224 views');
+                assert.equal(
+                    response.data?.video?.url,
+                    'https://d1ndex63qxojbr.cloudfront.net/clip/index.mp4',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {

@@ -30,7 +30,10 @@ export type Platform =
     | 'bluesky'
     | 'youtube'
     | 'bilibili'
-    | 'pinterest';
+    | 'pinterest'
+    | 'tiktok'
+    | 'tumblr'
+    | 'twitch';
 
 export type XVerificationBadge = 'premium' | 'organization' | 'government';
 
@@ -64,6 +67,8 @@ export interface EmbedData {
     sections?: EmbedSection[];
     mode?: 'gallery' | 'mosaic';
     mediaOrigin?: 'post' | 'quote';
+    /** True when source-platform metadata says media should be hidden until revealed. */
+    sensitive?: boolean;
 }
 
 export interface EmbedSection {

@@ -300,6 +300,9 @@ export const platformColors: Record<string, string> = {
     bluesky: '#1185FE',
     bilibili: '#00A1D6',
     pinterest: '#E60023',
+    tiktok: '#FE2C55',
+    tumblr: '#35465C',
+    twitch: '#9146FF',
 };
 
 /**
@@ -315,6 +318,9 @@ export const platformNames: Record<string, string> = {
     bilibili: '📺 Bilibili',
     youtube: '▶️ YouTube',
     pinterest: '📌 Pinterest',
+    tiktok: '🎵 TikTok',
+    tumblr: '🅣 Tumblr',
+    twitch: '🟣 Twitch',
 };
 
 /**
