@@ -64,6 +64,8 @@ export interface EmbedData {
     timestamp?: string;
     platform: Platform;
     stats?: string;
+    /** Compact platform-specific context rendered below post media. */
+    context?: string;
     sections?: EmbedSection[];
     mode?: 'gallery' | 'mosaic';
     mediaOrigin?: 'post' | 'quote';

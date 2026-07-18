@@ -21,20 +21,32 @@ class NewPlatformEmbedTests(unittest.TestCase):
             "authorName": "Creator Name",
             "authorHandle": "@creator",
             "authorUrl": "https://www.tiktok.com/@creator",
+            "authorAvatar": "https://p16-sign.tiktokcdn-us.com/avatar.jpeg",
             "image": "https://p16-sign.tiktokcdn-us.com/cover.jpeg",
+            "video": {
+                "url": "https://v16-webapp-prime.us.tiktok.com/video.mp4",
+                "width": 576,
+                "height": 1024,
+            },
+            "stats": "❤️ 25.5M 💬 251.4K 🔁 3.3M",
+            "timestamp": "2024-07-16T12:30:00Z",
             "sensitive": True,
         }
 
         container = serialized_container(build_tiktok_layout(payload))
         rendered = str(container)
+        header = str(container["components"][0])
         gallery = container["components"][1]
 
         self.assertIn("Creator Name", rendered)
         self.assertIn("@creator", rendered)
         self.assertIn("A TikTok caption", rendered)
+        self.assertNotIn("###", header)
+        self.assertIn("1527868616215629954", rendered)
+        self.assertIn("<t:", rendered)
         self.assertEqual(
             gallery["items"][0]["media"]["url"],
-            "https://p16-sign.tiktokcdn-us.com/cover.jpeg",
+            "https://v16-webapp-prime.us.tiktok.com/video.mp4",
         )
         self.assertTrue(gallery["items"][0]["spoiler"])
 
@@ -52,16 +64,22 @@ class NewPlatformEmbedTests(unittest.TestCase):
                 "https://64.media.tumblr.com/second.jpg",
             ],
             "stats": "887 notes",
+            "context": "#writing #classics #jokes",
             "timestamp": "2026-05-29T18:34:20Z",
         }
 
         container = serialized_container(build_tumblr_layout(payload))
         rendered = str(container)
+        header = str(container["components"][0])
         gallery = container["components"][1]
 
         self.assertIn("Changes on Tumblr", rendered)
         self.assertIn("@changes", rendered)
+        self.assertIn("A complete Tumblr post summary.", header)
+        self.assertNotIn("###", header)
         self.assertIn("887", rendered)
+        self.assertIn("#writing #classics #jokes", container["components"][2]["content"])
+        self.assertIn("1527868615393546400", rendered)
         self.assertIn("<t:", rendered)
         self.assertEqual(
             [item["media"]["url"] for item in gallery["items"]],

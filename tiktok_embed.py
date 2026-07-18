@@ -11,7 +11,13 @@ from embed_footer import FooterBranding
 from platform_embed import PlatformCardSpec, build_platform_layout, fetch_platform_payload
 
 
-TIKTOK_SPEC = PlatformCardSpec("tiktok", "TikTok", 0xFE2C55, "🎵")
+TIKTOK_SPEC = PlatformCardSpec(
+    "tiktok",
+    "TikTok",
+    0xFE2C55,
+    "<:tiktok:1527868616215629954>",
+    content_first=True,
+)
 
 
 def build_tiktok_layout(

@@ -39,6 +39,8 @@ MEDIA_HOST_SUFFIXES = {
             "muscdn.com",
             "byteoversea.com",
             "ibytedtos.com",
+            "tiktok.com",
+            "tnktok.com",
         }
     ),
     "tumblr": frozenset({"media.tumblr.com", "assets.tumblr.com"}),

@@ -16,7 +16,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 
 | YouTube Community Posts | Video | Supported | Official page metadata |
 | Pinterest | Pin | Supported | Official Pin metadata |
-| TikTok | Video | Supported | Official public oEmbed |
+| TikTok | Video | Supported | Public page data + FxTikTok fallback |
 | Tumblr | Post | Supported | Public post metadata |
 | Twitch | Stream | Supported | Public Twitch metadata |
 
@@ -139,6 +139,7 @@ All embeds follow a consistent format:
 - Direct source-platform requests are primary for every handler; external embed services are emergency fallbacks only.
 - Pixiv data via [Phixiv](https://github.com/thelaao/phixiv)
 - Bilibili data via [VxBilibili](https://github.com/niconi21/vxBilibili)
+- Emergency TikTok media fallback via [FxTikTok](https://github.com/okdargy/fxtiktok)
 - Built with [Hono](https://hono.dev/) framework
 - Deployed on [Cloudflare Workers](https://workers.cloudflare.com/)
 

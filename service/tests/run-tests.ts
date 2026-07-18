@@ -472,20 +472,62 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'tiktokHandler builds creator context from the official public oEmbed response',
+        name: 'tiktokHandler builds an Embedded-style playable card from first-party page data',
         run: async () => {
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async (input) => {
-                assert.match(String(input), /^https:\/\/www\.tiktok\.com\/oembed\?url=/);
-                return Response.json({
-                    title: 'A complete TikTok caption #example',
-                    author_name: 'Creator Name',
-                    author_url: 'https://www.tiktok.com/@creator',
-                    author_unique_id: 'creator',
-                    thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/cover.jpeg',
-                    thumbnail_width: 576,
-                    thumbnail_height: 1024,
-                });
+                const requested = String(input);
+                if (requested.startsWith('https://www.tiktok.com/oembed?url=')) {
+                    return Response.json({
+                        title: 'A complete TikTok caption #example',
+                        author_name: 'Creator Name',
+                        author_url: 'https://www.tiktok.com/@creator',
+                        author_unique_id: 'creator',
+                        thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/cover.jpeg',
+                        thumbnail_width: 576,
+                        thumbnail_height: 1024,
+                    });
+                }
+                assert.equal(
+                    requested,
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                );
+                return new Response(`
+                    <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+                    {
+                        "__DEFAULT_SCOPE__": {
+                            "webapp.video-detail": {
+                                "itemInfo": {
+                                    "itemStruct": {
+                                        "id": "7421234567890123456",
+                                        "desc": "A complete TikTok caption #example",
+                                        "createTime": "1721133000",
+                                        "video": {
+                                            "width": 576,
+                                            "height": 1024,
+                                            "duration": 14,
+                                            "cover": "https://p16-sign.tiktokcdn-us.com/cover.jpeg",
+                                            "playAddr": "https://v16-webapp-prime.us.tiktok.com/video.mp4"
+                                        },
+                                        "author": {
+                                            "uniqueId": "creator",
+                                            "nickname": "Creator Name",
+                                            "avatarLarger": "https://p16-sign.tiktokcdn-us.com/avatar.jpeg"
+                                        },
+                                        "stats": {
+                                            "diggCount": 25500000,
+                                            "commentCount": 251400,
+                                            "shareCount": 3300000,
+                                            "playCount": 50000000
+                                        },
+                                        "warnInfo": []
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    </script>
+                `, { headers: { 'Content-Type': 'text/html' } });
             };
             try {
                 const response = await tiktokHandler.handle(
@@ -496,8 +538,94 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.authorName, 'Creator Name');
                 assert.equal(response.data?.authorHandle, '@creator');
+                assert.equal(response.data?.authorAvatar, 'https://p16-sign.tiktokcdn-us.com/avatar.jpeg');
                 assert.equal(response.data?.image, 'https://p16-sign.tiktokcdn-us.com/cover.jpeg');
                 assert.equal(response.data?.description, 'A complete TikTok caption #example');
+                assert.equal(response.data?.video?.url, 'https://v16-webapp-prime.us.tiktok.com/video.mp4');
+                assert.equal(response.data?.stats, '❤️ 25.5M  💬 251.4K  🔁 3.3M');
+                assert.equal(response.data?.timestamp, '2024-07-16T12:30:00.000Z');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'tiktokHandler uses bounded FxTikTok ActivityPub only as an emergency fallback',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requested = String(input);
+                if (requested === 'https://www.tnktok.com/api/v1/statuses/7421234567890123456') {
+                    return Response.json({
+                        id: '7421234567890123456',
+                        url: 'https://tiktok.com/@creator/video/7421234567890123456',
+                        created_at: '2024-07-16T12:30:00.000Z',
+                        content: '<b>❤️ 25.5M  💬 251.4K  🔁 3.3M</b>',
+                        spoiler_text: '',
+                        account: {
+                            username: 'creator',
+                            display_name: 'Creator Name',
+                            url: 'https://www.tiktok.com/@creator',
+                            avatar: 'https://offload.tnktok.com/generate/avatar/creator',
+                        },
+                        media_attachments: [{
+                            type: 'video',
+                            url: 'https://offload.tnktok.com/generate/video/7421234567890123456',
+                            preview_url: 'https://offload.tnktok.com/generate/cover/7421234567890123456',
+                            meta: { original: { width: 576, height: 1024 } },
+                        }],
+                    });
+                }
+                return new Response('unavailable', { status: 403 });
+            };
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.authorAvatar, 'https://offload.tnktok.com/generate/avatar/creator');
+                assert.equal(
+                    response.data?.video?.url,
+                    'https://offload.tnktok.com/generate/video/7421234567890123456',
+                );
+                assert.equal(response.data?.stats, '❤️ 25.5M 💬 251.4K 🔁 3.3M');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'tiktokHandler rejects FxTikTok activity with mismatched creator identity',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const requested = String(input);
+                if (requested === 'https://www.tnktok.com/api/v1/statuses/7421234567890123456') {
+                    return Response.json({
+                        id: '7421234567890123456',
+                        url: 'https://tiktok.com/@creator/video/7421234567890123456',
+                        account: {
+                            username: 'impostor',
+                            display_name: 'Impostor',
+                            avatar: 'https://offload.tnktok.com/generate/avatar/impostor',
+                        },
+                        media_attachments: [{
+                            type: 'video',
+                            url: 'https://offload.tnktok.com/generate/video/7421234567890123456',
+                        }],
+                    });
+                }
+                return new Response('unavailable', { status: 403 });
+            };
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                assert.equal(response.success, false);
+                assert.equal(response.redirect, 'https://www.tiktok.com/@creator/video/7421234567890123456');
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -524,6 +652,7 @@ const tests: TestCase[] = [
                     {
                         "@type": "SocialMediaPosting",
                         "datePublished": "2026-05-29T18:34:20+00:00",
+                        "keywords": ["writing", "classics", "jokes"],
                         "author": {
                             "name": "changes",
                             "url": "https://changes.tumblr.com/",
@@ -543,6 +672,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorHandle, '@changes');
                 assert.equal(response.data?.authorAvatar, 'https://64.media.tumblr.com/avatar.pnj');
                 assert.equal(response.data?.timestamp, '2026-05-29T18:34:20.000Z');
+                assert.equal(response.data?.context, '#writing #classics #jokes');
                 assert.equal(response.data?.stats, '📝 887 notes');
                 assert.deepEqual(response.data?.images, [
                     'https://64.media.tumblr.com/first.jpg',
@@ -3895,6 +4025,8 @@ const tests: TestCase[] = [
             assert.match(indexHtml, /class="credits-intro"/);
             assert.match(indexHtml, /class="credit-name">FxTwitter/);
             assert.match(indexHtml, /class="credit-purpose">X metadata fallback/);
+            assert.match(indexHtml, /class="credit-name">FxTikTok/);
+            assert.match(indexHtml, /class="credit-purpose">Emergency TikTok media fallback/);
             assert.match(indexHtml, /class="credits-note"/);
             assert.match(indexHtml, /rel="noopener noreferrer"/);
             assert.match(stylesCss, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);

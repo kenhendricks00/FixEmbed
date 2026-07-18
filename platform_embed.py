@@ -26,6 +26,7 @@ class PlatformCardSpec:
     display_name: str
     color: int
     emoji: str
+    content_first: bool = False
 
 
 def build_platform_layout(
@@ -58,10 +59,13 @@ def build_platform_layout(
         identity = f"**[{author_name}]({author_url})**"
     else:
         identity = f"**{author_name}**"
-    title_line = f"### [{title}]({source_url})" if source_url else f"### {title}"
-    header_text = "\n".join(
-        part for part in (identity, title_line, description) if part
-    )
+    if spec.content_first:
+        header_text = "\n".join(part for part in (identity, description or title) if part)
+    else:
+        title_line = f"### [{title}]({source_url})" if source_url else f"### {title}"
+        header_text = "\n".join(
+            part for part in (identity, title_line, description) if part
+        )
 
     children: list[discord.ui.Item[Any]] = []
     if author_avatar:
@@ -99,6 +103,10 @@ def build_platform_layout(
                 )
             )
         )
+
+    context = str(payload.get("context") or "").strip()
+    if context:
+        children.append(discord.ui.TextDisplay(f"-# {context[:1000]}"))
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
     if stats and preferences.show_stats:

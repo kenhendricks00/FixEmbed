@@ -171,6 +171,7 @@ FixEmbed uses first-party platform data whenever available. When a platform bloc
 - [SnapSave](https://snapsave.app) — Instagram media recovery
 - [Phixiv](https://github.com/thelaao/phixiv) — Pixiv fallback
 - [VxBilibili](https://github.com/niconi21/vxBilibili) — Bilibili fallback
+- [FxTikTok](https://github.com/okdargy/fxtiktok) — emergency TikTok media fallback
 
 These services are not affiliated with or endorsed by FixEmbed.
 

@@ -409,6 +409,10 @@ docker run -d kenhendricks00/fixembed</code></pre>
                     <span><span class="credit-name">VxBilibili</span><span class="credit-purpose">Bilibili fallback</span></span>
                     <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
                 </a>
+                <a href="https://github.com/okdargy/fxtiktok" class="credit-link" target="_blank" rel="noopener noreferrer">
+                    <span><span class="credit-name">FxTikTok</span><span class="credit-purpose">Emergency TikTok media fallback</span></span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </a>
             </div>
             <p class="credits-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>These independent services are not affiliated with or endorsed by FixEmbed.</span></p>
         </div>

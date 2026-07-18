@@ -26,6 +26,7 @@ type TumblrJsonLd = {
     '@type'?: unknown;
     datePublished?: unknown;
     articleBody?: unknown;
+    keywords?: unknown;
     author?: JsonLdAuthor;
 };
 
@@ -191,6 +192,20 @@ function isSensitiveTumblrPost(html: string): boolean {
     );
 }
 
+function tumblrTagContext(value: unknown): string | undefined {
+    const candidates = Array.isArray(value)
+        ? value
+        : typeof value === 'string'
+            ? value.split(',')
+            : [];
+    const tags = candidates
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim().replace(/^#/, '').replace(/\s+/g, '-'))
+        .filter((tag) => /^[\p{L}\p{N}_-]{1,50}$/u.test(tag))
+        .slice(0, 10);
+    return tags.length ? tags.map((tag) => `#${tag}`).join(' ') : undefined;
+}
+
 export const tumblrHandler: PlatformHandler = {
     name: 'tumblr',
     patterns: [
@@ -235,6 +250,7 @@ export const tumblrHandler: PlatformHandler = {
                     images: images.length > 1 ? images : undefined,
                     timestamp: normalizeTimestamp(jsonLd?.datePublished),
                     stats: notes > 0 ? `📝 ${notes.toLocaleString('en-US')} notes` : undefined,
+                    context: tumblrTagContext(jsonLd?.keywords),
                     sensitive: isSensitiveTumblrPost(result.html),
                     color: platformColors.tumblr,
                     platform: 'tumblr',

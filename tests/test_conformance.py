@@ -178,6 +178,9 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(by_id["twitter-carousel"].media_type, "carousel")
         self.assertEqual(by_id["twitter-gif"].media_type, "gif")
         self.assertEqual(by_id["twitter-video"].media_type, "video")
+        self.assertEqual(by_id["tiktok-video"].media_type, "video")
+        self.assertIn("avatar", by_id["tiktok-video"].requires)
+        self.assertIn("stats", by_id["tiktok-video"].requires)
         self.assertEqual(
             by_id["twitter-translation"].options,
             {"lang": "es"},

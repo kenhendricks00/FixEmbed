@@ -11,7 +11,13 @@ from embed_footer import FooterBranding
 from platform_embed import PlatformCardSpec, build_platform_layout, fetch_platform_payload
 
 
-TUMBLR_SPEC = PlatformCardSpec("tumblr", "Tumblr", 0x35465C, "🅣")
+TUMBLR_SPEC = PlatformCardSpec(
+    "tumblr",
+    "Tumblr",
+    0x35465C,
+    "<:tumblr:1527868615393546400>",
+    content_first=True,
+)
 
 
 def build_tumblr_layout(

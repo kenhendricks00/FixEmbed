@@ -2,6 +2,8 @@
 
 #### **TikTok, Tumblr, Twitch, and safer media**
 - Added first-party TikTok video, Tumblr post, and Twitch clip, VOD, and channel cards across automatic conversion, `/fix`, context commands, settings, status probes, and production conformance.
+- Matched TikTok and Tumblr cards to the creator-first Embedded layout with right-side avatars, direct TikTok video or slideshow media, engagement details, and Tumblr tags below galleries.
+- Added FxTikTok as a bounded emergency fallback when TikTok blocks both its public page data and official oEmbed response.
 - Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.
 - Source-marked sensitive media now renders behind Discord spoilers across all Components V2 cards.
 - Clarified that post translation is an X-specific feature; other platforms preserve source-language text.
