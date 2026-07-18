@@ -3,6 +3,7 @@
 #### **TikTok, Tumblr, Twitch, and safer media**
 - Added first-party TikTok video, Tumblr post, and Twitch clip, VOD, and channel cards across automatic conversion, `/fix`, context commands, settings, status probes, and production conformance.
 - Matched TikTok and Tumblr cards to the creator-first Embedded layout with right-side avatars, direct TikTok video or slideshow media, engagement details, and Tumblr tags below galleries.
+- Added the dedicated TikTok share application emoji to the engagement row.
 - Added FxTikTok as a bounded emergency fallback when TikTok blocks both its public page data and official oEmbed response.
 - Recovered missing TikTok avatars from the creator's public profile, used FxTikTok relay URLs for stable Discord-fetchable media, and signed Twitch clip media URLs with CloudFront-aware production probes.
 - Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.

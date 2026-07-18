@@ -43,6 +43,7 @@ class NewPlatformEmbedTests(unittest.TestCase):
         self.assertIn("A TikTok caption", rendered)
         self.assertNotIn("###", header)
         self.assertIn("1527868616215629954", rendered)
+        self.assertIn("<:share:1527880479305498744> 3.3M", rendered)
         self.assertIn("<t:", rendered)
         self.assertEqual(
             gallery["items"][0]["media"]["url"],

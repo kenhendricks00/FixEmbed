@@ -108,7 +108,10 @@ def build_platform_layout(
     if context:
         children.append(discord.ui.TextDisplay(f"-# {context[:1000]}"))
 
-    stats = format_component_stats(str(payload.get("stats") or "").strip())
+    stats = format_component_stats(
+        str(payload.get("stats") or "").strip(),
+        platform=spec.api_name,
+    )
     if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 

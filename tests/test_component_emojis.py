@@ -17,6 +17,7 @@ class ComponentEmojiTests(unittest.TestCase):
                 "like": 1526255244483362866,
                 "repost": 1526255036072591450,
                 "comment": 1526254715250282506,
+                "share": 1527880479305498744,
                 "x_government": 1527644261208690778,
                 "x_premium": 1527644259308798113,
                 "x_organization": 1527642128300118129,
@@ -52,6 +53,11 @@ class ComponentEmojiTests(unittest.TestCase):
         rendered = format_component_stats("\U0001fa99 456", platform="bilibili")
 
         self.assertEqual(rendered, f"{application_emoji('coins')} 456")
+
+    def test_tiktok_uses_share_instead_of_repost(self):
+        rendered = format_component_stats("\U0001f501 3.3M", platform="tiktok")
+
+        self.assertEqual(rendered, f"{application_emoji('share')} 3.3M")
 
 
 if __name__ == "__main__":
