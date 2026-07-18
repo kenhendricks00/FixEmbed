@@ -213,7 +213,8 @@ async function handleClip(input: Extract<TwitchInput, { kind: 'clip' }>): Promis
         source: 'first-party',
         data: {
             title: truncateText(text(clip.title) || 'Twitch clip', 300),
-            description: context,
+            description: '',
+            context,
             url: input.canonical,
             siteName: getBrandedSiteName('twitch'),
             ...broadcaster,

@@ -9,6 +9,7 @@
 - Replaced Tumblr's generic notes symbol with the dedicated application emoji.
 - Added the dedicated TikTok share application emoji to the engagement row.
 - Simplified Twitch creator headers to one linked profile name and replaced the generic footer dot with the Twitch application emoji.
+- Moved Twitch clip game, clipper, and duration metadata beside the view count beneath the video.
 - Added FxTikTok as a bounded emergency fallback when TikTok blocks both its public page data and official oEmbed response.
 - Recovered missing TikTok avatars from the creator's public profile, used FxTikTok relay URLs for stable Discord-fetchable media, and signed Twitch clip media URLs with CloudFront-aware production probes.
 - Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.

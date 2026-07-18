@@ -28,6 +28,7 @@ class PlatformCardSpec:
     emoji: str
     content_first: bool = False
     link_author_name_only: bool = False
+    merge_context_with_stats: bool = False
 
 
 def build_platform_layout(
@@ -108,13 +109,23 @@ def build_platform_layout(
         )
 
     context = str(payload.get("context") or "").strip()
-    if context:
-        children.append(discord.ui.TextDisplay(f"-# {context[:1000]}"))
-
     stats = format_component_stats(
         str(payload.get("stats") or "").strip(),
         platform=spec.api_name,
     )
+    if spec.merge_context_with_stats and context:
+        secondary_metadata = " · ".join(
+            part for part in (
+                stats if preferences.show_stats else "",
+                context,
+            )
+            if part
+        )
+        children.append(discord.ui.TextDisplay(f"-# {secondary_metadata[:1000]}"))
+        stats = ""
+    elif context:
+        children.append(discord.ui.TextDisplay(f"-# {context[:1000]}"))
+
     if stats and preferences.show_stats:
         children.append(discord.ui.TextDisplay(f"-# {stats}"))
 

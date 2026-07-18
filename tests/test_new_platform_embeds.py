@@ -91,12 +91,11 @@ class NewPlatformEmbedTests(unittest.TestCase):
         )
     def test_twitch_clip_card_keeps_game_clip_credit_stats_and_playable_media(self):
         payload = {
-            "title": "We go crazy with the flick for the win :)",
-            "description": "Apex Legends · Clipped by TSoonami · 30s",
+            "title": "Linus is gonna retire soon",
             "url": "https://clips.twitch.tv/GoodGoodWaffleTwitchRaid",
-            "authorName": "TSoonami",
-            "authorHandle": "@tsoonami",
-            "authorUrl": "https://www.twitch.tv/tsoonami",
+            "authorName": "LinusTech",
+            "authorHandle": "@linustech",
+            "authorUrl": "https://www.twitch.tv/linustech",
             "authorAvatar": "https://static-cdn.jtvnw.net/profile.png",
             "video": {
                 "url": "https://d1ndex63qxojbr.cloudfront.net/clip/index.mp4",
@@ -104,24 +103,27 @@ class NewPlatformEmbedTests(unittest.TestCase):
                 "height": 720,
                 "thumbnail": "https://static-cdn.jtvnw.net/clip.jpg",
             },
-            "stats": "224 views",
+            "context": "Talk Shows & Podcasts · Clipped by Nugrun · 30s",
+            "stats": "\U0001f441\ufe0f 228.2K views",
             "timestamp": "2019-10-01T20:15:47Z",
         }
 
         container = serialized_container(build_twitch_layout(payload))
-        rendered = str(container)
         header = container["components"][0]["components"][0]["content"]
         gallery = container["components"][1]
         footer = container["components"][-1]["content"]
 
         self.assertIn(
-            "**[TSoonami](https://www.twitch.tv/tsoonami)**",
+            "**[LinusTech](https://www.twitch.tv/linustech)**",
             header,
         )
-        self.assertNotIn("@tsoonami", header)
-        self.assertIn("Apex Legends", rendered)
-        self.assertIn("Clipped by TSoonami", rendered)
-        self.assertIn("224", rendered)
+        self.assertNotIn("@linustech", header)
+        self.assertNotIn("Talk Shows & Podcasts", header)
+        self.assertEqual(
+            container["components"][2]["content"],
+            "-# <:views:1526255708683636896> 228.2K views · "
+            "Talk Shows & Podcasts · Clipped by Nugrun · 30s",
+        )
         self.assertIn("<:twitch:1527868614269468852>", footer)
         self.assertNotIn("\U0001f7e3", footer)
         self.assertEqual(

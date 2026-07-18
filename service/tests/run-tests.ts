@@ -910,7 +910,8 @@ const tests: TestCase[] = [
                 );
                 assert.equal(response.success, true);
                 assert.equal(response.data?.authorName, 'TSoonami');
-                assert.equal(response.data?.description, 'Apex Legends · Clipped by Clipper · 30s');
+                assert.equal(response.data?.description, '');
+                assert.equal(response.data?.context, 'Apex Legends · Clipped by Clipper · 30s');
                 assert.equal(response.data?.stats, '👁️ 224 views');
                 const mediaUrl = new URL(response.data?.video?.url || '');
                 assert.equal(

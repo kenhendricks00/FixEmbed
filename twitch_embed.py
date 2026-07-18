@@ -17,6 +17,7 @@ TWITCH_SPEC = PlatformCardSpec(
     0x9146FF,
     "<:twitch:1527868614269468852>",
     link_author_name_only=True,
+    merge_context_with_stats=True,
 )
 
 
