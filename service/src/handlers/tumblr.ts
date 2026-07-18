@@ -322,6 +322,8 @@ export const tumblrHandler: PlatformHandler = {
             const images = tumblrImages(post, jsonLd);
             const noteMatch = result.html.match(/\b([\d,]+)\s+notes?\b/i);
             const notes = noteMatch ? Number(noteMatch[1].replace(/,/g, '')) : 0;
+            const tagContext = tumblrTagContext(jsonLd?.keywords)
+                || tumblrTagContext(metaContent(result.html, 'keywords'));
             return {
                 success: true,
                 source: 'first-party',
@@ -338,7 +340,7 @@ export const tumblrHandler: PlatformHandler = {
                     images: images.length > 1 ? images : undefined,
                     timestamp: normalizeTimestamp(jsonLd?.datePublished),
                     stats: notes > 0 ? `📝 ${notes.toLocaleString('en-US')} notes` : undefined,
-                    context: tumblrTagContext(jsonLd?.keywords),
+                    context: tagContext,
                     sensitive: isSensitiveTumblrPost(result.html),
                     color: platformColors.tumblr,
                     platform: 'tumblr',

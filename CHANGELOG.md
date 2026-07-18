@@ -5,6 +5,7 @@
 - Matched TikTok and Tumblr cards to the creator-first Embedded layout with right-side avatars, direct TikTok video or slideshow media, engagement details, and Tumblr tags below galleries.
 - Restored complete Tumblr post bodies, inline links and emphasis, and high-resolution themed-blog media instead of shortened Open Graph summaries.
 - Simplified Tumblr creator headers to one linked, correctly cased blog name instead of repeating the username as a separate handle.
+- Restored Tumblr hashtags from themed-blog keyword metadata so the tag row appears beneath post media.
 - Added the dedicated TikTok share application emoji to the engagement row.
 - Simplified Twitch creator headers to one linked profile name and replaced the generic footer dot with the Twitch application emoji.
 - Added FxTikTok as a bounded emergency fallback when TikTok blocks both its public page data and official oEmbed response.

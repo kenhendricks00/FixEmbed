@@ -801,6 +801,7 @@ const tests: TestCase[] = [
                 return new Response(`
                     <meta property="og:title" content="TitleKnown">
                     <meta property="og:description" content="The shortened Tumblr summary...">
+                    <meta name="keywords" content="my art,kosa,kids online safety act,censorship,internet censorship">
                     <div class="post-left post">
                         <div class="npf_row">
                             <a data-big-photo="https://64.media.tumblr.com/post/s1280x1920/poster.png">
@@ -838,6 +839,10 @@ const tests: TestCase[] = [
                 );
                 assert.equal(response.success, true);
                 assert.equal(response.data?.authorName, 'TitleKnown');
+                assert.equal(
+                    response.data?.context,
+                    '#my-art #kosa #kids-online-safety-act #censorship #internet-censorship',
+                );
                 assert.match(
                     response.data?.description || '',
                     /\[linked passage\]\(https:\/\/example\.com\/detail\)/,
