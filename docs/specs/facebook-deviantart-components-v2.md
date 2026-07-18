@@ -10,7 +10,7 @@ Facebook's access model makes an unconditional launch unsafe. Complete public Pa
 
 Add Facebook and DeviantArt as supported links with strict public-content boundaries and platform-aware rich cards.
 
-DeviantArt will use its official public oEmbed interface as the direct source. Cards will preserve artist identity, title, description, media or video preview, engagement, publication time, safety state, source link, and FixEmbed footer. Public deviation and Sta.sh URLs are supported; unrelated DeviantArt pages are not.
+DeviantArt will use its official public oEmbed interface from the SparkedHost bot runtime as the direct source. Production verification found that DeviantArt rejects Cloudflare Worker egress, so the Discord Components V2 path does not depend on the Worker's DeviantArt handler. Cards will preserve artist identity, title, description, media or video preview, engagement, publication time, safety state, source link, and FixEmbed footer. Public deviation and Sta.sh URLs are supported; unrelated DeviantArt pages are not.
 
 Facebook will target public Page posts, photos, galleries, videos, and Reels across proven permalink and share variants. Its direct source is Meta's approved Page public-content interface. A separately validated fallback source may recover missing public metadata or media, but it must be bounded, identity-checked, privacy-safe, observable, and unable to turn private content into a supported link. Facebook stays disabled until fixtures and live canaries prove complete, stable cards for every advertised content class.
 
@@ -56,7 +56,7 @@ FixEmbed will always attempt to replace a supported link. Original media URLs ar
 - A supported link is limited to public content with a strict, platform-specific URL grammar.
 - Facebook v1 covers public Page posts, photos, galleries, videos, and Reels only after each URL class has a proven resolver. Bare Page profiles, groups, comments, private or personal-account content, stories, and login-only content are excluded.
 - DeviantArt v1 covers public deviation and Sta.sh URLs documented by its oEmbed interface. Profiles, galleries, favorites, search, and journal pages are excluded.
-- DeviantArt oEmbed is the direct source and does not require a new production secret.
+- DeviantArt oEmbed is fetched directly by the bot runtime and does not require a new production secret. The Cloudflare Worker is not a DeviantArt card dependency because its production egress receives HTTP 403 from the same official canary that succeeds from the bot-host route.
 - DeviantArt photo responses use the complete signed media URL returned by the service. Signed query parameters are never stripped or reconstructed.
 - DeviantArt video responses use the official thumbnail and source link unless a separately validated playable-media capability is proven.
 - DeviantArt safety metadata controls spoiler presentation.
@@ -71,11 +71,11 @@ FixEmbed will always attempt to replace a supported link. Original media URLs ar
 - Both platforms reuse the existing platform-aware card composition seam and the shared automatic/manual command delivery path.
 - Both platforms participate in existing service settings, channel rules, telemetry, reliability reporting, conformance, translations, documentation, and one-time default migrations.
 - DeviantArt application emoji ID `1528150711089500180` and Facebook application emoji ID `1528017838567329913` are used consistently in cards and service controls.
-- SparkedHost is the known bot-hosting route, but deployment is separate from implementation and occurs only after verification.
+- SparkedHost is the bot-hosting route and is the verified network path for official DeviantArt oEmbed retrieval.
 
 ## Testing Decisions
 
-- Test the highest existing retrieval seam by submitting a supported source URL to the public embed API and asserting the normalized platform payload.
+- Test DeviantArt's highest production retrieval seam in the bot runtime by submitting a supported source URL to the direct oEmbed adapter and asserting the normalized platform payload. Keep the public Worker probe as an independent outage signal rather than a Discord card dependency.
 - Test the highest existing presentation seam by passing a normalized payload through the shared Components V2 card path and asserting user-visible identity, text, media, engagement, safety, timestamp, source, and footer behavior.
 - Use sanitized deterministic fixtures for DeviantArt photos, GIFs, hosted videos, mature content, missing optional fields, throttling, not-found responses, and unsafe returned media.
 - Use sanitized deterministic fixtures for Facebook text, single-photo, gallery, video preview, Reel preview, missing engagement, unresolved modern URLs, private/not-found responses, permission failures, throttling, and unsafe returned identity or media.
@@ -96,10 +96,10 @@ FixEmbed will always attempt to replace a supported link. Original media URLs ar
 - Promising arbitrary public Facebook video or Reel playback before a permitted media source is proven.
 - DeviantArt profiles, galleries, favorites, search, journals, private deviations, or unauthorized originals.
 - Permanent media archiving or stripping signed media credentials.
-- Uploading to SparkedHost or restarting the production bot during implementation.
+- Recovering private, deleted, login-only, or otherwise unavailable deviations from cached third-party previews.
 
 ## Further Notes
 
 - The source-feasibility research is retained in the repository and should be refreshed if Meta changes its access or field model.
-- DeviantArt is the first implementation frontier because it is currently unblocked.
+- DeviantArt is implemented through the bot-host route; its Cloudflare Worker handler remains blocked by upstream HTTP 403 responses.
 - Facebook's credentialed tracer bullet is a human-access frontier. Implementation beyond its disabled seams remains blocked until the approved access and readiness evidence exist.

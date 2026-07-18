@@ -1,6 +1,11 @@
 import unittest
+from unittest.mock import AsyncMock, patch
 
-from deviantart_embed import build_deviantart_layout
+from deviantart_embed import (
+    build_deviantart_layout,
+    fetch_deviantart_layout,
+    normalize_deviantart_oembed_payload,
+)
 from tiktok_embed import build_tiktok_layout
 from tumblr_embed import build_tumblr_layout
 from twitch_embed import build_twitch_layout
@@ -164,3 +169,84 @@ class NewPlatformEmbedTests(unittest.TestCase):
             gallery["items"][0]["media"]["url"],
             payload["video"]["url"],
         )
+
+
+class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetches_directly_without_depending_on_the_blocked_worker(self):
+        source_url = (
+            "https://www.deviantart.com/team/art/"
+            "Fella-Celebrates-100k-971957229"
+        )
+        payload = {
+            "title": "Fella Celebrates 100k",
+            "description": "A milestone artwork.",
+            "url": source_url,
+            "authorName": "Team",
+            "authorHandle": "@team",
+            "authorUrl": "https://www.deviantart.com/team",
+            "image": (
+                "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/"
+                "fella.png?token=signed"
+            ),
+            "timestamp": "2023-07-14T21:32:03+00:00",
+            "platform": "deviantart",
+        }
+
+        direct_fetch = AsyncMock(return_value=payload)
+        with patch(
+            "deviantart_embed._fetch_deviantart_oembed_payload",
+            direct_fetch,
+            create=True,
+        ):
+            layout = await fetch_deviantart_layout(source_url)
+
+        direct_fetch.assert_awaited_once_with(source_url)
+        rendered = str(serialized_container(layout))
+        self.assertIn("Fella Celebrates 100k", rendered)
+        self.assertIn("<:deviantart:1528150711089500180>", rendered)
+
+    def test_normalizes_signed_media_stats_timestamp_and_safety(self):
+        source_url = (
+            "https://www.deviantart.com/team/art/"
+            "Fella-Celebrates-100k-971957229"
+        )
+        signed_image = (
+            "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/"
+            "fella.png?token=signed-value"
+        )
+        signed_avatar = (
+            "https://a.deviantart.net/avatars/t/e/team.gif?cache=version"
+        )
+        payload = normalize_deviantart_oembed_payload(
+            source_url,
+            {
+                "type": "photo",
+                "title": "Fella Celebrates 100k",
+                "description": "A milestone artwork.",
+                "url": signed_image,
+                "author_name": "Team",
+                "author_url": "https://www.deviantart.com/team",
+                "safety": "mature",
+                "pubdate": "2023-07-14T14:32:03-07:00",
+                "community": {
+                    "statistics": {
+                        "_attributes": {
+                            "views": "632165",
+                            "favorites": "1315",
+                            "comments": "354",
+                        }
+                    }
+                },
+            },
+            author_avatar_url=signed_avatar,
+        )
+
+        self.assertEqual(payload["image"], signed_image)
+        self.assertEqual(payload["authorAvatar"], signed_avatar)
+        self.assertEqual(payload["authorHandle"], "@team")
+        self.assertIn("632.2K views", payload["stats"])
+        self.assertEqual(payload["timestamp"], "2023-07-14T21:32:03+00:00")
+        self.assertTrue(payload["sensitive"])
+        self.assertIn(signed_avatar, str(serialized_container(
+            build_deviantart_layout(payload)
+        )))

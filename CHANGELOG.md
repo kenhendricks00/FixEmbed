@@ -4,6 +4,7 @@
 - Added public DeviantArt deviation and Sta.sh cards across automatic conversion, `/fix`, settings, reliability status, and production conformance.
 - Preserved artwork titles, artist attribution, signed full-size images, publication times, views, favorites, comments, downloads, copyright context, and the dedicated DeviantArt application emoji.
 - Rendered mature artwork behind Discord spoilers and kept public video deviations on a safe official preview until a reliable direct playback source is proven.
+- Moved official DeviantArt oEmbed retrieval into the bot runtime after DeviantArt blocked Cloudflare Worker requests, preventing public deviations from degrading to legacy link embeds.
 - Documented and ticketed Facebook support as a gated follow-up because current first-party parity requires Meta Page Public Content Access, App Review, and business verification.
 
 #### **TikTok, Tumblr, Twitch, and safer media**

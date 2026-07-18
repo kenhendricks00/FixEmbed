@@ -7,7 +7,7 @@ Target: FixEmbed's Cloudflare Worker metadata service and Discord Components V2 
 
 | Platform | First-party source | Feasible now? | Recommended scope |
 | --- | --- | --- | --- |
-| DeviantArt | DeviantArt oEmbed | Yes, without OAuth in the live probes | Ship public deviation and `sta.sh` links. Render photos/GIFs directly; render hosted videos as thumbnail + source link unless a safe player path is proven. |
+| DeviantArt | DeviantArt oEmbed | Yes from the SparkedHost bot runtime, without OAuth | Ship public deviation and `sta.sh` links. Fetch metadata in the bot runtime because DeviantArt rejects Cloudflare Worker egress. Render photos/GIFs directly; render hosted videos as thumbnail + source link unless a safe player path is proven. |
 | Facebook content published by public Pages | Meta Graph API with Page Public Content Access | Technically yes, but externally blocked | Implement behind a disabled feature flag only after Meta App Review and business verification. Start with canonical Page post URLs whose numeric Page/post IDs can be resolved reliably. |
 | Facebook via Meta oEmbed alone | Meta oEmbed Read | No for FixEmbed-quality cards | The current response is embed HTML plus provider/size metadata. It no longer supplies normalized author or thumbnail fields, and Discord Components V2 cannot execute the returned HTML/JavaScript. |
 | Facebook via anonymous HTML scraping | Facebook web pages/plugins | Not a production-quality first-party contract | Do not make this the primary implementation. Anonymous fetches returned HTTP 400 in this environment, and the HTML is undocumented and session/anti-bot dependent. |
@@ -41,7 +41,9 @@ For FixEmbed, accept `www.deviantart.com/{username}/art/{slug}` and `sta.sh/{id}
 
 ### Authentication and review
 
-The documented oEmbed call has no OAuth parameter, and both public deviation probes below returned HTTP 200 without credentials. This is distinct from DeviantArt's OAuth API, which requires registered application credentials for its richer endpoints. The oEmbed path is therefore Cloudflare Worker-compatible without adding a secret.
+The documented oEmbed call has no OAuth parameter, and both public deviation probes below returned HTTP 200 without credentials. This is distinct from DeviantArt's OAuth API, which requires registered application credentials for its richer endpoints.
+
+Production verification on 2026-07-18 found an important hosting constraint: the same official public canary returned HTTP 200 from the local/bot-host route but HTTP 403 from the deployed Cloudflare Worker. DeviantArt metadata retrieval therefore runs in the SparkedHost bot process. The Worker endpoint remains unsuitable as the Discord card's retrieval dependency until a live Cloudflare canary proves otherwise.
 
 DeviantArt says API clients must send a User-Agent and use HTTP compression; use a stable FixEmbed User-Agent and `Accept-Encoding` supported by the Worker runtime. Source: [DeviantArt getting started](https://deviantart.readme.io/docs/getting-started).
 
@@ -260,7 +262,7 @@ Do not build the full handler before this passes:
 Implement immediately:
 
 - strict URL detection/canonicalization;
-- oEmbed fetch with timeout, stable User-Agent, cache, and 429 backoff;
+- bot-runtime oEmbed fetch with timeout, stable User-Agent, bounded response size, positive and negative caches, and concurrent-miss coalescing;
 - `photo`, GIF-as-photo, and video-thumbnail handling;
 - safety/spoiler mapping;
 - views/favorites/comments/downloads stats;
