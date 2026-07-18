@@ -173,7 +173,7 @@
       "requires": ["title", "author", "author-link", "avatar", "timestamp", "stats", "media"],
       "mediaType": "video",
       "sectionKinds": [],
-      "allowFallback": false,
+      "allowFallback": true,
       "latencyBudgetMs": 7000,
       "renderer": "components-v2",
       "probeMedia": true

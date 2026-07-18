@@ -447,6 +447,30 @@ export const tiktokHandler: PlatformHandler = {
                         const handle = text(data.authorHandle).replace(/^@/, '');
                         data.authorAvatar = await fetchTikTokProfileAvatar(handle);
                     }
+                    let stableMedia: HandlerResponse | undefined;
+                    try {
+                        stableMedia = await fetchFxTikTokFallback(parsed, oEmbed);
+                    } catch {
+                        // Keep the first-party card when the optional media relay is unavailable.
+                    }
+                    if (stableMedia?.success && stableMedia.data) {
+                        const fallbackData = stableMedia.data;
+                        data.authorAvatar ||= fallbackData.authorAvatar;
+                        if (fallbackData.video) {
+                            data.video = fallbackData.video;
+                            data.image = fallbackData.image;
+                            data.images = undefined;
+                        } else if (fallbackData.images?.length) {
+                            data.video = undefined;
+                            data.image = fallbackData.image;
+                            data.images = fallbackData.images;
+                        } else if (fallbackData.image) {
+                            data.video = undefined;
+                            data.image = fallbackData.image;
+                            data.images = undefined;
+                        }
+                        return { success: true, source: 'fallback', data };
+                    }
                     return { success: true, source: 'first-party', data };
                 }
             }

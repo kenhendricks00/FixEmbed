@@ -181,6 +181,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(by_id["tiktok-video"].media_type, "video")
         self.assertIn("avatar", by_id["tiktok-video"].requires)
         self.assertIn("stats", by_id["tiktok-video"].requires)
+        self.assertTrue(by_id["tiktok-video"].allow_fallback)
         self.assertEqual(
             by_id["twitter-translation"].options,
             {"lang": "es"},
