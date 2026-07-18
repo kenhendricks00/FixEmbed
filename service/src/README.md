@@ -14,13 +14,20 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 | Pixiv | 🎨 | ✅ | Phixiv HTML scraping |
 | Bilibili | 📺 | ✅ | VxBilibili HTML scraping |
 
-> **Note**: YouTube & TikTok are not supported as Discord has excellent native embedding for these platforms.
+| YouTube Community Posts | Video | Supported | Official page metadata |
+| Pinterest | Pin | Supported | Official Pin metadata |
+| TikTok | Video | Supported | Official public oEmbed |
+| Tumblr | Post | Supported | Public post metadata |
+| Twitch | Stream | Supported | Public Twitch metadata |
 
 ## Features
 
 - **Rich Embeds**: Consistent `FixEmbed • [emoji] Platform` branding across all platforms
 - **Video Playback**: Native video support for Twitter, Instagram Reels, Threads, Reddit, and Bilibili
-- **Carousel Images**: Multi-image posts display as grids (Instagram, Threads)
+- **Mixed Media and Galleries**: Complete image/video collections retain source order when available
+- **Sensitive Media**: Source-marked sensitive content is hidden behind Discord spoilers
+- **Platform Context**: Creator identity, timestamps, engagement, games, communities, and other source-specific context are preserved when available
+- **X Translation**: Explicit X language modifiers include original and translated text; other platforms preserve source-language text
 - **Engagement Stats**: Metrics displayed via oEmbed (💬 comments, ❤️ likes, � reposts, 👁 views)
   - Zero values are automatically hidden for cleaner display
 - **Author Attribution**: Consistent `@handle` display across all social platforms
@@ -76,6 +83,12 @@ GET /bluesky/profile/{handle}/post/{id}
 GET /reddit/r/{subreddit}/comments/{id}
 GET /pixiv/artworks/{id}
 GET /bilibili/video/{bvid}
+GET /youtube/post/{id}
+GET /pinterest/pin/{id}
+GET /tiktok/@{username}/video/{id}
+GET /tumblr/{blog}/{id}
+GET /twitch/{channel}
+GET /twitch/videos/{id}
 ```
 
 ### Video Proxy

@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **TikTok, Tumblr, Twitch, and safer media**
+- Added first-party TikTok video, Tumblr post, and Twitch clip, VOD, and channel cards across automatic conversion, `/fix`, context commands, settings, status probes, and production conformance.
+- Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.
+- Source-marked sensitive media now renders behind Discord spoilers across all Components V2 cards.
+- Clarified that post translation is an X-specific feature; other platforms preserve source-language text.
+
 ## v1.5.0 (07/17/2026)
 
 #### **Release highlights**

@@ -26,6 +26,9 @@ SUPPORTED_PLATFORM_NAMES = {
     "Bilibili": "Bilibili",
     "YouTube": "YouTube",
     "Pinterest": "Pinterest",
+    "TikTok": "TikTok",
+    "Tumblr": "Tumblr",
+    "Twitch": "Twitch",
 }
 VALID_STATUSES = {"operational", "degraded", "outage"}
 VALID_MODES = {"first-party", "fallback", "unavailable"}

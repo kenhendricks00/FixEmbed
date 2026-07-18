@@ -3703,7 +3703,7 @@ const tests: TestCase[] = [
     {
         name: 'status probes cover every handler and exercise representative platform samples',
         run: () => {
-            assert.equal(STATUS_PROBES.length, 9);
+            assert.equal(STATUS_PROBES.length, 12);
             assert.equal(
                 new Set(STATUS_PROBES.map((probe) => probe.platform)).size,
                 STATUS_PROBES.length,
@@ -3848,7 +3848,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'public website advertises YouTube and Pinterest support',
+        name: 'public website advertises every supported platform and card safety',
         run: () => {
             assert.match(indexHtml, /<h3>YouTube<\/h3>/);
             assert.match(indexHtml, /YouTube community posts/i);
@@ -3858,6 +3858,14 @@ const tests: TestCase[] = [
             assert.match(indexHtml, /full-size images and playable video/i);
             assert.match(docsHtml, /Pinterest Pins/);
             assert.match(docsHtml, /pin\.it/);
+            assert.match(indexHtml, /<h3>TikTok<\/h3>/);
+            assert.match(indexHtml, /<h3>Tumblr<\/h3>/);
+            assert.match(indexHtml, /<h3>Twitch<\/h3>/);
+            assert.match(indexHtml, /sensitive media is automatically hidden behind Discord spoilers/i);
+            assert.match(docsHtml, /TikTok Videos/);
+            assert.match(docsHtml, /Tumblr Posts/);
+            assert.match(docsHtml, /Twitch Clips, VODs, and Channels/);
+            assert.match(docsHtml, /Translation modifiers currently apply to X posts only/);
         },
     },
     {

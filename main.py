@@ -25,6 +25,9 @@ from pixiv_relay import start_pixiv_relay
 from bilibili_embed import fetch_bilibili_layout
 from youtube_embed import fetch_youtube_community_layout
 from pinterest_embed import fetch_pinterest_layout
+from tiktok_embed import fetch_tiktok_layout
+from tumblr_embed import fetch_tumblr_layout
+from twitch_embed import fetch_twitch_layout
 from embed_footer import FooterBranding, escape_component_text
 from card_preferences import preferences_from_settings
 from premium_controls import (
@@ -40,7 +43,11 @@ from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
 from install_links import build_install_controls
 from onboarding import send_onboarding_dm
-from settings_migrations import migrate_pinterest_service_default, migrate_youtube_service_default
+from settings_migrations import (
+    migrate_new_social_services_default,
+    migrate_pinterest_service_default,
+    migrate_youtube_service_default,
+)
 from reliability import (
     ReliabilityClient,
     ReliabilityReport,
@@ -118,6 +125,31 @@ SERVICES = {
         "patterns": [r"pinterest\.com/pin/[\w-]+", r"pin\.it/[\w-]+"],
         "base_url": "fixembed.app",
         "display_format": "Pinterest • {0}"
+    },
+    "TikTok": {
+        "patterns": [
+            r"tiktok\.com/@[\w.-]+/video/\d+",
+            r"(?:vm|vt)\.tiktok\.com/[\w-]+",
+        ],
+        "base_url": "fixembed.app",
+        "display_format": "TikTok • {0}"
+    },
+    "Tumblr": {
+        "patterns": [
+            r"[\w-]+\.tumblr\.com/post/\d+",
+            r"tumblr\.com/[\w-]+/\d+",
+        ],
+        "base_url": "fixembed.app",
+        "display_format": "Tumblr • {0}"
+    },
+    "Twitch": {
+        "patterns": [
+            r"(?:clips\.twitch\.tv/[\w-]+|twitch\.tv/[\w-]+/clip/[\w-]+)",
+            r"twitch\.tv/videos/\d+",
+            r"twitch\.tv/[\w-]+",
+        ],
+        "base_url": "fixembed.app",
+        "display_format": "Twitch • {0}"
     }
 }
 
@@ -133,6 +165,9 @@ SERVICE_EMOJI_FALLBACKS = {
     "Bilibili": "📺",
     "YouTube": "▶️",
     "Pinterest": "📌",
+    "TikTok": "🎵",
+    "Tumblr": "🅣",
+    "Twitch": "🟣",
 }
 SERVICE_EMOJI_IDS = {
     "YouTube": 1526267390592290926,
@@ -595,6 +630,7 @@ async def on_ready():
     await init_premium_controls(client.db)
     await migrate_youtube_service_default(client.db)
     await migrate_pinterest_service_default(client.db)
+    await migrate_new_social_services_default(client.db)
     await load_channel_states(client.db)
     await load_settings(client.db)
     for guild_id, controls in (await load_premium_controls(client.db)).items():
@@ -632,7 +668,7 @@ async def on_ready():
     client.launch_time = discord.utils.utcnow()
 
 statuses = itertools.cycle([
-    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Bilibili links", "for YouTube links", "for Pinterest links"
+    "for Twitter links", "for Reddit links", "for Instagram links", "for Threads links", "for Pixiv links", "for Bluesky links", "for Bilibili links", "for YouTube links", "for Pinterest links", "for TikTok links", "for Tumblr links", "for Twitch links"
 ])
 
 @tasks.loop(seconds=60)
@@ -730,6 +766,27 @@ async def build_components_v2_link(
             )
         elif item.service == "Pinterest":
             layout = await fetch_pinterest_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "TikTok":
+            layout = await fetch_tiktok_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Tumblr":
+            layout = await fetch_tumblr_layout(
+                item.canonical_url,
+                automatic_url,
+                footer_branding,
+                card_preferences,
+            )
+        elif item.service == "Twitch":
+            layout = await fetch_twitch_layout(
                 item.canonical_url,
                 automatic_url,
                 footer_branding,
@@ -2010,6 +2067,9 @@ async def quality(interaction: discord.Interaction, profile: app_commands.Choice
     app_commands.Choice(name="Bilibili", value="Bilibili"),
     app_commands.Choice(name="YouTube", value="YouTube"),
     app_commands.Choice(name="Pinterest", value="Pinterest"),
+    app_commands.Choice(name="TikTok", value="TikTok"),
+    app_commands.Choice(name="Tumblr", value="Tumblr"),
+    app_commands.Choice(name="Twitch", value="Twitch"),
 ], action=[
     app_commands.Choice(name="force on", value="on"),
     app_commands.Choice(name="force off", value="off"),

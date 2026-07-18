@@ -165,6 +165,41 @@
       "latencyBudgetMs": 5000,
       "renderer": "components-v2",
       "probeMedia": true
+    },
+    {
+      "id": "tiktok-video",
+      "platform": "tiktok",
+      "url": "https://www.tiktok.com/@scout2015/video/6718335390845095173",
+      "requires": ["title", "author", "author-link", "media"],
+      "mediaType": "image",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "latencyBudgetMs": 7000,
+      "renderer": "components-v2",
+      "probeMedia": true
+    },
+    {
+      "id": "tumblr-post",
+      "platform": "tumblr",
+      "url": "https://changes.tumblr.com/post/817972810553196544/may-2026",
+      "requires": ["title", "author", "author-link", "avatar", "timestamp"],
+      "sectionKinds": [],
+      "allowFallback": false,
+      "latencyBudgetMs": 7000,
+      "renderer": "components-v2",
+      "probeMedia": true
+    },
+    {
+      "id": "twitch-clip",
+      "platform": "twitch",
+      "url": "https://clips.twitch.tv/GoodGoodWaffleTwitchRaid",
+      "requires": ["title", "author", "author-link", "avatar", "timestamp", "stats", "media"],
+      "mediaType": "video",
+      "sectionKinds": [],
+      "allowFallback": false,
+      "latencyBudgetMs": 7000,
+      "renderer": "components-v2",
+      "probeMedia": true
     }
   ]
 }

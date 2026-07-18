@@ -6,6 +6,11 @@ import logging
 
 YOUTUBE_DEFAULT_MIGRATION = "enable_youtube_community_posts_v1"
 PINTEREST_DEFAULT_MIGRATION = "enable_pinterest_pins_v1"
+NEW_SOCIAL_SERVICE_MIGRATIONS = (
+    ("TikTok", "enable_tiktok_videos_v1"),
+    ("Tumblr", "enable_tumblr_posts_v1"),
+    ("Twitch", "enable_twitch_links_v1"),
+)
 
 
 def add_service_to_serialized_settings(serialized: str, service: str) -> tuple[str, bool]:
@@ -63,3 +68,9 @@ async def migrate_youtube_service_default(db) -> None:
 async def migrate_pinterest_service_default(db) -> None:
     """Enable Pinterest once for guilds saved before Pin support existed."""
     await migrate_service_default(db, "Pinterest", PINTEREST_DEFAULT_MIGRATION)
+
+
+async def migrate_new_social_services_default(db) -> None:
+    """Enable TikTok, Tumblr, and Twitch once for existing guilds."""
+    for service, migration_name in NEW_SOCIAL_SERVICE_MIGRATIONS:
+        await migrate_service_default(db, service, migration_name)

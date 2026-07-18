@@ -297,6 +297,20 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("fetch_pinterest_layout(", main_source)
         self.assertNotIn("download_pinterest", main_source)
 
+    def test_new_social_platforms_use_components_v2_without_uploading_media(self):
+        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+
+        for service, module_name, fetch_name in (
+            ("TikTok", "tiktok_embed", "fetch_tiktok_layout"),
+            ("Tumblr", "tumblr_embed", "fetch_tumblr_layout"),
+            ("Twitch", "twitch_embed", "fetch_twitch_layout"),
+        ):
+            with self.subTest(service=service):
+                self.assertIn(f"from {module_name} import {fetch_name}", main_source)
+                self.assertIn(f'elif item.service == "{service}":', main_source)
+                self.assertIn(f"{fetch_name}(", main_source)
+                self.assertNotIn(f"download_{service.lower()}", main_source)
+
     def test_forbidden_channel_errors_keep_discord_context(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 

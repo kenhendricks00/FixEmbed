@@ -2,7 +2,8 @@
  * FixEmbed Service - Main Entry Point
  * 
  * A unified embed service for Discord supporting:
- * Twitter/X, Reddit, YouTube, Bluesky, Instagram, Threads, Pixiv, Bilibili, Pinterest
+ * Twitter/X, Reddit, YouTube, Bluesky, Instagram, Threads, Pixiv, Bilibili,
+ * Pinterest, TikTok, Tumblr, and Twitch
  * 
  * Built with Hono + Cloudflare Workers
  */
@@ -164,6 +165,9 @@ export const STATUS_PROBES: StatusProbe[] = [
     { platform: 'Bilibili', sampleUrl: 'https://www.bilibili.com/video/BV1nhZ2YHEtL' },
     { platform: 'YouTube', sampleUrl: 'https://www.youtube.com/post/UgkxAcAx0FNJNhrLMff_RLjK_d20485xSAyz' },
     { platform: 'Pinterest', sampleUrl: 'https://www.pinterest.com/pin/424605071145119869/' },
+    { platform: 'TikTok', sampleUrl: 'https://www.tiktok.com/@scout2015/video/6718335390845095173' },
+    { platform: 'Tumblr', sampleUrl: 'https://changes.tumblr.com/post/817972810553196544/may-2026' },
+    { platform: 'Twitch', sampleUrl: 'https://clips.twitch.tv/GoodGoodWaffleTwitchRaid' },
 ];
 
 const STATUS_PROBE_TIMEOUT_MS = 7_000;

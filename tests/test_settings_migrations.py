@@ -1,6 +1,10 @@
 import unittest
 
-from settings_migrations import PINTEREST_DEFAULT_MIGRATION, add_service_to_serialized_settings
+from settings_migrations import (
+    NEW_SOCIAL_SERVICE_MIGRATIONS,
+    PINTEREST_DEFAULT_MIGRATION,
+    add_service_to_serialized_settings,
+)
 
 
 class SettingsMigrationTests(unittest.TestCase):
@@ -14,6 +18,16 @@ class SettingsMigrationTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(updated, repr(["Twitter", "Instagram", "YouTube"]))
+
+    def test_new_social_migrations_have_stable_unique_names(self):
+        self.assertEqual(
+            NEW_SOCIAL_SERVICE_MIGRATIONS,
+            (
+                ("TikTok", "enable_tiktok_videos_v1"),
+                ("Tumblr", "enable_tumblr_posts_v1"),
+                ("Twitch", "enable_twitch_links_v1"),
+            ),
+        )
 
     def test_existing_service_is_not_duplicated(self):
         serialized = repr(["Twitter", "YouTube"])

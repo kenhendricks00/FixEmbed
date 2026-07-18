@@ -158,6 +158,9 @@ class ManifestTests(unittest.TestCase):
                 "youtube",
                 "bilibili",
                 "pinterest",
+                "tiktok",
+                "tumblr",
+                "twitch",
             },
         )
         self.assertEqual(set(BUILDERS), platforms)

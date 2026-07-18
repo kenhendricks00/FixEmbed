@@ -45,6 +45,11 @@ SUPPORTED_HOSTS = {
     "youtube": frozenset({"youtube.com", "www.youtube.com", "m.youtube.com"}),
     "bilibili": frozenset({"bilibili.com", "www.bilibili.com"}),
     "pinterest": frozenset({"pinterest.com", "www.pinterest.com", "pin.it"}),
+    "tiktok": frozenset(
+        {"tiktok.com", "www.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"}
+    ),
+    "tumblr": frozenset({"tumblr.com", "www.tumblr.com", "changes.tumblr.com"}),
+    "twitch": frozenset({"twitch.tv", "www.twitch.tv", "clips.twitch.tv"}),
 }
 REQUIREMENTS = frozenset(
     {

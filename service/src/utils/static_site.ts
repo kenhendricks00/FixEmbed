@@ -7,13 +7,13 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FixEmbed - Fix Discord Embeds for Social Media</title>
     <meta name="description"
-        content="FixEmbed is a Discord bot that fixes embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins.">
+        content="FixEmbed fixes Discord embeds for Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
 
     <!-- Open Graph / Discord Embed -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta property="og:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins. Get rich previews directly in Discord!">
+        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
     <meta property="og:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
     <meta property="og:url" content="https://fixembed.app">
@@ -24,7 +24,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
-        content="A Discord bot that fixes broken embeds from Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, and Pinterest Pins.">
+        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch.">
     <meta name="twitter:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 
@@ -157,7 +157,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
                     <h3>Multi-Platform Support</h3>
                     <p>Supports X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube
-                        community posts, and Pinterest Pins.</p>
+                        community posts, Pinterest Pins, TikTok, Tumblr, and Twitch.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-user"></i></div>
@@ -169,6 +169,11 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="feature-icon"><i class="fas fa-sliders-h"></i></div>
                     <h3>Customizable Settings</h3>
                     <p>Easy setup with options to activate or deactivate services per channel or server-wide.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-images"></i></div>
+                    <h3>Rich, Safer Media</h3>
+                    <p>Preserves mixed media, complete galleries, and platform context. Source-marked sensitive media is automatically hidden behind Discord spoilers.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-bolt"></i></div>
@@ -200,7 +205,7 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Share social media links</h3>
-                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, or Pinterest Pins.
+                        <p>Post links from X/Twitter, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube community posts, Pinterest Pins, TikTok, Tumblr, or Twitch.
                         </p>
                     </div>
                 </div>
@@ -266,6 +271,21 @@ export const indexHtml = `<!DOCTYPE html>
                     <div class="platform-icon"><i class="fab fa-pinterest"></i></div>
                     <h3>Pinterest</h3>
                     <p>Displays Pins with full-size images and playable video.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fab fa-tiktok"></i></div>
+                    <h3>TikTok</h3>
+                    <p>Shows video details, creator identity, and the official preview.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fab fa-tumblr"></i></div>
+                    <h3>Tumblr</h3>
+                    <p>Preserves post text, creator details, timestamps, and image galleries.</p>
+                </div>
+                <div class="platform-card">
+                    <div class="platform-icon"><i class="fab fa-twitch"></i></div>
+                    <h3>Twitch</h3>
+                    <p>Displays clips, VODs, and channels with Twitch-specific context.</p>
                 </div>
             </div>
         </div>
@@ -2096,7 +2116,7 @@ export const tosHtml = `<!DOCTYPE html>
                     <p>The Service is provided "as is" without warranties of any kind, either express or implied. We are not responsible for the content generated in previews, which originates from third-party platforms.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Services</h3>
-                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
+                    <p>FixEmbed interacts with third-party platforms (Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, and Twitch). We are not affiliated with these platforms. Availability of the Service relies on these platforms' uptime and API access.</p>
 
                     <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Modifications to Terms</h3>
                     <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the new terms.</p>
@@ -2395,8 +2415,12 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
                             <tr><td>YouTube Community Posts</td><td>youtube.com/post</td></tr>
                             <tr><td>Pinterest Pins</td><td>pinterest.com/pin, pin.it</td></tr>
+                            <tr><td>TikTok Videos</td><td>tiktok.com, vm.tiktok.com, vt.tiktok.com</td></tr>
+                            <tr><td>Tumblr Posts</td><td>tumblr.com, *.tumblr.com</td></tr>
+                            <tr><td>Twitch Clips, VODs, and Channels</td><td>twitch.tv, clips.twitch.tv</td></tr>
                         </tbody>
                     </table>
+                    <p style="color: var(--text-secondary); margin-top: 1rem;">Cards preserve mixed media, galleries, creator identity, and platform-specific context when available. Source-marked sensitive media is hidden behind Discord spoilers. Translation modifiers currently apply to X posts only.</p>
                 </div>
             </div>
         </div>

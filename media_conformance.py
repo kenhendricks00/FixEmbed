@@ -32,6 +32,17 @@ MEDIA_HOST_SUFFIXES = {
         {"hdslb.com", "bilivideo.com", "vxbilibili.com", "fixembed.app"}
     ),
     "pinterest": frozenset({"pinimg.com"}),
+    "tiktok": frozenset(
+        {
+            "tiktokcdn.com",
+            "tiktokcdn-us.com",
+            "muscdn.com",
+            "byteoversea.com",
+            "ibytedtos.com",
+        }
+    ),
+    "tumblr": frozenset({"media.tumblr.com", "assets.tumblr.com"}),
+    "twitch": frozenset({"jtvnw.net", "cloudfront.net"}),
 }
 
 
