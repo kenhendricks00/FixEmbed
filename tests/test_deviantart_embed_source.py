@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,7 @@ from deviantart_embed import (
     _ProfileMetadataParser,
     _fetch_deviantart_oembed_payload,
     _read_oembed_response,
+    _request_deviantart_oembed_payload,
 )
 
 
@@ -32,6 +34,65 @@ class FakeResponse:
         self.status = status
         self.headers = headers or {}
         self.content = FakeContent(*chunks)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+
+class FakeSession:
+    def __init__(self, *_args, **_kwargs):
+        self.requested_urls = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    def get(self, url, **_kwargs):
+        self.requested_urls.append(url)
+        if url == deviantart_embed.DEVIANTART_OEMBED_URL:
+            payload = {
+                "type": "photo",
+                "title": "Lunar eclipse",
+                "description": "Artwork by Kabuvee.",
+                "url": (
+                    "https://images-wixmp-ed30a86b8c4ca887773594c2."
+                    "wixmp.com/lunar.jpg?token=signed"
+                ),
+                "author_name": "Kabuvee",
+                "author_url": "https://www.deviantart.com/kabuvee",
+                "safety": "nonadult",
+                "pubdate": "2023-10-31T22:47:46-07:00",
+                "community": {
+                    "statistics": {
+                        "_attributes": {
+                            "views": 510000,
+                            "favorites": 428,
+                            "comments": 11,
+                        }
+                    }
+                },
+            }
+            return FakeResponse(
+                200,
+                headers={"Content-Type": "application/json"},
+                chunks=(json.dumps(payload).encode(),),
+            )
+        if url == "https://www.deviantart.com/kabuvee":
+            return FakeResponse(
+                200,
+                headers={"Content-Type": "text/html; charset=utf-8"},
+                chunks=(
+                    b'<meta property="og:image" content="'
+                    b"https://a.deviantart.net/avatars/k/a/"
+                    b'kabuvee.jpg?version=1">',
+                ),
+            )
+        return FakeResponse(404)
 
 
 class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
@@ -67,6 +128,20 @@ class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
             parser.avatar_url,
             "https://a.deviantart.net/avatars/k/a/kabuvee.jpg?version=1",
         )
+
+    async def test_complete_request_fetches_profile_avatar_and_normalizes_card_data(self):
+        with patch("deviantart_embed.aiohttp.ClientSession", FakeSession):
+            payload = await _request_deviantart_oembed_payload(SOURCE_URL)
+
+        self.assertEqual(payload["title"], "Lunar eclipse")
+        self.assertEqual(payload["authorName"], "Kabuvee")
+        self.assertEqual(payload["authorHandle"], "@kabuvee")
+        self.assertEqual(
+            payload["authorAvatar"],
+            "https://a.deviantart.net/avatars/k/a/kabuvee.jpg?version=1",
+        )
+        self.assertIn("510K views", payload["stats"])
+        self.assertEqual(payload["timestamp"], "2023-11-01T05:47:46+00:00")
 
 
 class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):

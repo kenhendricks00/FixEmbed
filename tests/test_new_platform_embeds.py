@@ -267,3 +267,39 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("__Team__", rendered)
         self.assertNotIn("@everyone", rendered)
         self.assertNotIn("<@123>", rendered)
+
+    def test_kabuvee_fixture_renders_complete_v2_card(self):
+        avatar = (
+            "https://a.deviantart.net/avatars/k/a/"
+            "kabuvee.jpg?version=1"
+        )
+        payload = {
+            "title": "Lunar eclipse",
+            "description": "Artwork by Kabuvee.",
+            "url": (
+                "https://www.deviantart.com/kabuvee/art/"
+                "Lunar-eclipse-991658138"
+            ),
+            "authorName": "Kabuvee",
+            "authorHandle": "@kabuvee",
+            "authorUrl": "https://www.deviantart.com/kabuvee",
+            "authorAvatar": avatar,
+            "image": (
+                "https://images-wixmp-ed30a86b8c4ca887773594c2."
+                "wixmp.com/lunar.jpg?token=signed"
+            ),
+            "stats": "👁️ 510K views  ❤️ 428 favorites  💬 11 comments",
+            "timestamp": "2023-11-01T05:47:46+00:00",
+        }
+
+        component = serialized_container(build_deviantart_layout(payload))
+        rendered = str(component)
+
+        self.assertEqual(component["type"], 17)
+        self.assertEqual(
+            component["components"][0]["accessory"]["media"]["url"],
+            avatar,
+        )
+        self.assertIn("510K views", rendered)
+        self.assertIn("<:deviantart:1528150711089500180>", rendered)
+        self.assertIn("<t:1698817666:R>", rendered)
