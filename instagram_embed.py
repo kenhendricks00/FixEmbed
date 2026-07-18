@@ -239,18 +239,19 @@ def build_instagram_layout(
         media_urls = [fallback_image]
     if media_urls:
         description = caption[:1024] or None
-        children.append(
-            discord.ui.MediaGallery(
-                *(
-                    discord.MediaGalleryItem(
-                        url,
-                        description=description,
-                        spoiler=payload.get("sensitive") is True,
+        for start in range(0, len(media_urls), 10):
+            children.append(
+                discord.ui.MediaGallery(
+                    *(
+                        discord.MediaGalleryItem(
+                            url,
+                            description=description,
+                            spoiler=payload.get("sensitive") is True,
+                        )
+                        for url in media_urls[start:start + 10]
                     )
-                    for url in media_urls[:10]
                 )
             )
-        )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
     if stats and preferences.show_stats:

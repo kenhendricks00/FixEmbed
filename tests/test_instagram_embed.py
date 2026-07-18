@@ -254,6 +254,55 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
 
+    def test_components_v2_layout_preserves_all_nine_carousel_images(self):
+        image_urls = [
+            f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+            for index in range(1, 10)
+        ]
+        payload = {
+            "caption": "Nine-image carousel",
+            "url": "https://www.instagram.com/p/NineImages/",
+            "authorHandle": "@creator",
+            "images": image_urls,
+        }
+
+        components = build_instagram_layout(payload).to_components()
+        gallery = components[0]["components"][1]
+
+        self.assertEqual(
+            [item["media"]["url"] for item in gallery["items"]],
+            image_urls,
+        )
+
+    def test_components_v2_layout_splits_twenty_images_across_discord_galleries(self):
+        image_urls = [
+            f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+            for index in range(1, 21)
+        ]
+        payload = {
+            "caption": "Twenty-image carousel",
+            "url": "https://www.instagram.com/p/TwentyImages/",
+            "authorHandle": "@creator",
+            "images": image_urls,
+        }
+
+        components = build_instagram_layout(payload).to_components()
+        galleries = [
+            component
+            for component in components[0]["components"]
+            if component["type"] == 12
+        ]
+
+        self.assertEqual([len(gallery["items"]) for gallery in galleries], [10, 10])
+        self.assertEqual(
+            [
+                item["media"]["url"]
+                for gallery in galleries
+                for item in gallery["items"]
+            ],
+            image_urls,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

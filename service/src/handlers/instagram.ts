@@ -22,6 +22,7 @@ const INSTAGRAM_TOTAL_TIMEOUT_MS = 3500;
 const INSTAGRAM_NATIVE_TIMEOUT_MS = 2200;
 const INSTAGRAM_VX_TIMEOUT_MS = 1200;
 const INSTAGRAM_KK_TIMEOUT_MS = 600;
+const INSTAGRAM_MAX_CAROUSEL_ITEMS = 20;
 
 // ========== VxInstagram Scraper ==========
 // Scrapes vxinstagram.com for composite carousel images and metadata
@@ -723,6 +724,21 @@ function decodeInstagramText(value: string): string {
         .replace(/&gt;/g, '>');
 }
 
+function extractInstagramImageUrls(html: string): string[] {
+    const urls: string[] = [];
+    const seen = new Set<string>();
+
+    for (const match of html.matchAll(/"display_url"\s*:\s*"([^"]+)"/g)) {
+        const url = decodeInstagramMediaUrl(match[1]);
+        if (!url.startsWith('https://') || seen.has(url)) continue;
+        seen.add(url);
+        urls.push(url);
+        if (urls.length === INSTAGRAM_MAX_CAROUSEL_ITEMS) break;
+    }
+
+    return urls;
+}
+
 function extractInstagramTimestamp(html: string): string | undefined {
     const numeric = html.match(/"taken_at"\s*:\s*(\d{9,13})/)?.[1]
         || html.match(/"taken_at_timestamp"\s*:\s*(\d{9,13})/)?.[1];
@@ -805,6 +821,7 @@ async function scrapeEmbedHtml(
         let mediaUrl = '';
         let isVideo = false;
         let previewUrl = '';
+        const imageUrls = extractInstagramImageUrls(html);
 
         // Pattern 1: Video from CDN (most reliable for actual videos)
         const cdnVideoMatch = html.match(/https:\/\/scontent[^"'\s]+\.mp4[^"'\s]*/);
@@ -852,6 +869,12 @@ async function scrapeEmbedHtml(
         }
 
         // Pattern 3: Image element with class
+        if (!mediaUrl) {
+            if (imageUrls.length > 0) {
+                [mediaUrl] = imageUrls;
+            }
+        }
+
         if (!mediaUrl) {
             const imagePatterns = [
                 /class="[^"]*EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"/i,
@@ -948,6 +971,9 @@ async function scrapeEmbedHtml(
                 result.data!.image = previewUrl || undefined;
             } else {
                 result.data!.image = mediaUrl;
+                result.data!.images = imageUrls.length > 1
+                    ? imageUrls
+                    : undefined;
             }
         }
 

@@ -1306,6 +1306,42 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler preserves every distinct image in a carousel',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const imageUrls = Array.from(
+                { length: 9 },
+                (_, index) => `https://scontent.example.com/carousel-${index + 1}.jpg`,
+            );
+            globalThis.fetch = async () => new Response([
+                '<span class="UsernameText">creator</span>',
+                '<div class="Caption">creator<br /><br />Carousel caption</div>',
+                '<script>',
+                JSON.stringify({
+                    edge_sidecar_to_children: {
+                        edges: [
+                            { node: { display_url: imageUrls[0] } },
+                            ...imageUrls.map((display_url) => ({ node: { display_url } })),
+                            { node: { display_url: 'http://untrusted.example/carousel.jpg' } },
+                        ],
+                    },
+                }),
+                '</script>',
+            ].join(''), { status: 200 });
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/NineImages/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.deepEqual(response.data?.images, imageUrls);
+                assert.equal(response.data?.image, imageUrls[0]);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler keeps media when Instagram embed metadata has no media URL',
         run: async () => {
             const originalFetch = globalThis.fetch;
