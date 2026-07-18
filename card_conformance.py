@@ -17,6 +17,9 @@ from reddit_embed import build_reddit_layout
 from threads_embed import build_threads_layout
 from twitter_embed import build_twitter_layout
 from youtube_embed import build_youtube_community_layout
+from tiktok_embed import build_tiktok_layout
+from tumblr_embed import build_tumblr_layout
+from twitch_embed import build_twitch_layout
 
 
 Builder = Callable[[Mapping[str, Any]], Any]
@@ -40,6 +43,9 @@ BUILDERS: dict[str, Builder] = {
     "bilibili": build_bilibili_layout,
     "youtube": build_youtube_community_layout,
     "pinterest": build_pinterest_layout,
+    "tiktok": build_tiktok_layout,
+    "tumblr": build_tumblr_layout,
+    "twitch": build_twitch_layout,
 }
 
 CONTAINER = 17

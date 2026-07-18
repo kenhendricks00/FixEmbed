@@ -72,6 +72,7 @@ def build_bilibili_layout(
                 discord.MediaGalleryItem(
                     media_url,
                     description=(description or title)[:1024],
+                    spoiler=payload.get("sensitive") is True,
                 )
             )
         )

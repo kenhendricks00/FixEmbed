@@ -81,7 +81,11 @@ def build_threads_layout(
         children.append(
             discord.ui.MediaGallery(
                 *(
-                    discord.MediaGalleryItem(url, description=media_description)
+                    discord.MediaGalleryItem(
+                        url,
+                        description=media_description,
+                        spoiler=payload.get("sensitive") is True,
+                    )
                     for url in media_urls[:10]
                 )
             )

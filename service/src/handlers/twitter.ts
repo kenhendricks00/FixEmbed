@@ -70,6 +70,7 @@ interface FxTwitterTweet {
     };
     poll?: FxTwitterPoll;
     quote?: FxTwitterTweet;
+    possibly_sensitive?: boolean;
     media?: {
         all?: FxTwitterMedia[];
         photos?: FxTwitterMedia[];
@@ -283,6 +284,7 @@ async function fetchFxTwitterFallback(
                 sections: galleryMode ? [] : sections,
                 mode: options.mode,
                 mediaOrigin,
+                sensitive: tweet.possibly_sensitive === true,
             },
         };
     } catch {
@@ -521,6 +523,7 @@ export const twitterHandler: PlatformHandler = {
                     sections: options.mode === 'gallery' ? [] : sections,
                     mode: options.mode,
                     mediaOrigin,
+                    sensitive: tweet.possibly_sensitive === true,
                 },
             };
         } catch (error) {

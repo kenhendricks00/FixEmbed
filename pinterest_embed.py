@@ -74,7 +74,11 @@ def build_pinterest_layout(
         children.append(
             discord.ui.MediaGallery(
                 *(
-                    discord.MediaGalleryItem(url, description=(description or title)[:1024])
+                    discord.MediaGalleryItem(
+                        url,
+                        description=(description or title)[:1024],
+                        spoiler=payload.get("sensitive") is True,
+                    )
                     for url in media_urls[:10]
                 )
             )

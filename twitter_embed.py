@@ -133,6 +133,7 @@ def _quote_section_items(section: Mapping[str, Any]) -> list[discord.ui.Item[Any
                             if media_type == "gif"
                             else f"Media from {name}"
                         ),
+                        spoiler=section.get("sensitive") is True,
                     )
                     for url, media_type in media
                 )
@@ -190,7 +191,11 @@ def build_twitter_layout(
         children.append(
             discord.ui.MediaGallery(
                 *(
-                    discord.MediaGalleryItem(url, description=media_description)
+                    discord.MediaGalleryItem(
+                        url,
+                        description=media_description,
+                        spoiler=payload.get("sensitive") is True,
+                    )
                     for url, _media_type in media
                 )
             )

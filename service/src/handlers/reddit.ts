@@ -59,6 +59,7 @@ interface RedditPost {
     created_utc: number;
     score: number;
     num_comments: number;
+    over_18?: boolean;
 }
 
 interface RedditCommunityResponse {
@@ -411,6 +412,7 @@ export const redditHandler: PlatformHandler = {
                     platform: 'reddit',
                     stats, // Consistent stats via oEmbed like other platforms
                     sections,
+                    sensitive: post.over_18 === true,
                 },
             };
         } catch (error) {

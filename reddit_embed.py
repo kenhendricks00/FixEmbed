@@ -91,7 +91,11 @@ def build_reddit_layout(
         children.append(
             discord.ui.MediaGallery(
                 *(
-                    discord.MediaGalleryItem(url, description=post_title[:1024] or None)
+                    discord.MediaGalleryItem(
+                        url,
+                        description=post_title[:1024] or None,
+                        spoiler=payload.get("sensitive") is True,
+                    )
                     for url in media_urls[:10]
                 )
             )

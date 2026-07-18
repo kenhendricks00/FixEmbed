@@ -2193,6 +2193,7 @@ const tests: TestCase[] = [
                     url: 'https://www.reddit.com/gallery/abc123',
                     permalink: '/r/pics/comments/abc123/a_twoimage_gallery/',
                     thumbnail: 'https://preview.redd.it/thumb.jpg',
+                    over_18: true,
                     is_video: false,
                     created_utc: 1783900800,
                     score: 50,
@@ -2220,6 +2221,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.description, '');
                 assert.equal(response.data?.authorAvatar, 'https://styles.redditmedia.com/subreddit-icon.png?width=256&height=256');
                 assert.equal(response.data?.timestamp, '2026-07-13T00:00:00.000Z');
+                assert.equal(response.data?.sensitive, true);
                 assert.deepEqual(response.data?.images, [
                     'https://preview.redd.it/second.png?x=1&y=2',
                     'https://preview.redd.it/first.png?x=1&y=2',

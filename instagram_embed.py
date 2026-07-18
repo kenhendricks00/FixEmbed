@@ -241,7 +241,14 @@ def build_instagram_layout(
         description = caption[:1024] or None
         children.append(
             discord.ui.MediaGallery(
-                *(discord.MediaGalleryItem(url, description=description) for url in media_urls[:10])
+                *(
+                    discord.MediaGalleryItem(
+                        url,
+                        description=description,
+                        spoiler=payload.get("sensitive") is True,
+                    )
+                    for url in media_urls[:10]
+                )
             )
         )
 

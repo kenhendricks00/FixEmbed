@@ -91,6 +91,7 @@ export interface TwitterTweetData {
     view_count_info?: { count: string };
     video?: { viewCount: string };
     lang?: string;
+    possibly_sensitive?: boolean;
     entities?: { media?: TwitterMedia[] };
     extended_entities?: { media?: TwitterMedia[] };
     mediaDetails?: TwitterMedia[];
@@ -261,6 +262,7 @@ export function normalizeGraphQLTweet(value: unknown): TwitterTweetData | null {
         conversation_count: Number(legacy.reply_count) || undefined,
         view_count_info: node.views?.count ? { count: String(node.views.count) } : undefined,
         lang: typeof legacy.lang === 'string' ? legacy.lang : undefined,
+        possibly_sensitive: legacy.possibly_sensitive === true,
         mediaDetails: normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media),
         poll: normalizeTwitterPoll(node.card),
         quote: node.quoted_status_result || node.quoted_tweet_results
