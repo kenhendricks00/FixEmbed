@@ -140,6 +140,14 @@ async def _probe_media_target(
         valid_type = content_type.startswith("image/")
         if target.kind != "avatar":
             valid_type = valid_type or content_type.startswith("video/")
+            if (
+                platform == "twitch"
+                and content_type in {"application/octet-stream", "binary/octet-stream"}
+                and urlparse(current_url).path.casefold().endswith(".mp4")
+            ):
+                # Twitch's signed CloudFront clip URLs serve valid MP4 bytes with
+                # a generic binary content type even though Discord can play them.
+                valid_type = True
         if not valid_type:
             return (_media_failure_code(target, "type-invalid"),)
         return ()

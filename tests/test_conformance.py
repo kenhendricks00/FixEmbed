@@ -590,6 +590,24 @@ class MediaReachabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(codes, ())
         self.assertEqual(len(requested), 2)
 
+    async def test_accepts_twitch_mp4_when_cloudfront_uses_binary_content_type(self):
+        async def fetch_media(_url, _timeout_seconds):
+            return MediaFetchResponse(206, "binary/octet-stream", None)
+
+        codes = await probe_media_targets(
+            "twitch",
+            (
+                MediaTarget(
+                    "media",
+                    "https://d1ndex63qxojbr.cloudfront.net/clip.mp4?sig=signed",
+                ),
+            ),
+            fetch_media=fetch_media,
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(codes, ())
+
     async def test_rejects_a_redirect_before_fetching_an_unsafe_destination(self):
         requested = []
 
