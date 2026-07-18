@@ -18,6 +18,7 @@ from timestamp_utils import parse_post_datetime, parse_post_timestamp
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
+FIXEMBED_ORIGIN = "https://fixembed.app"
 INSTAGRAM_COLOR = 0xE4405F
 FIXEMBED_COLOR = 0x5865F2
 FIXEMBED_EMOJI_ID = 1525580543503106148
@@ -58,10 +59,22 @@ def _is_instagram_avatar_url(value: str) -> bool:
     except ValueError:
         return False
     hostname = (parsed.hostname or "").lower()
-    return parsed.scheme == "https" and (
-        hostname.endswith(".cdninstagram.com")
-        or hostname.endswith(".fbcdn.net")
+    return (
+        parsed.scheme == "https"
+        and not parsed.username
+        and not parsed.password
+        and (
+            hostname.endswith(".cdninstagram.com")
+            or hostname.endswith(".fbcdn.net")
+            or hostname in {"cdninstagram.com", "fbcdn.net"}
+        )
     )
+
+
+def _relay_instagram_media_url(value: str) -> str:
+    if not _is_instagram_avatar_url(value):
+        return value
+    return f"{FIXEMBED_ORIGIN}/proxy/instagram?url={quote(value, safe='')}"
 
 
 async def _upgrade_instagram_avatar(
@@ -237,6 +250,7 @@ def build_instagram_layout(
     media_urls = [video_url] if video_url else [str(url) for url in image_urls if url]
     if not media_urls and fallback_image:
         media_urls = [fallback_image]
+    media_urls = [_relay_instagram_media_url(url) for url in media_urls]
     if media_urls:
         description = caption[:1024] or None
         for start in range(0, len(media_urls), 10):

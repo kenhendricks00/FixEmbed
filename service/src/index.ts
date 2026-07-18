@@ -30,6 +30,7 @@ import {
 } from './utils/status_report_cache.ts';
 import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
+import { proxyInstagramImage } from './routes/instagram_media_proxy.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -837,6 +838,8 @@ app.get('/video/threads', async (c) => {
         return c.redirect(videoUrl, 302);
     }
 });
+
+app.get('/proxy/instagram', proxyInstagramImage);
 
 // Image proxy endpoint for Pixiv - adds required Referer header
 app.get('/proxy/pixiv', async (c) => {

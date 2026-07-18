@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from urllib.parse import parse_qs, urlsplit
 
 import aiohttp
 import instagram_embed
@@ -254,7 +255,7 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
 
-    def test_components_v2_layout_preserves_all_nine_carousel_images(self):
+    def test_components_v2_layout_relays_all_nine_carousel_images(self):
         image_urls = [
             f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
             for index in range(1, 10)
@@ -269,8 +270,15 @@ class InstagramEmbedTests(unittest.TestCase):
         components = build_instagram_layout(payload).to_components()
         gallery = components[0]["components"][1]
 
+        relayed_urls = [item["media"]["url"] for item in gallery["items"]]
+        parsed_urls = [urlsplit(url) for url in relayed_urls]
+
+        self.assertEqual(len(relayed_urls), 9)
+        self.assertTrue(all(parsed.scheme == "https" for parsed in parsed_urls))
+        self.assertTrue(all(parsed.netloc == "fixembed.app" for parsed in parsed_urls))
+        self.assertTrue(all(parsed.path == "/proxy/instagram" for parsed in parsed_urls))
         self.assertEqual(
-            [item["media"]["url"] for item in gallery["items"]],
+            [parse_qs(parsed.query)["url"][0] for parsed in parsed_urls],
             image_urls,
         )
 
@@ -294,13 +302,20 @@ class InstagramEmbedTests(unittest.TestCase):
         ]
 
         self.assertEqual([len(gallery["items"]) for gallery in galleries], [10, 10])
+        relayed_urls = [
+            item["media"]["url"]
+            for gallery in galleries
+            for item in gallery["items"]
+        ]
         self.assertEqual(
             [
-                item["media"]["url"]
-                for gallery in galleries
-                for item in gallery["items"]
+                parse_qs(urlsplit(url).query)["url"][0]
+                for url in relayed_urls
             ],
             image_urls,
+        )
+        self.assertTrue(
+            all(url.startswith("https://fixembed.app/proxy/instagram?") for url in relayed_urls)
         )
 
 

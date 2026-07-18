@@ -1920,6 +1920,100 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'Instagram media proxy streams images from trusted CDN hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response('image-bytes', {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'image/jpeg',
+                        'Content-Length': '11',
+                    },
+                });
+            };
+
+            try {
+                const imageUrl = 'https://scontent-atl3-1.cdninstagram.com/v/example.jpg';
+                const response = await app.request(
+                    '/proxy/instagram?url=' + encodeURIComponent(imageUrl),
+                    {},
+                    env,
+                );
+
+                assert.equal(response.status, 200);
+                assert.equal(response.headers.get('Content-Type'), 'image/jpeg');
+                assert.equal(response.headers.get('Cache-Control'), 'public, max-age=86400');
+                assert.equal(await response.text(), 'image-bytes');
+                assert.deepEqual(requested, [imageUrl]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'Instagram media proxy rejects URLs outside trusted image hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response('unexpected');
+            };
+
+            try {
+                const response = await app.request(
+                    '/proxy/instagram?url='
+                        + encodeURIComponent('https://example.com/internal-target'),
+                    {},
+                    env,
+                );
+
+                assert.equal(response.status, 400);
+                assert.deepEqual(await response.json(), {
+                    error: 'Invalid Instagram image URL',
+                });
+                assert.equal(requests, 0);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'Instagram media proxy rejects redirects outside trusted image hosts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                requested.push(String(input));
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: 'https://example.com/internal-target' },
+                });
+            };
+
+            try {
+                const response = await app.request(
+                    '/proxy/instagram?url=' + encodeURIComponent(
+                        'https://scontent-atl3-1.cdninstagram.com/v/example.jpg',
+                    ),
+                    {},
+                    env,
+                );
+
+                assert.equal(response.status, 502);
+                assert.deepEqual(await response.json(), {
+                    error: 'Unsafe Instagram image redirect',
+                });
+                assert.equal(requested.length, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'Bilibili media proxy rejects URLs outside trusted video hosts',
         run: async () => {
             const response = await app.request(
