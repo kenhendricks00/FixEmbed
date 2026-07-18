@@ -13,7 +13,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta property="og:type" content="website">
     <meta property="og:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta property="og:description"
-        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
+        content="A Discord bot with rich cards for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
     <meta property="og:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
     <meta property="og:url" content="https://fixembed.app">
@@ -24,7 +24,7 @@ export const indexHtml = `<!DOCTYPE html>
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FixEmbed - Fix Discord Embeds for Social Media">
     <meta name="twitter:description"
-        content="A Discord bot with rich previews for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
+        content="A Discord bot with rich cards for Twitter/X, Instagram, Reddit, Threads, Pixiv, Bluesky, Bilibili, YouTube, Pinterest, TikTok, Tumblr, Twitch, and DeviantArt.">
     <meta name="twitter:image"
         content="https://raw.githubusercontent.com/kenhendricks00/FixEmbed/refs/heads/main/assets/OG.png">
 

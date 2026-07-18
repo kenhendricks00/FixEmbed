@@ -945,6 +945,7 @@ const tests: TestCase[] = [
                     version: '1.0',
                     type: 'photo',
                     title: 'Fella Celebrates 100k',
+                    description: 'A public milestone illustration.',
                     url: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella.png?token=signed-value',
                     author_name: 'team',
                     author_url: 'https://www.deviantart.com/team',
@@ -987,6 +988,7 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.equal(response.data?.platform, 'deviantart');
                 assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.description, 'A public milestone illustration.');
                 assert.equal(response.data?.authorName, 'team');
                 assert.equal(response.data?.authorHandle, '@team');
                 assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
@@ -1047,22 +1049,133 @@ const tests: TestCase[] = [
             try {
                 globalThis.fetch = async () => new Response(null, { status: 429 });
                 const throttled = await deviantartHandler.handle(
-                    'https://sta.sh/01example',
+                    'https://sta.sh/01throttled',
                     env,
                 );
                 assert.equal(throttled.success, false);
                 assert.match(throttled.error || '', /rate limited/i);
-                assert.equal(throttled.redirect, 'https://sta.sh/01example');
+                assert.equal(throttled.redirect, 'https://sta.sh/01throttled');
 
                 globalThis.fetch = async () => new Response('{}', {
                     headers: { 'Content-Length': '512001' },
                 });
                 const oversized = await deviantartHandler.handle(
-                    'https://sta.sh/01example',
+                    'https://sta.sh/01oversized',
                     env,
                 );
                 assert.equal(oversized.success, false);
                 assert.match(oversized.error || '', /response too large/i);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler preserves signed GIF media and degrades missing optional fields',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const signedGif = 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/art.gif?token=signed-gif';
+            globalThis.fetch = async () => Response.json({
+                type: 'photo',
+                title: 'Animated work',
+                url: signedGif,
+                author_name: 'artist',
+                author_url: 'https://www.deviantart.com/artist',
+                provider_name: 'DeviantArt',
+                safety: 'nonadult',
+            });
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/artist/art/Animated-work-456',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.image, signedGif);
+                assert.equal(response.data?.stats, undefined);
+                assert.equal(response.data?.timestamp, undefined);
+                assert.equal(response.data?.context, undefined);
+                assert.equal(response.data?.sensitive, false);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler degrades unsafe photo media without fetching it',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => Response.json({
+                type: 'photo',
+                title: 'Text-only recovery',
+                url: 'https://attacker.example/private.jpg',
+                author_name: 'artist',
+                author_url: 'https://www.deviantart.com/artist',
+                provider_name: 'DeviantArt',
+                safety: 'nonadult',
+            });
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/artist/art/Text-only-recovery-789',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.image, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler negatively caches not-found responses',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response(null, { status: 404 });
+            };
+            try {
+                const url = 'https://sta.sh/01missing';
+                const first = await deviantartHandler.handle(url, env);
+                const second = await deviantartHandler.handle(url, env);
+                assert.equal(first.success, false);
+                assert.equal(second.success, false);
+                assert.match(second.error || '', /returned 404/i);
+                assert.equal(requests, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'deviantartHandler coalesces concurrent misses and caches success',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                await Promise.resolve();
+                return Response.json({
+                    type: 'photo',
+                    title: 'Coalesced work',
+                    url: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/coalesced.jpg?token=signed',
+                    author_name: 'artist',
+                    author_url: 'https://www.deviantart.com/artist',
+                    provider_name: 'DeviantArt',
+                    safety: 'nonadult',
+                });
+            };
+            try {
+                const url = 'https://www.deviantart.com/artist/art/Coalesced-work-987';
+                const [first, second] = await Promise.all([
+                    deviantartHandler.handle(url, env),
+                    deviantartHandler.handle(url, env),
+                ]);
+                const third = await deviantartHandler.handle(url, env);
+                assert.equal(first.success, true);
+                assert.equal(second.success, true);
+                assert.equal(third.success, true);
+                assert.equal(requests, 1);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -1168,6 +1281,10 @@ const tests: TestCase[] = [
         name: 'findHandler returns null for unsupported URLs',
         run: () => {
             assert.equal(findHandler('https://example.com/not-supported'), null);
+            assert.equal(
+                findHandler('https://www.deviantart.com/artist/art/work/comments/123'),
+                null,
+            );
         },
     },
     {

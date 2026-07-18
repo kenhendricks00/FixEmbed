@@ -149,7 +149,7 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
     if (
         parsed.scheme == "https"
         and host == "deviantart.com"
-        and len(segments) >= 3
+        and len(segments) == 3
         and segments[1].lower() == "art"
         and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0])
         and re.fullmatch(r"[A-Za-z0-9_-]+", segments[2])

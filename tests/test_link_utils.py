@@ -27,6 +27,7 @@ class SocialServiceTests(unittest.TestCase):
         links = extract_supported_links(
             "https://www.deviantart.com/team "
             "https://deviantart.example/team/art/not-real-123 "
+            "https://www.deviantart.com/team/art/work/comments/123 "
             "https://sta.sh.example/0123456789abc"
         )
 

@@ -10,6 +10,17 @@ import { normalizePostTimestamp } from '../utils/timestamp.ts';
 const OEMBED_ENDPOINT = 'https://backend.deviantart.com/oembed';
 const MAX_OEMBED_BYTES = 512_000;
 const MEDIA_HOST_SUFFIXES = ['wixmp.com', 'deviantart.net', 'deviantart.com'];
+const SUCCESS_CACHE_TTL_MS = 5 * 60_000;
+const NEGATIVE_CACHE_TTL_MS = 30_000;
+const MAX_CACHE_ENTRIES = 256;
+
+type CachedResponse = {
+    expiresAt: number;
+    response: HandlerResponse;
+};
+
+const responseCache = new Map<string, CachedResponse>();
+const inFlightRequests = new Map<string, Promise<HandlerResponse>>();
 
 type DeviantArtUrl = {
     canonical: string;
@@ -19,6 +30,7 @@ type DeviantArtUrl = {
 type OEmbedPayload = {
     type?: unknown;
     title?: unknown;
+    description?: unknown;
     url?: unknown;
     author_name?: unknown;
     author_url?: unknown;
@@ -48,7 +60,7 @@ function parseDeviantArtUrl(raw: string): DeviantArtUrl | null {
         const path = url.pathname.split('/').filter(Boolean);
         if (
             host === 'deviantart.com'
-            && path.length >= 3
+            && path.length === 3
             && path[1].toLowerCase() === 'art'
             && /^[A-Za-z0-9_-]+$/.test(path[0])
             && /^[A-Za-z0-9_-]+$/.test(path[2])
@@ -178,80 +190,120 @@ function authorHandle(authorUrl: string, fallback?: string): string | undefined 
     }
 }
 
+function cachedResponse(canonicalUrl: string): HandlerResponse | undefined {
+    const entry = responseCache.get(canonicalUrl);
+    if (!entry) return undefined;
+    if (entry.expiresAt <= Date.now()) {
+        responseCache.delete(canonicalUrl);
+        return undefined;
+    }
+    return entry.response;
+}
+
+function cacheResponse(canonicalUrl: string, response: HandlerResponse): void {
+    const now = Date.now();
+    for (const [key, entry] of responseCache) {
+        if (entry.expiresAt <= now) responseCache.delete(key);
+    }
+    if (responseCache.size >= MAX_CACHE_ENTRIES) {
+        const oldest = responseCache.keys().next().value;
+        if (typeof oldest === 'string') responseCache.delete(oldest);
+    }
+    responseCache.set(canonicalUrl, {
+        expiresAt: now + (response.success ? SUCCESS_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS),
+        response,
+    });
+}
+
 export const deviantartHandler: PlatformHandler = {
     name: 'deviantart',
     patterns: [
-        /^https:\/\/(?:www\.)?deviantart\.com\/[A-Za-z0-9_-]+\/art\/[A-Za-z0-9_-]+(?:[/?#]|$)/i,
-        /^https:\/\/sta\.sh\/[A-Za-z0-9_-]+(?:[/?#]|$)/i,
+        /^https:\/\/(?:www\.)?deviantart\.com\/[A-Za-z0-9_-]+\/art\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i,
+        /^https:\/\/sta\.sh\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/i,
     ],
     async handle(rawUrl: string, _env: Env): Promise<HandlerResponse> {
         const parsedUrl = parseDeviantArtUrl(rawUrl);
         if (!parsedUrl) return { success: false, error: 'Invalid DeviantArt URL' };
 
-        try {
-            const endpoint = new URL(OEMBED_ENDPOINT);
-            endpoint.searchParams.set('url', parsedUrl.canonical);
-            endpoint.searchParams.set('maxwidth', '1200');
-            const response = await fetchWithTimeout(endpoint.toString(), {
-                headers: {
-                    'Accept': 'application/json',
-                    'User-Agent': 'FixEmbed/1.0 (+https://fixembed.app)',
-                },
-            }, 6_000);
-            if (response.status === 429) {
-                return {
-                    success: false,
-                    error: 'DeviantArt rate limited the request',
-                    redirect: parsedUrl.canonical,
-                };
-            }
-            if (!response.ok) {
-                return {
-                    success: false,
-                    error: `DeviantArt returned ${response.status}`,
-                    redirect: parsedUrl.canonical,
-                };
-            }
+        const cached = cachedResponse(parsedUrl.canonical);
+        if (cached) return cached;
+        const inFlight = inFlightRequests.get(parsedUrl.canonical);
+        if (inFlight) return inFlight;
 
-            const payload = await readJsonLimited(response);
-            const kind = text(payload.type).toLowerCase();
-            const title = truncateText(text(payload.title) || 'DeviantArt deviation', 300);
-            const authorName = truncateText(text(payload.author_name) || parsedUrl.artist || 'DeviantArt artist', 100);
-            const authorUrl = trustedAuthorUrl(payload.author_url);
-            const image = kind === 'photo'
-                ? trustedMediaUrl(payload.url)
-                : trustedMediaUrl(payload.thumbnail_url);
-            if (!image && !title) {
+        const request = (async (): Promise<HandlerResponse> => {
+            try {
+                const endpoint = new URL(OEMBED_ENDPOINT);
+                endpoint.searchParams.set('url', parsedUrl.canonical);
+                endpoint.searchParams.set('maxwidth', '1200');
+                const response = await fetchWithTimeout(endpoint.toString(), {
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'FixEmbed/1.0 (+https://fixembed.app)',
+                    },
+                }, 6_000);
+                if (response.status === 429) {
+                    return {
+                        success: false,
+                        error: 'DeviantArt rate limited the request',
+                        redirect: parsedUrl.canonical,
+                    };
+                }
+                if (!response.ok) {
+                    return {
+                        success: false,
+                        error: `DeviantArt returned ${response.status}`,
+                        redirect: parsedUrl.canonical,
+                    };
+                }
+
+                const payload = await readJsonLimited(response);
+                const kind = text(payload.type).toLowerCase();
+                const title = truncateText(text(payload.title) || 'DeviantArt deviation', 300);
+                const authorName = truncateText(text(payload.author_name) || parsedUrl.artist || 'DeviantArt artist', 100);
+                const authorUrl = trustedAuthorUrl(payload.author_url);
+                const image = kind === 'photo'
+                    ? trustedMediaUrl(payload.url)
+                    : trustedMediaUrl(payload.thumbnail_url);
+                if (!image && !title) {
+                    return {
+                        success: false,
+                        error: 'DeviantArt metadata unavailable',
+                        redirect: parsedUrl.canonical,
+                    };
+                }
+                const safety = text(payload.safety).toLowerCase();
+                const data: EmbedData = {
+                    title,
+                    description: truncateText(text(payload.description), 4000),
+                    url: parsedUrl.canonical,
+                    siteName: getBrandedSiteName('deviantart'),
+                    authorName,
+                    authorHandle: authorHandle(authorUrl || '', parsedUrl.artist),
+                    authorUrl,
+                    image,
+                    color: platformColors.deviantart,
+                    timestamp: normalizePostTimestamp(text(payload.pubdate)),
+                    platform: 'deviantart',
+                    stats: formatStats(payload),
+                    context: copyrightContext(payload),
+                    sensitive: Boolean(safety && !['clean', 'safe', 'nonadult'].includes(safety)),
+                };
+                return { success: true, source: 'first-party', data };
+            } catch (error) {
                 return {
                     success: false,
-                    error: 'DeviantArt metadata unavailable',
+                    error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
                     redirect: parsedUrl.canonical,
                 };
             }
-            const safety = text(payload.safety).toLowerCase();
-            const data: EmbedData = {
-                title,
-                description: '',
-                url: parsedUrl.canonical,
-                siteName: getBrandedSiteName('deviantart'),
-                authorName,
-                authorHandle: authorHandle(authorUrl || '', parsedUrl.artist),
-                authorUrl,
-                image,
-                color: platformColors.deviantart,
-                timestamp: normalizePostTimestamp(text(payload.pubdate)),
-                platform: 'deviantart',
-                stats: formatStats(payload),
-                context: copyrightContext(payload),
-                sensitive: Boolean(safety && !['clean', 'safe', 'nonadult'].includes(safety)),
-            };
-            return { success: true, source: 'first-party', data };
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
-                redirect: parsedUrl.canonical,
-            };
+        })();
+        inFlightRequests.set(parsedUrl.canonical, request);
+        try {
+            const response = await request;
+            cacheResponse(parsedUrl.canonical, response);
+            return response;
+        } finally {
+            inFlightRequests.delete(parsedUrl.canonical);
         }
     },
 };
