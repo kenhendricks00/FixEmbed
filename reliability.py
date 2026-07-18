@@ -63,7 +63,7 @@ class ReliabilityReport:
 
 async def probe_deviantart_bot_health() -> PlatformHealth:
     """Probe the same bot-host metadata path used for DeviantArt V2 cards."""
-    from deviantart_source import fetch_deviantart_payload
+    from deviantart_embed import fetch_deviantart_payload
 
     started_at = time.monotonic()
     try:

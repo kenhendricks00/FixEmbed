@@ -2,8 +2,8 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import deviantart_source
-from deviantart_source import (
+import deviantart_embed
+from deviantart_embed import (
     DeviantArtRateLimitError,
     DeviantArtSourceError,
     _ProfileMetadataParser,
@@ -43,7 +43,7 @@ class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             raised.exception.retry_after_seconds,
-            deviantart_source.MAX_RATE_LIMIT_SECONDS,
+            deviantart_embed.MAX_RATE_LIMIT_SECONDS,
         )
 
     async def test_reads_chunked_oembed_json(self):
@@ -71,10 +71,10 @@ class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
 
 class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        deviantart_source._payload_cache.clear()
-        deviantart_source._negative_cache.clear()
-        deviantart_source._inflight.clear()
-        deviantart_source._rate_limited_until = float("-inf")
+        deviantart_embed._payload_cache.clear()
+        deviantart_embed._negative_cache.clear()
+        deviantart_embed._inflight.clear()
+        deviantart_embed._rate_limited_until = float("-inf")
 
     async def test_coalesces_concurrent_misses_and_caches_success(self):
         release = asyncio.Event()
@@ -85,7 +85,7 @@ class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):
 
         direct_request = AsyncMock(side_effect=request)
         with patch(
-            "deviantart_source._request_deviantart_oembed_payload",
+            "deviantart_embed._request_deviantart_oembed_payload",
             direct_request,
         ):
             first = asyncio.create_task(
@@ -108,7 +108,7 @@ class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):
             side_effect=DeviantArtSourceError("DeviantArt returned 404")
         )
         with patch(
-            "deviantart_source._request_deviantart_oembed_payload",
+            "deviantart_embed._request_deviantart_oembed_payload",
             direct_request,
         ):
             with self.assertRaises(DeviantArtSourceError):
