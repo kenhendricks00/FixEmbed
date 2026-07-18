@@ -18,6 +18,7 @@ class ComponentEmojiTests(unittest.TestCase):
                 "repost": 1526255036072591450,
                 "comment": 1526254715250282506,
                 "share": 1527880479305498744,
+                "note": 1527889882746323094,
                 "x_government": 1527644261208690778,
                 "x_premium": 1527644259308798113,
                 "x_organization": 1527642128300118129,
@@ -58,6 +59,11 @@ class ComponentEmojiTests(unittest.TestCase):
         rendered = format_component_stats("\U0001f501 3.3M", platform="tiktok")
 
         self.assertEqual(rendered, f"{application_emoji('share')} 3.3M")
+
+    def test_tumblr_uses_uploaded_note_emoji(self):
+        rendered = format_component_stats("\U0001f4dd 377 notes", platform="tumblr")
+
+        self.assertEqual(rendered, f"{application_emoji('note')} 377 notes")
 
 
 if __name__ == "__main__":

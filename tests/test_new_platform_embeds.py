@@ -64,7 +64,7 @@ class NewPlatformEmbedTests(unittest.TestCase):
                 "https://64.media.tumblr.com/first.jpg",
                 "https://64.media.tumblr.com/second.jpg",
             ],
-            "stats": "887 notes",
+            "stats": "\U0001f4dd 887 notes",
             "context": "#writing #classics #jokes",
             "timestamp": "2026-05-29T18:34:20Z",
         }
@@ -81,7 +81,7 @@ class NewPlatformEmbedTests(unittest.TestCase):
         self.assertNotIn("@titleknown", header)
         self.assertIn("A complete Tumblr post summary.", header)
         self.assertNotIn("###", header)
-        self.assertIn("887", rendered)
+        self.assertIn("<:note:1527889882746323094> 887 notes", rendered)
         self.assertIn("#writing #classics #jokes", container["components"][2]["content"])
         self.assertIn("1527868615393546400", rendered)
         self.assertIn("<t:", rendered)

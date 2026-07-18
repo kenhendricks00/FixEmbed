@@ -323,7 +323,8 @@ export const tumblrHandler: PlatformHandler = {
             const noteMatch = result.html.match(/\b([\d,]+)\s+notes?\b/i);
             const notes = noteMatch ? Number(noteMatch[1].replace(/,/g, '')) : 0;
             const tagContext = tumblrTagContext(jsonLd?.keywords)
-                || tumblrTagContext(metaContent(result.html, 'keywords'));
+                || tumblrTagContext(metaContent(result.html, 'keywords'))
+                || tumblrTagContext(metaContent(result.html, 'parsely-tags'));
             return {
                 success: true,
                 source: 'first-party',
