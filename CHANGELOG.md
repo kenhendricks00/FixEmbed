@@ -13,7 +13,7 @@
 - Added FxTikTok as a bounded emergency fallback when TikTok blocks both its public page data and official oEmbed response.
 - Recovered missing TikTok avatars from the creator's public profile, used FxTikTok relay URLs for stable Discord-fetchable media, and signed Twitch clip media URLs with CloudFront-aware production probes.
 - Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.
-- Restored complete Instagram carousels by preserving every distinct source image and splitting galleries at Discord's 10-item component limit.
+- Restored complete Instagram carousels by reading escaped first-party sidecar data, preserving every distinct source image, and splitting galleries at Discord's 10-item component limit.
 - Source-marked sensitive media now renders behind Discord spoilers across all Components V2 cards.
 - Clarified that post translation is an X-specific feature; other platforms preserve source-language text.
 

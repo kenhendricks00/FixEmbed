@@ -1342,6 +1342,46 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler preserves carousel images from escaped Instagram contextJSON',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const imageUrls = Array.from(
+                { length: 10 },
+                (_, index) => `https://scontent.example.com/escaped-carousel-${index + 1}.jpg?token=abc%3D%3D&index=${index + 1}`,
+            );
+            const contextJson = JSON.stringify({
+                context: { type: 'GraphSidecar', shortcode: 'Da5rB1BFp7l' },
+                gql_data: {
+                    shortcode_media: {
+                        __typename: 'GraphSidecar',
+                        display_url: imageUrls[0],
+                        edge_sidecar_to_children: {
+                            edges: imageUrls.map((display_url) => ({ node: { display_url } })),
+                        },
+                    },
+                },
+            })
+                .replace(/%/g, '\\u0025')
+                .replace(/&/g, '\\u0026')
+                .replace(/\//g, '\\/');
+            globalThis.fetch = async () => new Response(
+                `<script>${JSON.stringify({ contextJSON: contextJson })}</script>`,
+                { status: 200 },
+            );
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/Da5rB1BFp7l/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.deepEqual(response.data?.images, imageUrls);
+                assert.equal(response.data?.image, imageUrls[0]);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
         name: 'instagramHandler keeps media when Instagram embed metadata has no media URL',
         run: async () => {
             const originalFetch = globalThis.fetch;

@@ -698,8 +698,11 @@ export const instagramHandler: PlatformHandler = {
 
 function decodeInstagramMediaUrl(value: string): string {
     let decoded = value
-        .replace(/\\u0026/g, '&')
-        .replace(/\\\//g, '/')
+        .replace(
+            /\\+u([0-9a-f]{4})/gi,
+            (_escape, code: string) => String.fromCharCode(Number.parseInt(code, 16)),
+        )
+        .replace(/\\+\//g, '/')
         .replace(/&#0*38;/g, '&');
     while (decoded.includes('&amp;')) {
         decoded = decoded.replace(/&amp;/g, '&');
@@ -728,12 +731,18 @@ function extractInstagramImageUrls(html: string): string[] {
     const urls: string[] = [];
     const seen = new Set<string>();
 
-    for (const match of html.matchAll(/"display_url"\s*:\s*"([^"]+)"/g)) {
-        const url = decodeInstagramMediaUrl(match[1]);
-        if (!url.startsWith('https://') || seen.has(url)) continue;
-        seen.add(url);
-        urls.push(url);
-        if (urls.length === INSTAGRAM_MAX_CAROUSEL_ITEMS) break;
+    const patterns = [
+        /"display_url"\s*:\s*"([^"]+)"/g,
+        /\\"display_url\\"\s*:\s*\\"(.+?)\\"/g,
+    ];
+    for (const pattern of patterns) {
+        for (const match of html.matchAll(pattern)) {
+            const url = decodeInstagramMediaUrl(match[1]);
+            if (!url.startsWith('https://') || seen.has(url)) continue;
+            seen.add(url);
+            urls.push(url);
+            if (urls.length === INSTAGRAM_MAX_CAROUSEL_ITEMS) return urls;
+        }
     }
 
     return urls;
