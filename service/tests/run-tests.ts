@@ -1355,6 +1355,8 @@ const tests: TestCase[] = [
                     shortcode_media: {
                         __typename: 'GraphSidecar',
                         display_url: imageUrls[0],
+                        edge_liked_by: { count: 9 },
+                        edge_media_to_comment: { count: 4 },
                         edge_sidecar_to_children: {
                             edges: imageUrls.map((display_url) => ({ node: { display_url } })),
                         },
@@ -1378,6 +1380,51 @@ const tests: TestCase[] = [
                 assert.equal(response.source, 'first-party');
                 assert.deepEqual(response.data?.images, imageUrls);
                 assert.equal(response.data?.image, imageUrls[0]);
+                assert.match(response.data?.stats || '', /9/);
+                assert.match(response.data?.stats || '', /4/);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'instagramHandler restores public likes and comments when anonymous embed data omits them',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/p/StatsPost/embed/captioned/')) {
+                    return new Response([
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />Stats caption</div>',
+                        '<script>{"contextJSON":"{}","display_url":"https:\\/\\/scontent.example.com\\/stats.jpg"}</script>',
+                    ].join(''), { status: 200 });
+                }
+                if (url === 'https://r.jina.ai/https://www.instagram.com/p/StatsPost/') {
+                    return new Response([
+                        '## View all 17 comments',
+                        '',
+                        '2,345',
+                        '',
+                        '[20 hours ago](https://www.instagram.com/creator/p/StatsPost/)',
+                    ].join('\n'), { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/p/StatsPost/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.deepEqual(requested, [
+                    'https://www.instagram.com/p/StatsPost/embed/captioned/',
+                    'https://r.jina.ai/https://www.instagram.com/p/StatsPost/',
+                ]);
+                assert.match(response.data?.stats || '', /2\.3K/);
+                assert.match(response.data?.stats || '', /17/);
             } finally { globalThis.fetch = originalFetch; }
         },
     },

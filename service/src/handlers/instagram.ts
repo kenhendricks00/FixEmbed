@@ -22,6 +22,7 @@ const INSTAGRAM_TOTAL_TIMEOUT_MS = 3500;
 const INSTAGRAM_NATIVE_TIMEOUT_MS = 2200;
 const INSTAGRAM_VX_TIMEOUT_MS = 1200;
 const INSTAGRAM_KK_TIMEOUT_MS = 600;
+const INSTAGRAM_STATS_TIMEOUT_MS = 650;
 const INSTAGRAM_MAX_CAROUSEL_ITEMS = 20;
 
 // ========== VxInstagram Scraper ==========
@@ -727,6 +728,62 @@ function decodeInstagramText(value: string): string {
         .replace(/&gt;/g, '>');
 }
 
+function parseInstagramCount(value: string | undefined): number | undefined {
+    const match = value?.trim().match(/^([\d,.]+)\s*([KMB])?$/i);
+    if (!match) return undefined;
+
+    const number = Number(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(number)) return undefined;
+
+    const multiplier = match[2]?.toUpperCase() === 'K'
+        ? 1_000
+        : match[2]?.toUpperCase() === 'M'
+            ? 1_000_000
+            : match[2]?.toUpperCase() === 'B'
+                ? 1_000_000_000
+                : 1;
+    return Math.round(number * multiplier);
+}
+
+function parseInstagramReaderStats(
+    markdown: string,
+    shortcode: string,
+): { likes?: number; comments?: number } {
+    const commentsText = markdown.match(
+        /(?:View all|##)\s+([\d,.]+\s*[KMB]?)\s+comments?/i,
+    )?.[1];
+    const comments = parseInstagramCount(commentsText)
+        ?? (/##\s+No comments yet\.?/i.test(markdown) ? 0 : undefined);
+
+    const explicitLikes = markdown.match(/([\d,.]+\s*[KMB]?)\s+likes?\b/i)?.[1];
+    const escapedShortcode = shortcode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const timestampAdjacentLikes = markdown.match(new RegExp(
+        String.raw`(?:^|\n)\s*([\d,.]+\s*[KMB]?)\s*\r?\n\s*\r?\n\[[^\]\r\n]+\]\(https:\/\/www\.instagram\.com\/[^)\r\n]*\/${escapedShortcode}\/?(?:\?[^)\r\n]*)?\)`,
+        'i',
+    ))?.[1];
+    const likes = parseInstagramCount(explicitLikes || timestampAdjacentLikes);
+
+    return { likes, comments };
+}
+
+async function scrapeInstagramReaderStats(
+    canonicalUrl: string,
+    shortcode: string,
+    timeoutMs: number,
+): Promise<{ likes?: number; comments?: number }> {
+    try {
+        const response = await fetchWithTimeout(
+            `https://r.jina.ai/${canonicalUrl}`,
+            { headers: { 'Accept': 'text/plain' } },
+            Math.min(INSTAGRAM_STATS_TIMEOUT_MS, timeoutMs),
+        );
+        if (!response.ok) return {};
+        return parseInstagramReaderStats(await response.text(), shortcode);
+    } catch {
+        return {};
+    }
+}
+
 function extractInstagramImageUrls(html: string): string[] {
     const urls: string[] = [];
     const seen = new Set<string>();
@@ -793,15 +850,31 @@ async function scrapeEmbedHtml(
             }
             return undefined;
         };
-        const likes = extractCount([
+        let likes = extractCount([
             /"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
             /"like_count"\s*:\s*(\d+)/,
+            /"edge_liked_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
+            /\\"edge_liked_by\\"\s*:\s*\{\s*\\"count\\"\s*:\s*(\d+)/,
         ]);
-        const comments = extractCount([
+        let comments = extractCount([
             /"edge_media_to_parent_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
             /"comment_count"\s*:\s*(\d+)/,
+            /"edge_media_to_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/,
+            /\\"edge_media_to_comment\\"\s*:\s*\{\s*\\"count\\"\s*:\s*(\d+)/,
             /View all\s+(\d[\d,]*)\s+comments/i,
         ]);
+        if (
+            html.includes('contextJSON')
+            && (likes === undefined || comments === undefined)
+        ) {
+            const readerStats = await scrapeInstagramReaderStats(
+                canonicalUrl,
+                parsed.shortcode,
+                timeoutMs,
+            );
+            likes ??= readerStats.likes;
+            comments ??= readerStats.comments;
+        }
 
         // Extract username - multiple patterns
         let username = '';

@@ -14,6 +14,7 @@
 - Recovered missing TikTok avatars from the creator's public profile, used FxTikTok relay URLs for stable Discord-fetchable media, and signed Twitch clip media URLs with CloudFront-aware production probes.
 - Added platform-aware creator, context, gallery, mixed-media, timestamp, and engagement fields when each source exposes them.
 - Restored complete Instagram carousels by reading escaped first-party sidecar data, preserving every distinct source image, and splitting galleries at Discord's 10-item component limit.
+- Restored Instagram like and comment counts from the current escaped first-party sidecar fields, with bounded public-page enrichment when anonymous embed data omits them.
 - Routed Instagram carousel images through a restricted FixEmbed relay, downloaded them concurrently, and attached them to the Components V2 message so Discord receives all ten images in source order without remote-media stalls.
 - Restored the 15-second rich-card delivery deadline now that large Instagram galleries no longer depend on Discord fetching ten remote image URLs.
 - Source-marked sensitive media now renders behind Discord spoilers across all Components V2 cards.
