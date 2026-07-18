@@ -27,6 +27,9 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
             "Bluesky": 1526269663334502544,
             "Bilibili": 1526271150739423304,
             "Pinterest": 1526398381415731240,
+            "TikTok": 1527868616215629954,
+            "Tumblr": 1527868615393546400,
+            "Twitch": 1527868614269468852,
         }
         for service, emoji_id in expected_ids.items():
             with self.subTest(service=service):
