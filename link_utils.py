@@ -48,6 +48,18 @@ def _unwrap_fixembed_url(url: str) -> str:
     return parse_qs(parsed.query).get("url", [url])[0]
 
 
+def _strict_https_authority(parsed) -> bool:
+    try:
+        return (
+            parsed.scheme.lower() == "https"
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port in {None, 443}
+        )
+    except ValueError:
+        return False
+
+
 def social_service(url: str) -> Optional[str]:
     """Return the supported service for a URL based on its hostname."""
     hostname = _hostname(_unwrap_fixembed_url(url))
@@ -147,7 +159,7 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
         return "Pinterest", f"https://pin.it/{token}", f"Pinterest • {token}"
 
     if (
-        parsed.scheme == "https"
+        _strict_https_authority(parsed)
         and host == "deviantart.com"
         and len(segments) == 3
         and segments[1].lower() == "art"
@@ -159,7 +171,7 @@ def _canonicalize(url: str) -> Optional[tuple[str, str, str]]:
         return "DeviantArt", canonical, f"DeviantArt • {artist}"
 
     if (
-        parsed.scheme == "https"
+        _strict_https_authority(parsed)
         and host == "sta.sh"
         and len(segments) == 1
         and re.fullmatch(r"[A-Za-z0-9_-]+", segments[0])

@@ -28,6 +28,9 @@ class SocialServiceTests(unittest.TestCase):
             "https://www.deviantart.com/team "
             "https://deviantart.example/team/art/not-real-123 "
             "https://www.deviantart.com/team/art/work/comments/123 "
+            "https://evil@deviantart.com/team/art/not-real-123 "
+            "https://www.deviantart.com:8443/team/art/not-real-123 "
+            "https://user:pass@sta.sh/0123456789abc "
             "https://sta.sh.example/0123456789abc"
         )
 
