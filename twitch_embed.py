@@ -11,7 +11,13 @@ from embed_footer import FooterBranding
 from platform_embed import PlatformCardSpec, build_platform_layout, fetch_platform_payload
 
 
-TWITCH_SPEC = PlatformCardSpec("twitch", "Twitch", 0x9146FF, "🟣")
+TWITCH_SPEC = PlatformCardSpec(
+    "twitch",
+    "Twitch",
+    0x9146FF,
+    "<:twitch:1527868614269468852>",
+    link_author_name_only=True,
+)
 
 
 def build_twitch_layout(

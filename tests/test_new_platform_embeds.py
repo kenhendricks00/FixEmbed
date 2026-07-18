@@ -107,11 +107,20 @@ class NewPlatformEmbedTests(unittest.TestCase):
 
         container = serialized_container(build_twitch_layout(payload))
         rendered = str(container)
+        header = container["components"][0]["components"][0]["content"]
         gallery = container["components"][1]
+        footer = container["components"][-1]["content"]
 
+        self.assertIn(
+            "**[TSoonami](https://www.twitch.tv/tsoonami)**",
+            header,
+        )
+        self.assertNotIn("@tsoonami", header)
         self.assertIn("Apex Legends", rendered)
         self.assertIn("Clipped by TSoonami", rendered)
         self.assertIn("224", rendered)
+        self.assertIn("<:twitch:1527868614269468852>", footer)
+        self.assertNotIn("\U0001f7e3", footer)
         self.assertEqual(
             gallery["items"][0]["media"]["url"],
             payload["video"]["url"],

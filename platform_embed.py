@@ -27,6 +27,7 @@ class PlatformCardSpec:
     color: int
     emoji: str
     content_first: bool = False
+    link_author_name_only: bool = False
 
 
 def build_platform_layout(
@@ -53,7 +54,9 @@ def build_platform_layout(
     author_handle = str(payload.get("authorHandle") or "").strip().lstrip("@")
     author_url = str(payload.get("authorUrl") or "").strip()
     author_avatar = str(payload.get("authorAvatar") or "").strip()
-    if author_handle and author_url:
+    if spec.link_author_name_only and author_url:
+        identity = f"**[{author_name}]({author_url})**"
+    elif author_handle and author_url:
         identity = f"**{author_name}** ([@{author_handle}]({author_url}))"
     elif author_url:
         identity = f"**[{author_name}]({author_url})**"
