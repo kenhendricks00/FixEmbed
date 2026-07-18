@@ -17,6 +17,7 @@ TUMBLR_SPEC = PlatformCardSpec(
     0x35465C,
     "<:tumblr:1527868615393546400>",
     content_first=True,
+    link_author_name_only=True,
 )
 
 

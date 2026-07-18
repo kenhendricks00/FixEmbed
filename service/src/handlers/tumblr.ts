@@ -305,16 +305,17 @@ export const tumblrHandler: PlatformHandler = {
             const result = await fetchTumblrHtml(parsed.canonical);
             const jsonLd = tumblrJsonLd(result.html);
             const post = tumblrPostFragment(result.html);
-            const title = truncateText(metaContent(result.html, 'og:title') || 'Tumblr post', 300);
+            const pageTitle = metaContent(result.html, 'og:title').trim();
+            const title = truncateText(pageTitle || 'Tumblr post', 300);
             const description = truncateText(
                 tumblrPostBody(post)
                 || (typeof jsonLd?.articleBody === 'string' ? jsonLd.articleBody : '')
                 || metaContent(result.html, 'og:description'),
                 2_800,
             );
-            const authorName = typeof jsonLd?.author?.name === 'string'
+            const authorName = pageTitle || (typeof jsonLd?.author?.name === 'string'
                 ? jsonLd.author.name.trim()
-                : parsed.blog;
+                : parsed.blog);
             const authorUrl = typeof jsonLd?.author?.url === 'string' && isTrustedTumblrUrl(jsonLd.author.url)
                 ? jsonLd.author.url
                 : `https://${parsed.blog}.tumblr.com/`;

@@ -53,12 +53,12 @@ class NewPlatformEmbedTests(unittest.TestCase):
 
     def test_tumblr_card_keeps_blog_context_gallery_notes_and_timestamp(self):
         payload = {
-            "title": "May, 2026",
+            "title": "TitleKnown",
             "description": "A complete Tumblr post summary.",
-            "url": "https://changes.tumblr.com/post/817972810553196544/may-2026",
-            "authorName": "Changes on Tumblr",
-            "authorHandle": "@changes",
-            "authorUrl": "https://changes.tumblr.com/",
+            "url": "https://titleknown.tumblr.com/post/801061841418780672",
+            "authorName": "TitleKnown",
+            "authorHandle": "@titleknown",
+            "authorUrl": "https://titleknown.tumblr.com/",
             "authorAvatar": "https://64.media.tumblr.com/avatar.pnj",
             "images": [
                 "https://64.media.tumblr.com/first.jpg",
@@ -71,11 +71,14 @@ class NewPlatformEmbedTests(unittest.TestCase):
 
         container = serialized_container(build_tumblr_layout(payload))
         rendered = str(container)
-        header = str(container["components"][0])
+        header = container["components"][0]["components"][0]["content"]
         gallery = container["components"][1]
 
-        self.assertIn("Changes on Tumblr", rendered)
-        self.assertIn("@changes", rendered)
+        self.assertIn(
+            "**[TitleKnown](https://titleknown.tumblr.com/)**",
+            header,
+        )
+        self.assertNotIn("@titleknown", header)
         self.assertIn("A complete Tumblr post summary.", header)
         self.assertNotIn("###", header)
         self.assertIn("887", rendered)

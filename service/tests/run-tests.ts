@@ -837,6 +837,7 @@ const tests: TestCase[] = [
                     env,
                 );
                 assert.equal(response.success, true);
+                assert.equal(response.data?.authorName, 'TitleKnown');
                 assert.match(
                     response.data?.description || '',
                     /\[linked passage\]\(https:\/\/example\.com\/detail\)/,
