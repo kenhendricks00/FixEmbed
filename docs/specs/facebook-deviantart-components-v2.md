@@ -1,5 +1,7 @@
 # Facebook and DeviantArt Components V2 support
 
+Source of truth: GitHub issue #47. This document retains the implementation decisions and production findings needed to operate the feature.
+
 ## Problem Statement
 
 FixEmbed does not recognize Facebook or DeviantArt links, so Discord users receive inconsistent native previews or no useful preview at all. Public Facebook Page content should reach the useful behavioral baseline demonstrated by Embedded while retaining FixEmbed's richer card identity, engagement, timestamp, footer, delivery fallback, and reliability reporting. Public DeviantArt deviations and Sta.sh links should preserve the artwork and artist context exposed by DeviantArt's official interface.

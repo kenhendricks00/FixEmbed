@@ -194,9 +194,8 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
 
         direct_fetch = AsyncMock(return_value=payload)
         with patch(
-            "deviantart_embed._fetch_deviantart_oembed_payload",
+            "deviantart_embed.fetch_deviantart_payload",
             direct_fetch,
-            create=True,
         ):
             layout = await fetch_deviantart_layout(source_url)
 
