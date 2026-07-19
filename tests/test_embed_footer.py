@@ -61,7 +61,7 @@ class EmbedFooterTests(unittest.TestCase):
         self.assertIn(r"\[Click]", footer)
         self.assertTrue(footer.endswith("via <:fixembed:1> FixEmbed"))
 
-    def test_translated_footer_names_source_language_and_links_original(self):
+    def test_translated_footer_names_source_language_without_redundant_link(self):
         footer = build_component_footer(
             fixembed_emoji="<:fixembed:1>",
             platform_emoji="<:reddit:2>",
@@ -77,8 +77,7 @@ class EmbedFooterTests(unittest.TestCase):
             "-# <:fixembed:1> [FixEmbed](https://fixembed.app/embed?url=example)"
             "  \N{MIDDLE DOT}  <:reddit:2> [Reddit](https://reddit.com/r/FixEmbed/comments/translated/post/)"
             "  \N{MIDDLE DOT}  <t:1783987200:R>"
-            "  \N{MIDDLE DOT}  Translated from Japanese"
-            "  \N{MIDDLE DOT}  [Link](https://reddit.com/r/FixEmbed/comments/translated/post/)",
+            "  \N{MIDDLE DOT}  Translated from Japanese",
         )
 
 

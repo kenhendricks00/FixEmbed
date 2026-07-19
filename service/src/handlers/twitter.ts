@@ -68,6 +68,7 @@ interface FxTwitterTweet {
         text?: string;
         source_lang?: string;
         target_lang?: string;
+        provider?: string;
     };
     poll?: FxTwitterPoll;
     quote?: FxTwitterTweet;
@@ -78,6 +79,55 @@ interface FxTwitterTweet {
         videos?: FxTwitterMedia[];
         external?: FxTwitterMedia;
     };
+}
+
+function requestedTranslationLanguage(options: HandlerOptions): string | undefined {
+    const language = options.language?.trim().toLowerCase();
+    return language && /^[a-z]{2}$/.test(language) ? language : undefined;
+}
+
+async function fetchFxTwitterTweet(
+    username: string,
+    tweetId: string,
+    language?: string,
+): Promise<FxTwitterTweet | undefined> {
+    const translationPath = language ? `/${language}` : '';
+    const url = `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}${translationPath}`;
+    try {
+        const response = await fetchWithTimeout(
+            url,
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)',
+                },
+            },
+            5000,
+        );
+        if (!response.ok) return undefined;
+        const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
+        return body.code === 200 && body.tweet ? body.tweet : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function fxTranslation(
+    tweet: FxTwitterTweet | undefined,
+    requestedLanguage: string,
+): { text: string; sourceLanguage: string; targetLanguage: string } | undefined {
+    const text = tweet?.translation?.text?.trim();
+    const sourceLanguage = tweet?.translation?.source_lang?.trim().toLowerCase();
+    const targetLanguage = tweet?.translation?.target_lang?.trim().toLowerCase();
+    if (
+        !text
+        || !sourceLanguage
+        || targetLanguage !== requestedLanguage
+        || sourceLanguage === targetLanguage
+    ) {
+        return undefined;
+    }
+    return { text, sourceLanguage, targetLanguage };
 }
 
 type TwitterVerificationUser = {
@@ -179,7 +229,12 @@ function fxTwitterQuoteSection(tweet: FxTwitterTweet): EmbedSection | undefined 
     return {
         kind: 'quote',
         title: 'Quoted post',
-        body: truncateText(quote.text?.replace(/https?:\/\/t\.co\/\w+/g, '').trim() || '', 900),
+        body: truncateText(
+            quote.translation?.text?.trim()
+            || quote.text?.replace(/https?:\/\/t\.co\/\w+/g, '').trim()
+            || '',
+            900,
+        ),
         url: quoteUrl,
         authorName: author.name,
         authorHandle: `@${author.screen_name}`,
@@ -214,37 +269,9 @@ async function fetchFxTwitterFallback(
     firstPartyError: string,
 ): Promise<HandlerResponse> {
     try {
-        const language = options.language?.toLowerCase();
-        const translationPath = language && /^[a-z]{2}$/.test(language)
-            ? `/${language}`
-            : '';
-        const baseUrl = `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}`;
-        const requestPayload = async (path: string) => {
-            try {
-                const response = await fetchWithTimeout(
-                    `${baseUrl}${path}`,
-                    { headers: { 'Accept': 'application/json', 'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)' } },
-                    5000,
-                );
-                if (!response.ok) return undefined;
-                const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
-                const author = body.tweet?.author;
-                return body.code === 200
-                    && body.tweet
-                    && author?.screen_name
-                    && author.name
-                    && author.avatar_url
-                    ? body
-                    : undefined;
-            } catch {
-                return undefined;
-            }
-        };
-        const body = await requestPayload(translationPath)
-            || (translationPath ? await requestPayload('') : undefined);
-        if (!body) return fallbackResponse(username, tweetId, firstPartyError);
-
-        const tweet = body.tweet;
+        const language = requestedTranslationLanguage(options);
+        const tweet = await fetchFxTwitterTweet(username, tweetId, language)
+            || (language ? await fetchFxTwitterTweet(username, tweetId) : undefined);
         const author = tweet?.author;
         if (!tweet || !author?.screen_name || !author.name || !author.avatar_url) {
             return fallbackResponse(username, tweetId, firstPartyError);
@@ -254,19 +281,17 @@ async function fetchFxTwitterFallback(
         const canonicalUrl = `https://x.com/${author.screen_name}/status/${tweetId}`;
         const galleryMode = options.mode === 'gallery';
         const originalText = truncateText(tweet.text?.trim() || '', 3000);
-        const translatedText = tweet.translation?.text?.trim();
-        const sourceLanguage = tweet.translation?.source_lang?.toLowerCase();
-        const targetLanguage = (tweet.translation?.target_lang || language)?.toLowerCase();
-        const translation = translatedText && sourceLanguage && targetLanguage
+        const platformTranslation = language ? fxTranslation(tweet, language) : undefined;
+        const translation = platformTranslation
             ? {
-                sourceLanguage,
-                sourceLanguageName: languageName(sourceLanguage),
-                targetLanguage,
+                sourceLanguage: platformTranslation.sourceLanguage,
+                sourceLanguageName: languageName(platformTranslation.sourceLanguage),
+                targetLanguage: platformTranslation.targetLanguage,
                 originalUrl: canonicalUrl,
             }
             : undefined;
-        const description = translatedText
-            ? truncateText(translatedText, 3000)
+        const description = platformTranslation
+            ? truncateText(platformTranslation.text, 3000)
             : originalText;
         const sections = [
             fxTwitterPollSection(tweet.poll),
@@ -302,7 +327,7 @@ async function fetchFxTwitterFallback(
                 video,
                 color: platformColors.twitter,
                 platform: 'twitter',
-                sourceLanguage,
+                sourceLanguage: platformTranslation?.sourceLanguage,
                 translation,
                 timestamp: tweet.created_at,
                 stats: galleryMode ? undefined : formatStats({
@@ -492,21 +517,51 @@ export const twitterHandler: PlatformHandler = {
                 });
                 if (!image && !images && !video && tweet.linkCard.image) image = tweet.linkCard.image;
             }
+            const canonicalUrl = `https://x.com/${handle}/status/${parsed.tweetId}`;
+            const requestedLanguage = requestedTranslationLanguage(options);
+            const translatedTweet = requestedLanguage
+                && requestedLanguage !== tweet.lang?.toLowerCase()
+                && options.mode !== 'gallery'
+                ? await fetchFxTwitterTweet(parsed.username, parsed.tweetId, requestedLanguage)
+                : undefined;
+            const primaryTranslation = requestedLanguage
+                ? fxTranslation(translatedTweet, requestedLanguage)
+                : undefined;
+            const quoteIdsMatch = !translatedTweet?.quote?.id
+                || !tweet.quote?.id_str
+                || translatedTweet.quote.id === tweet.quote.id_str;
+            const quoteTranslation = requestedLanguage && quoteIdsMatch
+                ? fxTranslation(translatedTweet?.quote, requestedLanguage)
+                : undefined;
             const quoteSection = sections?.find((section) => section.kind === 'quote');
+            if (quoteSection && quoteTranslation) {
+                quoteSection.body = truncateText(quoteTranslation.text, 900);
+            }
             if (!image && !images && !video && quoteSection) {
                 video = quoteSection.video;
                 if (quoteSection.images?.length === 1 && !video) [image] = quoteSection.images;
                 else if (quoteSection.images?.length) images = quoteSection.images;
                 if (image || images || video) mediaOrigin = 'quote';
             }
+            const translationSource = primaryTranslation || quoteTranslation;
+            const translation = requestedLanguage && translationSource
+                ? {
+                    sourceLanguage: translationSource.sourceLanguage,
+                    sourceLanguageName: languageName(translationSource.sourceLanguage),
+                    targetLanguage: requestedLanguage,
+                    originalUrl: canonicalUrl,
+                }
+                : undefined;
 
             return {
                 success: true,
                 source: 'first-party',
                 data: {
                     title: `@${handle}`,
-                    description: options.mode === 'gallery' ? '' : description,
-                    url: `https://x.com/${handle}/status/${parsed.tweetId}`,
+                    description: options.mode === 'gallery'
+                        ? ''
+                        : truncateText(primaryTranslation?.text || description, 3000),
+                    url: canonicalUrl,
                     siteName: getBrandedSiteName('twitter'),
                     authorName: tweet.user.name,
                     authorHandle: `@${handle}`,
@@ -518,7 +573,8 @@ export const twitterHandler: PlatformHandler = {
                     video,
                     color: platformColors.twitter,
                     platform: 'twitter',
-                    sourceLanguage: tweet.lang?.toLowerCase(),
+                    sourceLanguage: translationSource?.sourceLanguage || tweet.lang?.toLowerCase(),
+                    translation,
                     timestamp: tweet.created_at,
                     stats: options.mode === 'gallery' ? undefined : formatStats({
                         comments: tweet.conversation_count,

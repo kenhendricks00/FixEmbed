@@ -3297,34 +3297,70 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'twitterHandler exposes source language for shared translation',
+        name: 'twitterHandler uses Grok translation without dropping emoji URLs or quote context',
         run: async () => {
             const originalFetch = globalThis.fetch;
-            globalThis.fetch = async () => new Response(JSON.stringify({
-                __typename: 'Tweet',
-                id_str: '1234567890',
-                text: 'こんにちは世界',
-                lang: 'ja',
-                user: {
-                    name: 'Example',
-                    screen_name: 'example',
-                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
-                },
-                created_at: '2026-07-12T00:00:00.000Z',
-            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    fxRequests.push(url);
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '1234567890',
+                            text: '\u203c\ufe0f \u591a\u304f\u306e\u53cd\u97ff\u3042\u308a\u304c\u3068\u3046\u3054\u3056\u3044\u307e\u3059\u3002',
+                            translation: {
+                                text: '\u203c\ufe0f Thank you for the many responses.\nhttps://example.com/details',
+                                source_lang: 'ja',
+                                target_lang: 'en',
+                                provider: 'grok',
+                            },
+                            quote: {
+                                id: '456',
+                                text: '\u30de\u30a4\u30af\u30e9\u30b9\u30ad\u30f3\u304c\u3001\u3061\u3073\u30ad\u30e3\u30e9GIF\u306b\u2728',
+                                translation: {
+                                    text: "Mike's class skin in a chibi character GIF \u2728\n"
+                                        + '*The usage video is in the reply\n\n'
+                                        + 'https://dot-chibiko.chabo.tokyo/',
+                                    source_lang: 'ja',
+                                    target_lang: 'en',
+                                    provider: 'grok',
+                                },
+                            },
+                        },
+                    });
+                }
+                return new Response(JSON.stringify({
+                    __typename: 'Tweet',
+                    id_str: '1234567890',
+                    text: '\u203c\ufe0f \u591a\u304f\u306e\u53cd\u97ff\u3042\u308a\u304c\u3068\u3046\u3054\u3056\u3044\u307e\u3059\u3002',
+                    lang: 'ja',
+                    user: {
+                        name: 'Example',
+                        screen_name: 'example',
+                        profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
+                    },
+                    quote: {
+                        id_str: '456',
+                        text: '\u30de\u30a4\u30af\u30e9\u30b9\u30ad\u30f3\u304c\u3001\u3061\u3073\u30ad\u30e3\u30e9GIF\u306b\u2728',
+                        user: {
+                            name: 'Quoted Author',
+                            screen_name: 'quoted',
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                        },
+                        mediaDetails: [],
+                    },
+                    created_at: '2026-07-12T00:00:00.000Z',
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            };
             let aiCalls = 0;
             const translationEnv: Env = {
                 ...env,
                 AI: {
-                    run: async (model: string, input: unknown) => {
+                    run: async () => {
                         aiCalls += 1;
-                        assert.equal(model, '@cf/meta/m2m100-1.2b');
-                        assert.deepEqual(input, {
-                            text: 'こんにちは世界',
-                            source_lang: 'ja',
-                            target_lang: 'en',
-                        });
-                        return { translated_text: 'Hello world' };
+                        return { translated_text: 'Workers AI must not translate X posts' };
                     },
                 } as unknown as Ai,
             };
@@ -3335,9 +3371,27 @@ const tests: TestCase[] = [
                     translationEnv,
                     { language: 'en' },
                 );
+                const quote = response.data?.sections?.find((section) => section.kind === 'quote');
 
-                assert.equal(response.data?.description, 'こんにちは世界');
-                assert.equal(response.data?.sourceLanguage, 'ja');
+                assert.equal(
+                    response.data?.description,
+                    '\u203c\ufe0f Thank you for the many responses.\nhttps://example.com/details',
+                );
+                assert.equal(
+                    quote?.body,
+                    "Mike's class skin in a chibi character GIF \u2728\n"
+                        + '*The usage video is in the reply\n\n'
+                        + 'https://dot-chibiko.chabo.tokyo/',
+                );
+                assert.deepEqual(response.data?.translation, {
+                    sourceLanguage: 'ja',
+                    sourceLanguageName: 'Japanese',
+                    targetLanguage: 'en',
+                    originalUrl: 'https://x.com/example/status/1234567890',
+                });
+                assert.deepEqual(fxRequests, [
+                    'https://api.fxtwitter.com/example/status/1234567890/en',
+                ]);
                 assert.equal(aiCalls, 0);
             } finally {
                 globalThis.fetch = originalFetch;
@@ -3896,21 +3950,15 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'shared translation translates quoted-post text in an already translated X card',
+        name: 'shared translation preserves X cards when platform translation is unavailable',
         run: async () => {
-            const translatedInputs: string[] = [];
+            let aiCalls = 0;
             const translationEnv: Env = {
                 ...env,
                 AI: {
-                    run: async (_model: string, input: {
-                        text?: string;
-                        source_lang?: string;
-                        target_lang?: string;
-                    }) => {
-                        translatedInputs.push(input.text || '');
-                        assert.equal(input.source_lang, 'ja');
-                        assert.equal(input.target_lang, 'en');
-                        return { translated_text: 'Quoted post text' };
+                    run: async () => {
+                        aiCalls += 1;
+                        return { translated_text: 'Workers AI must not translate X posts' };
                     },
                 } as unknown as Ai,
             };
@@ -3921,21 +3969,15 @@ const tests: TestCase[] = [
                     source: 'fallback',
                     data: {
                         title: '@primary',
-                        description: 'Main post text',
+                        description: '\u5143\u306e\u6295\u7a3f\u30c6\u30ad\u30b9\u30c8 \u2728',
                         url: 'https://x.com/primary/status/123',
                         siteName: 'FixEmbed \u2022 \ud835\udd4f Twitter',
                         platform: 'twitter',
                         sourceLanguage: 'ja',
-                        translation: {
-                            sourceLanguage: 'ja',
-                            sourceLanguageName: 'Japanese',
-                            targetLanguage: 'en',
-                            originalUrl: 'https://x.com/primary/status/123',
-                        },
                         sections: [{
                             kind: 'quote',
                             title: 'Quoted post',
-                            body: '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f',
+                            body: '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f \u2728\nhttps://example.com/context',
                             url: 'https://x.com/quoted/status/456',
                             authorName: 'Quoted Author',
                             authorHandle: '@quoted',
@@ -3947,15 +3989,13 @@ const tests: TestCase[] = [
                 { language: 'en' },
             );
 
-            assert.equal(result.data?.description, 'Main post text');
-            assert.deepEqual(result.data?.translation, {
-                sourceLanguage: 'ja',
-                sourceLanguageName: 'Japanese',
-                targetLanguage: 'en',
-                originalUrl: 'https://x.com/primary/status/123',
-            });
+            assert.equal(result.data?.description, '\u5143\u306e\u6295\u7a3f\u30c6\u30ad\u30b9\u30c8 \u2728');
+            assert.equal(result.data?.translation, undefined);
             assert.equal(result.data?.sections?.[0]?.title, 'Quoted post');
-            assert.equal(result.data?.sections?.[0]?.body, 'Quoted post text');
+            assert.equal(
+                result.data?.sections?.[0]?.body,
+                '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f \u2728\nhttps://example.com/context',
+            );
             assert.equal(result.data?.sections?.[0]?.authorName, 'Quoted Author');
             assert.equal(result.data?.sections?.[0]?.authorHandle, '@quoted');
             assert.equal(
@@ -3966,7 +4006,7 @@ const tests: TestCase[] = [
                 result.data?.sections?.[0]?.images,
                 ['https://pbs.twimg.com/media/quoted.jpg'],
             );
-            assert.deepEqual(translatedInputs, ['\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f']);
+            assert.equal(aiCalls, 0);
         },
     },
     {

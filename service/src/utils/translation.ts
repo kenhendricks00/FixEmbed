@@ -208,6 +208,9 @@ export async function applyRequestedTranslation(
     if (!targetLanguage || !result.success || !data || !env.AI) {
         return result;
     }
+    if (data.platform === 'twitter') {
+        return result;
+    }
     if (
         data.translation
         && normalizeLanguage(data.translation.targetLanguage) !== targetLanguage

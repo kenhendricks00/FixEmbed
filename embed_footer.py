@@ -70,6 +70,4 @@ def build_component_footer(
     source_language = escape_component_text(translated_from or "")[:50]
     if source_language:
         parts.append(f"Translated from {source_language}")
-        if source_url:
-            parts.append(f"[Link]({source_url})")
     return "-# " + "  ·  ".join(parts)
