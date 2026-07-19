@@ -3726,12 +3726,13 @@ const tests: TestCase[] = [
                         target_lang?: string;
                     }) => {
                         assert.equal(model, '@cf/meta/m2m100-1.2b');
-                        assert.equal(input.text, 'たくさんの返信をありがとうございます。新しい機能を公開しました。');
                         assert.equal(input.source_lang, 'ja');
                         assert.equal(input.target_lang, 'en');
-                        return {
-                            translated_text: 'Thank you for the many replies. We released a new feature.',
-                        };
+                        if (input.text === 'FixEmbed のお知らせ') {
+                            return { translated_text: 'FixEmbed announcement' };
+                        }
+                        assert.equal(input.text, 'たくさんの返信をありがとうございます。新しい機能を公開しました。');
+                        return { translated_text: 'Thank you for the many replies. We released a new feature.' };
                     },
                 } as unknown as Ai,
             };
@@ -3744,6 +3745,7 @@ const tests: TestCase[] = [
                     translationEnv,
                 );
                 const payload = await response.json() as { data?: {
+                    title?: string;
                     description?: string;
                     translation?: {
                         sourceLanguage?: string;
@@ -3758,6 +3760,7 @@ const tests: TestCase[] = [
                     payload.data?.description,
                     'Thank you for the many replies. We released a new feature.',
                 );
+                assert.equal(payload.data?.title, 'r/FixEmbed • FixEmbed announcement');
                 assert.deepEqual(payload.data?.translation, {
                     sourceLanguage: 'ja',
                     sourceLanguageName: 'Japanese',
@@ -3801,6 +3804,38 @@ const tests: TestCase[] = [
             assert.equal(result.data?.title, 'r/FixEmbed \u2022 We released a new feature');
             assert.equal(result.data?.description, '');
             assert.equal(result.data?.translation?.sourceLanguageName, 'Japanese');
+        },
+    },
+    {
+        name: 'shared translation targets a Twitch title instead of generated context',
+        run: async () => {
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string }) => {
+                        assert.equal(input.text, '\u65b0\u3057\u3044\u914d\u4fe1\u30bf\u30a4\u30c8\u30eb');
+                        return { translated_text: 'New stream title' };
+                    },
+                } as unknown as Ai,
+            };
+
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    data: {
+                        title: '\u65b0\u3057\u3044\u914d\u4fe1\u30bf\u30a4\u30c8\u30eb',
+                        description: 'Game: Example \u00b7 1:20:00',
+                        url: 'https://www.twitch.tv/videos/123',
+                        siteName: 'FixEmbed \u2022 Twitch',
+                        platform: 'twitch',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.equal(result.data?.title, 'New stream title');
+            assert.equal(result.data?.description, 'Game: Example \u00b7 1:20:00');
         },
     },
     {
@@ -4646,6 +4681,11 @@ const tests: TestCase[] = [
                 assert.equal(activityResponse.status, 200);
                 assert.match(activity.content, /We released a new feature/);
                 assert.doesNotMatch(activity.content, /\u65b0\u3057\u3044\u6a5f\u80fd/);
+                assert.equal(
+                    activity.application.name,
+                    'Translated from Japanese \u00b7 Link',
+                );
+                assert.equal(activity.application.website, sourceUrl);
             } finally {
                 globalThis.fetch = originalFetch;
             }

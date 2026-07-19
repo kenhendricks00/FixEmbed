@@ -97,13 +97,15 @@ type TranslationTarget = {
     prefix?: string;
 };
 
-function translatableTarget(data: EmbedData): TranslationTarget | undefined {
-    const caption = String(data.caption || '').trim();
-    if (caption) return { field: 'caption', text: caption };
+const MULTI_FIELD_PLATFORMS = new Set([
+    'reddit',
+    'pixiv',
+    'bilibili',
+    'pinterest',
+    'deviantart',
+]);
 
-    const description = String(data.description || '').trim();
-    if (description) return { field: 'description', text: description };
-
+function titleTarget(data: EmbedData): TranslationTarget | undefined {
     const title = String(data.title || '').trim();
     if (!title) return undefined;
     if (data.platform === 'reddit') {
@@ -119,30 +121,45 @@ function translatableTarget(data: EmbedData): TranslationTarget | undefined {
     return { field: 'title', text: title };
 }
 
+function translatableTargets(data: EmbedData): TranslationTarget[] {
+    if (data.platform === 'twitch') {
+        const target = titleTarget(data);
+        return target ? [target] : [];
+    }
+
+    const caption = String(data.caption || '').trim();
+    if (caption) return [{ field: 'caption', text: caption }];
+
+    const description = String(data.description || '').trim();
+    const title = titleTarget(data);
+    if (MULTI_FIELD_PLATFORMS.has(data.platform)) {
+        return [
+            ...(title ? [title] : []),
+            ...(description ? [{ field: 'description' as const, text: description }] : []),
+        ];
+    }
+    if (description) return [{ field: 'description', text: description }];
+    return title ? [title] : [];
+}
+
 function translatedData(
     data: EmbedData,
-    translatedText: string,
+    translations: Array<{ target: TranslationTarget; text: string }>,
     metadata: TranslationMetadata,
-    target: TranslationTarget,
 ): EmbedData {
-    if (target.field === 'title') {
-        return {
-            ...data,
-            title: `${target.prefix || ''}${translatedText}`,
-            translation: metadata,
-        };
-    }
-    if (target.field === 'description') {
-        return {
-            ...data,
-            description: translatedText,
-            translation: metadata,
-        };
+    const translated = { ...data };
+    for (const { target, text } of translations) {
+        if (target.field === 'title') {
+            translated.title = `${target.prefix || ''}${text}`;
+        } else if (target.field === 'description') {
+            translated.description = text;
+        } else {
+            translated.description = text;
+            translated.caption = text;
+        }
     }
     return {
-        ...data,
-        description: translatedText,
-        caption: translatedText,
+        ...translated,
         translation: metadata,
     };
 }
@@ -158,29 +175,35 @@ export async function applyRequestedTranslation(
         return result;
     }
 
-    const target = translatableTarget(data);
-    if (!target) return result;
+    const targets = translatableTargets(data);
+    if (!targets.length) return result;
 
-    const source = sourceLanguage(data, target.text);
+    const source = sourceLanguage(
+        data,
+        targets.map((target) => target.text).join('\n\n'),
+    );
     if (!source || source.code === targetLanguage) return result;
 
     try {
-        const translation = await env.AI.run(TRANSLATION_MODEL, {
-            text: target.text,
-            source_lang: source.code,
-            target_lang: targetLanguage,
-        }) as { translated_text?: string };
-        const translatedText = translation.translated_text?.trim();
-        if (!translatedText || translatedText === target.text) return result;
+        const translatedTargets = await Promise.all(targets.map(async (target) => {
+            const translation = await env.AI!.run(TRANSLATION_MODEL, {
+                text: target.text,
+                source_lang: source.code,
+                target_lang: targetLanguage,
+            }) as { translated_text?: string };
+            const text = translation.translated_text?.trim();
+            if (!text || text === target.text) throw new Error('Empty translation');
+            return { target, text };
+        }));
 
         return {
             ...result,
-            data: translatedData(data, translatedText, {
+            data: translatedData(data, translatedTargets, {
                 sourceLanguage: source.code,
                 sourceLanguageName: source.name,
                 targetLanguage,
                 originalUrl: data.url,
-            }, target),
+            }),
         };
     } catch (error) {
         console.error('post_translation_failed', {

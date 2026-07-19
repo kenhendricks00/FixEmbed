@@ -88,6 +88,8 @@ interface ActivityEmbedData {
     au?: string;
     sn?: string;
     l?: string;
+    tn?: string;
+    tu?: string;
 }
 
 function decodeActivitySource(encodedData: string): ActivityEmbedData {
@@ -589,12 +591,28 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
             ts: parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime()) ? parsedTimestamp.toISOString() : undefined,
             au: source.authorUrl || source.url,
             sn: source.siteName,
+            tn: source.translation?.sourceLanguageName,
+            tu: source.translation?.originalUrl,
         };
     }
     const handle = (embedData.h || `@${author}`).replace(/^@/, '');
     const isInstagram = embedData.p === 'instagram';
     const instagramProfileUrl = embedData.au || `https://www.instagram.com/${encodeURIComponent(handle)}/`;
     const createdAt = embedData.ts || new Date().toISOString();
+    const translationSourceName = /^[A-Za-z][A-Za-z ]{0,49}$/.test(embedData.tn || '')
+        ? embedData.tn
+        : undefined;
+    let translationOriginalUrl: string | undefined;
+    if (translationSourceName && embedData.tu) {
+        try {
+            const parsedOriginalUrl = new URL(embedData.tu);
+            if (parsedOriginalUrl.protocol === 'https:') {
+                translationOriginalUrl = parsedOriginalUrl.toString();
+            }
+        } catch {
+            translationOriginalUrl = undefined;
+        }
+    }
     const mediaAttachments: MastodonMediaAttachment[] = [];
 
     if (embedData.v) {
@@ -655,8 +673,10 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         spoiler_text: '',
         visibility: 'public',
         application: {
-            name: embedData.sn || 'FixEmbed',
-            website: 'https://fixembed.app',
+            name: translationSourceName
+                ? `Translated from ${translationSourceName} · Link`
+                : embedData.sn || 'FixEmbed',
+            website: translationOriginalUrl || 'https://fixembed.app',
         },
         media_attachments: mediaAttachments,
         account: {
