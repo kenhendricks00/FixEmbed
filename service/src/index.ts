@@ -31,6 +31,10 @@ import {
 import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
 import { proxyInstagramImage } from './routes/instagram_media_proxy.ts';
+import {
+    redactInstagramVideoRelayRequestLog,
+    relayInstagramVideo,
+} from './routes/instagram_video_relay.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -250,7 +254,9 @@ async function buildStatusReport(env: Env): Promise<PublicStatusReport> {
 
 // Middleware
 app.use('*', cors());
-app.use('*', logger());
+app.use('*', logger((message) => {
+    console.log(redactInstagramVideoRelayRequestLog(message));
+}));
 
 app.post('/webhooks/topgg', (c) => handleTopGgWebhook(c.req.raw, c.env));
 
@@ -760,54 +766,7 @@ app.get('/embed', async (c) => {
     }
 });
 
-// Video proxy endpoint for Instagram - streams the video with proper headers
-app.get('/video/instagram', async (c) => {
-    const videoUrl = c.req.query('url');
-
-    if (!videoUrl) {
-        return c.json({ error: 'Missing video URL' }, 400);
-    }
-
-    try {
-        // Fetch the video from the source
-        const response = await fetch(videoUrl, {
-            headers: {
-                'User-Agent': 'TelegramBot (like TwitterBot)',
-                'Accept': 'video/*,*/*',
-                'Range': c.req.header('Range') || 'bytes=0-',
-            },
-        });
-
-        if (!response.ok && response.status !== 206) {
-            return c.redirect(videoUrl, 302);
-        }
-
-        // Stream the video back with proper headers
-        const headers = new Headers();
-        headers.set('Content-Type', response.headers.get('Content-Type') || 'video/mp4');
-        headers.set('Accept-Ranges', 'bytes');
-        headers.set('Cache-Control', 'public, max-age=3600');
-        headers.set('Content-Disposition', 'inline; filename="instagram-video.mp4"');
-        headers.set('X-Content-Type-Options', 'nosniff');
-
-        const contentLength = response.headers.get('Content-Length');
-        const contentRange = response.headers.get('Content-Range');
-        if (contentLength) {
-            headers.set('Content-Length', contentLength);
-        }
-        if (contentRange) {
-            headers.set('Content-Range', contentRange);
-        }
-
-        return new Response(response.body, {
-            status: response.status,
-            headers,
-        });
-    } catch (error) {
-        // Fallback to redirect
-        return c.redirect(videoUrl, 302);
-    }
-});
+app.get('/video/instagram', relayInstagramVideo);
 
 // Video proxy endpoint for Threads - streams the video with proper headers
 app.get('/video/threads', async (c) => {

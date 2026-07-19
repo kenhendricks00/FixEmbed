@@ -40,6 +40,7 @@ import {
     parseInstallSource,
 } from '../src/utils/install.ts';
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
+import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import {
     cleanUrl,
@@ -2318,11 +2319,35 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'Instagram Reel video relay preserves Discord byte-range playback',
+        name: 'Instagram Reel request logs redact source URLs and shortcodes',
+        run: () => {
+            const upstreamUrl = 'https://kkinstagram.com/reel/PrivateShortcode/';
+            const incoming = '<-- GET /video/instagram?url=' + encodeURIComponent(upstreamUrl);
+            const outgoing = incoming.replace('<--', '-->') + ' 206 82ms';
+
+            const redactedIncoming = redactInstagramVideoRelayRequestLog(incoming);
+            const redactedOutgoing = redactInstagramVideoRelayRequestLog(outgoing);
+
+            assert.equal(
+                redactedIncoming,
+                '<-- GET /video/instagram?url=%5BREDACTED%5D',
+            );
+            assert.equal(
+                redactedOutgoing,
+                '--> GET /video/instagram?url=%5BREDACTED%5D 206 82ms',
+            );
+            assert.equal(redactedIncoming.includes('PrivateShortcode'), false);
+            assert.equal(redactedOutgoing.includes(upstreamUrl), false);
+        },
+    },
+    {
+        name: 'Instagram Reel video relay preserves playback and emits privacy-safe telemetry',
         run: async () => {
             const originalFetch = globalThis.fetch;
+            const originalInfo = console.info;
             const upstreamUrl = 'https://kkinstagram.com/reel/DWm-w02iSXP/';
             let forwardedRange: string | null = null;
+            const telemetry: Array<[string, Record<string, unknown>]> = [];
             globalThis.fetch = async (input, init) => {
                 assert.equal(String(input), upstreamUrl);
                 forwardedRange = new Headers(init?.headers).get('Range');
@@ -2334,6 +2359,9 @@ const tests: TestCase[] = [
                         'Content-Range': 'bytes 0-10/4044060',
                     },
                 });
+            };
+            console.info = (event, fields) => {
+                telemetry.push([String(event), fields as Record<string, unknown>]);
             };
 
             try {
@@ -2355,9 +2383,127 @@ const tests: TestCase[] = [
                     response.headers.get('Content-Disposition'),
                     'inline; filename="instagram-video.mp4"',
                 );
+                const requestId = response.headers.get('X-FixEmbed-Request-ID');
+                assert.match(requestId || '', /^[0-9a-f-]{36}$/);
                 assert.equal(await response.text(), 'video-chunk');
+                assert.deepEqual(telemetry, [[
+                    'instagram_video_relay',
+                    {
+                        requestId,
+                        provider: 'kkinstagram',
+                        outcome: 'stream_started',
+                        requestedRange: true,
+                        upstreamStatus: 206,
+                        upstreamMediaType: 'video/mp4',
+                        hasContentRange: true,
+                        contentLength: 11,
+                        upstreamResponseMs: telemetry[0]?.[1].upstreamResponseMs,
+                    },
+                ]]);
+                assert.equal(typeof telemetry[0]?.[1].upstreamResponseMs, 'number');
+                assert.equal(JSON.stringify(telemetry).includes('DWm-w02iSXP'), false);
+                assert.equal(JSON.stringify(telemetry).includes(upstreamUrl), false);
             } finally {
                 globalThis.fetch = originalFetch;
+                console.info = originalInfo;
+            }
+        },
+    },
+    {
+        name: 'Instagram Reel video relay logs provider degradation without exposing the URL',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalWarn = console.warn;
+            const upstreamUrl = 'https://vxinstagram.com/offload/PrivateShortcode/0.mp4';
+            const telemetry: Array<[string, Record<string, unknown>]> = [];
+            globalThis.fetch = async () => new Response('unavailable', {
+                status: 503,
+                headers: { 'Content-Length': '11' },
+            });
+            console.warn = (event, fields) => {
+                telemetry.push([String(event), fields as Record<string, unknown>]);
+            };
+
+            try {
+                const response = await app.request(
+                    '/video/instagram?url=' + encodeURIComponent(upstreamUrl),
+                    {},
+                    env,
+                );
+
+                assert.equal(response.status, 302);
+                const requestId = response.headers.get('X-FixEmbed-Request-ID');
+                assert.match(requestId || '', /^[0-9a-f-]{36}$/);
+                assert.deepEqual(telemetry, [[
+                    'instagram_video_relay',
+                    {
+                        requestId,
+                        provider: 'vxinstagram',
+                        outcome: 'redirected',
+                        requestedRange: false,
+                        upstreamStatus: 503,
+                        upstreamMediaType: 'other',
+                        hasContentRange: false,
+                        contentLength: 11,
+                        upstreamResponseMs: telemetry[0]?.[1].upstreamResponseMs,
+                        failureStage: 'upstream_response',
+                    },
+                ]]);
+                assert.equal(typeof telemetry[0]?.[1].upstreamResponseMs, 'number');
+                assert.equal(JSON.stringify(telemetry).includes('PrivateShortcode'), false);
+                assert.equal(JSON.stringify(telemetry).includes(upstreamUrl), false);
+            } finally {
+                globalThis.fetch = originalFetch;
+                console.warn = originalWarn;
+            }
+        },
+    },
+    {
+        name: 'Instagram Reel video relay correlates upstream fetch failures',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalWarn = console.warn;
+            const upstreamUrl = 'https://kkinstagram.com/reel/AnotherPrivateShortcode/';
+            const telemetry: Array<[string, Record<string, unknown>]> = [];
+            globalThis.fetch = async () => {
+                throw new DOMException('timed out', 'TimeoutError');
+            };
+            console.warn = (event, fields) => {
+                telemetry.push([String(event), fields as Record<string, unknown>]);
+            };
+
+            try {
+                const response = await app.request(
+                    '/video/instagram?url=' + encodeURIComponent(upstreamUrl),
+                    { headers: { Range: 'bytes=0-' } },
+                    env,
+                );
+
+                assert.equal(response.status, 302);
+                const requestId = response.headers.get('X-FixEmbed-Request-ID');
+                assert.match(requestId || '', /^[0-9a-f-]{36}$/);
+                assert.deepEqual(telemetry, [[
+                    'instagram_video_relay',
+                    {
+                        requestId,
+                        provider: 'kkinstagram',
+                        outcome: 'redirected',
+                        requestedRange: true,
+                        upstreamStatus: null,
+                        upstreamMediaType: 'unknown',
+                        hasContentRange: false,
+                        contentLength: null,
+                        upstreamResponseMs: telemetry[0]?.[1].upstreamResponseMs,
+                        failureStage: 'upstream_fetch',
+                        errorType: 'TimeoutError',
+                    },
+                ]]);
+                assert.equal(typeof telemetry[0]?.[1].upstreamResponseMs, 'number');
+                assert.equal(JSON.stringify(telemetry).includes('AnotherPrivateShortcode'), false);
+                assert.equal(JSON.stringify(telemetry).includes(upstreamUrl), false);
+            } finally {
+                globalThis.fetch = originalFetch;
+                console.warn = originalWarn;
             }
         },
     },

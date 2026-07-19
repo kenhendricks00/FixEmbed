@@ -1,5 +1,8 @@
 ## Unreleased
 
+#### **Instagram Reel diagnostics**
+- Added correlated, privacy-safe relay telemetry for Instagram Reel streams, upstream response degradation, and fetch failures without recording source URLs or shortcodes.
+
 #### **DeviantArt deviations**
 - Added public DeviantArt deviation and Sta.sh cards across automatic conversion, `/fix`, settings, reliability status, and production conformance.
 - Preserved artwork titles, artist attribution, signed full-size images, publication times, views, favorites, comments, downloads, copyright context, and the dedicated DeviantArt application emoji.
