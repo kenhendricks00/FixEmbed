@@ -48,6 +48,20 @@ def build_reddit_layout(
     author_url = str(payload.get("authorUrl") or "").strip()
     subreddit_icon = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
+    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
+    linked_article = next(
+        (
+            section
+            for section in sections
+            if isinstance(section, Mapping)
+            and section.get("kind") == "link-card"
+            and str(section.get("url") or "").strip().startswith(("https://", "http://"))
+        ),
+        None,
+    )
+    linked_article_url = (
+        str(linked_article.get("url") or "").strip() if linked_article else ""
+    )
 
     author_text = f"[{author}]({author_url})" if author_url else author
     identity = f"**{subreddit}**  ·  Posted by {author_text}"
@@ -56,9 +70,12 @@ def build_reddit_layout(
     description = apply_caption_preferences(description, preferences)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
-    header_text = "\n".join(
-        part for part in (identity, f"### {post_title}", description) if part
+    title_text = (
+        f"### [{post_title}]({linked_article_url})"
+        if linked_article_url
+        else f"### {post_title}"
     )
+    header_text = "\n".join(part for part in (identity, title_text, description) if part)
 
     children: list[discord.ui.Item[Any]] = []
     if subreddit_icon:
@@ -73,6 +90,9 @@ def build_reddit_layout(
         )
     else:
         children.append(discord.ui.TextDisplay(header_text))
+
+    if linked_article_url:
+        children.append(discord.ui.TextDisplay(linked_article_url))
 
     video = payload.get("video")
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
@@ -101,11 +121,10 @@ def build_reddit_layout(
             )
         )
 
-    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
     rendered_sections = [
         _section_text(section)
         for section in sections[:4]
-        if isinstance(section, Mapping)
+        if isinstance(section, Mapping) and section is not linked_article
     ]
     if rendered_sections:
         children.append(discord.ui.Separator())
