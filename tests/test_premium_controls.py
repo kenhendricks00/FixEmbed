@@ -8,7 +8,7 @@ from premium_controls import (
     init_premium_controls,
     load_premium_controls,
     record_processing_outcome,
-    resolve_twitter_language,
+    resolve_translation_language,
     save_premium_controls,
     should_skip_automatic,
 )
@@ -52,7 +52,7 @@ class PremiumControlsTests(unittest.IsolatedAsyncioTestCase):
                 "card_show_stats": False,
                 "card_show_hashtags": False,
                 "card_caption_mode": "compact",
-                "twitter_language": "ES",
+                "translation_language": "ES",
                 "ignored_user_ids": [9, "8", "bad"],
                 "ignored_role_ids": [7, "6"],
             },
@@ -66,7 +66,7 @@ class PremiumControlsTests(unittest.IsolatedAsyncioTestCase):
                 "card_show_stats": False,
                 "card_show_hashtags": False,
                 "card_caption_mode": "compact",
-                "twitter_language": "es",
+                "translation_language": "es",
                 "ignored_user_ids": [9, 8],
                 "ignored_role_ids": [7, 6],
             },
@@ -77,14 +77,41 @@ class PremiumControlsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(loaded, {})
         self.assertTrue(DEFAULT_PREMIUM_CONTROLS["card_show_stats"])
-        self.assertIsNone(DEFAULT_PREMIUM_CONTROLS["twitter_language"])
+        self.assertIsNone(DEFAULT_PREMIUM_CONTROLS["translation_language"])
 
-    def test_translation_prefers_explicit_link_and_requires_premium(self):
-        settings = {"twitter_language": "es"}
+    def test_translation_prefers_explicit_link_and_is_free(self):
+        settings = {"translation_language": "es"}
 
-        self.assertEqual(resolve_twitter_language("fr", settings, premium=True), "fr")
-        self.assertEqual(resolve_twitter_language(None, settings, premium=True), "es")
-        self.assertIsNone(resolve_twitter_language(None, settings, premium=False))
+        self.assertEqual(resolve_translation_language("fr", settings), "fr")
+        self.assertEqual(resolve_translation_language(None, settings), "es")
+
+    async def test_legacy_twitter_language_is_migrated(self):
+        legacy_db = _AsyncSQLite()
+        await legacy_db.execute(
+            """CREATE TABLE guild_premium_controls (
+                guild_id INTEGER PRIMARY KEY,
+                card_show_stats BOOLEAN NOT NULL DEFAULT TRUE,
+                card_show_hashtags BOOLEAN NOT NULL DEFAULT TRUE,
+                card_caption_mode TEXT NOT NULL DEFAULT 'full',
+                twitter_language TEXT DEFAULT NULL,
+                ignored_user_ids TEXT NOT NULL DEFAULT '[]',
+                ignored_role_ids TEXT NOT NULL DEFAULT '[]'
+            )"""
+        )
+        await legacy_db.execute(
+            """INSERT INTO guild_premium_controls (
+                guild_id, twitter_language
+            ) VALUES (?, ?)""",
+            (456, "ja"),
+        )
+
+        try:
+            await init_premium_controls(legacy_db)
+            loaded = await load_premium_controls(legacy_db)
+        finally:
+            await legacy_db.close()
+
+        self.assertEqual(loaded[456]["translation_language"], "ja")
 
     def test_member_or_role_exclusion_requires_premium(self):
         message = SimpleNamespace(

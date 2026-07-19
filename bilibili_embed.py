@@ -9,7 +9,7 @@ import aiohttp
 import discord
 
 from component_emojis import format_component_stats
-from embed_footer import FooterBranding, build_component_footer
+from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
 from timestamp_utils import parse_post_timestamp
 
@@ -92,6 +92,7 @@ def build_bilibili_layout(
                 converted_url=converted_url,
                 timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
+                translated_from=translated_source_name(payload),
             )
         )
     )
@@ -101,8 +102,13 @@ def build_bilibili_layout(
     return view
 
 
-async def _fetch_bilibili_payload(source_url: str) -> Mapping[str, Any]:
+async def _fetch_bilibili_payload(
+    source_url: str,
+    translation_language: Optional[str] = None,
+) -> Mapping[str, Any]:
     api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
+    if translation_language:
+        api_url += f"&lang={quote(translation_language, safe='')}"
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(api_url) as response:
@@ -119,8 +125,13 @@ async def fetch_bilibili_layout(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a Bilibili Components V2 card."""
     return build_bilibili_layout(
-        await _fetch_bilibili_payload(source_url), converted_url, footer_branding, card_preferences
+        await _fetch_bilibili_payload(source_url, translation_language),
+        converted_url,
+        footer_branding,
+        card_preferences,
     )

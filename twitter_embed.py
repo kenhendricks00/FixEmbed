@@ -10,7 +10,7 @@ import aiohttp
 import discord
 
 from component_emojis import application_emoji, format_component_stats
-from embed_footer import FooterBranding, build_component_footer
+from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
 from timestamp_utils import parse_post_timestamp
 
@@ -231,6 +231,7 @@ def build_twitter_layout(
                 converted_url=converted_url,
                 timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
+                translated_from=translated_source_name(payload),
             )
         )
     )

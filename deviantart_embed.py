@@ -18,7 +18,7 @@ from discord.utils import escape_markdown, escape_mentions
 
 from card_preferences import CardPreferences
 from embed_footer import FooterBranding
-from platform_embed import PlatformCardSpec, build_platform_layout
+from platform_embed import PlatformCardSpec, build_platform_layout, fetch_platform_payload
 
 
 DEVIANTART_SPEC = PlatformCardSpec(
@@ -446,9 +446,19 @@ async def fetch_deviantart_layout(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> discord.ui.LayoutView:
+    if translation_language:
+        payload = await fetch_platform_payload(
+            source_url,
+            "deviantart",
+            translation_language,
+        )
+    else:
+        payload = await fetch_deviantart_payload(source_url)
     return build_deviantart_layout(
-        await fetch_deviantart_payload(source_url),
+        payload,
         converted_url,
         footer_branding,
         card_preferences,

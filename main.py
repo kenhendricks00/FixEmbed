@@ -13,7 +13,7 @@ import sqlite3
 import time
 import ast
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from instagram_embed import fetch_instagram_delivery
@@ -37,7 +37,7 @@ from premium_controls import (
     init_premium_controls,
     load_premium_controls,
     record_processing_outcome,
-    resolve_twitter_language,
+    resolve_translation_language,
     save_premium_controls,
     should_skip_automatic,
 )
@@ -718,8 +718,13 @@ async def build_components_v2_link(
 ):
     """Build the same Components V2 card for automatic and command entry points."""
     media_quality = guild_settings.get("media_quality", "balanced")
+    translation_language = resolve_translation_language(
+        item.language,
+        guild_settings,
+    )
+    translated_item = replace(item, language=translation_language)
     automatic_url = build_automatic_url(
-        item,
+        translated_item,
         media_quality,
         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
     )
@@ -732,19 +737,15 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
             layout = instagram_delivery.layout
             files = instagram_delivery.files
         elif item.service == "Twitter":
-            fixed_url = build_fixembed_url(item, media_quality)
-            twitter_language = resolve_twitter_language(
-                item.language,
-                guild_settings,
-                premium=premium,
-            )
+            fixed_url = build_fixembed_url(translated_item, media_quality)
             payload = await fetch_twitter_payload(
                 item.canonical_url,
-                twitter_language,
+                translation_language,
                 item.mode,
             )
             layout = build_twitter_layout(
@@ -759,6 +760,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Threads":
             layout = await fetch_threads_layout(
@@ -766,6 +768,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Pixiv":
             layout = await fetch_pixiv_layout(
@@ -773,6 +776,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Bluesky":
             layout = await fetch_bluesky_layout(
@@ -780,6 +784,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Bilibili":
             layout = await fetch_bilibili_layout(
@@ -787,6 +792,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "YouTube":
             layout = await fetch_youtube_community_layout(
@@ -794,6 +800,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Pinterest":
             layout = await fetch_pinterest_layout(
@@ -801,6 +808,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "TikTok":
             layout = await fetch_tiktok_layout(
@@ -808,6 +816,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Tumblr":
             layout = await fetch_tumblr_layout(
@@ -815,6 +824,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "Twitch":
             layout = await fetch_twitch_layout(
@@ -822,6 +832,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         elif item.service == "DeviantArt":
             layout = await fetch_deviantart_layout(
@@ -829,6 +840,7 @@ async def build_components_v2_link(
                 automatic_url,
                 footer_branding,
                 card_preferences,
+                translation_language=translation_language,
             )
         else:
             raise ValueError("unsupported rich-card service")
@@ -1156,7 +1168,7 @@ class SettingsDropdown(ui.Select):
             discord.SelectOption(label=get_text(lang, "debug"), description=get_text(lang, "debug_desc"), value="Debug", emoji="🐞"),
             discord.SelectOption(label=get_text(lang, "embed_color"), description=get_text(lang, "embed_color_desc"), value="Embed Color", emoji="💎"),
             discord.SelectOption(label="Card Style", description="Customize social cards (Premium)", value="Card Style", emoji="🎛️"),
-            discord.SelectOption(label="X Translation", description="Choose a default language (Premium)", value="X Translation", emoji="🌐"),
+            discord.SelectOption(label="Translation", description="Translate every supported platform", value="Translation", emoji="🌐"),
             discord.SelectOption(label="Exclusions", description="Ignore members or roles (Premium)", value="Exclusions", emoji="🛡️"),
             discord.SelectOption(label="Analytics", description="View private 30-day insights (Premium)", value="Analytics", emoji="📈"),
             discord.SelectOption(
@@ -1180,9 +1192,12 @@ class SettingsDropdown(ui.Select):
             )
             await interaction.response.send_message(view=view, ephemeral=True)
             return
+        if value == "Translation":
+            view = TranslationSettingsView(self.source_interaction, self.settings)
+            await interaction.response.send_message(view=view, ephemeral=True)
+            return
         premium_pages = {
             "Card Style": CardStyleSettingsView,
-            "X Translation": TwitterTranslationSettingsView,
             "Exclusions": ExclusionSettingsView,
         }
         if value in premium_pages:
@@ -1760,9 +1775,9 @@ class CardStyleSettingsView(PremiumControlsPage):
         await interaction.response.edit_message(view=self)
 
 
-class TwitterLanguageSelect(ui.Select):
+class TranslationLanguageSelect(ui.Select):
     def __init__(self, page):
-        current = page.settings.get("twitter_language")
+        current = page.settings.get("translation_language")
         options = [
             discord.SelectOption(
                 label="Original language", value="none", default=current is None
@@ -1777,41 +1792,38 @@ class TwitterLanguageSelect(ui.Select):
             )
             for code, name in LANGUAGE_NAMES.items()
         )
-        super().__init__(placeholder="Choose the default X language...", options=options)
+        super().__init__(placeholder="Choose the default translation language...", options=options)
         self.page = page
 
     async def callback(self, interaction):
-        if not await self.page.confirm_premium(interaction):
-            return
-        self.page.settings["twitter_language"] = (
+        self.page.settings["translation_language"] = (
             None if self.values[0] == "none" else self.values[0]
         )
-        await self.page.save_premium()
+        await self.page.save_translation()
         self.page.render()
         await interaction.response.edit_message(view=self.page)
 
 
-class TwitterTranslationSettingsView(PremiumControlsPage):
-    def __init__(self, interaction, settings, *, premium):
-        super().__init__(interaction, settings, premium=premium)
+class TranslationSettingsView(SettingsPageView):
+    def __init__(self, interaction, settings):
+        super().__init__(interaction, settings)
         self.render()
 
+    async def save_translation(self):
+        await save_premium_controls(
+            client.db, self.interaction.guild.id, self.settings
+        )
+
     def render(self):
-        if not self.premium:
-            self.render_locked(
-                title="Default X Translation",
-                description="Automatically translate X posts unless a link requests another language.",
-            )
-            return
-        current = self.settings.get("twitter_language")
+        current = self.settings.get("translation_language")
         label = LANGUAGE_NAMES.get(current, "Original language")
         self.render_page(
-            title="Default X Translation",
-            description="Explicit translation options in a posted link always take priority.",
+            title="Default Translation",
+            description="Translate posts from every supported platform. Explicit link options take priority.",
             status=f"**Default:** {label}",
-            controls=((TwitterLanguageSelect(self),),),
-            accent_color=discord.Color.gold(),
-            footer="Premium translation",
+            controls=((TranslationLanguageSelect(self),),),
+            accent_color=discord.Color.blurple(),
+            footer="Translation",
         )
 
 

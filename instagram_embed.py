@@ -14,7 +14,7 @@ import aiohttp
 import discord
 
 from component_emojis import format_component_stats
-from embed_footer import FooterBranding, build_component_footer
+from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
 from timestamp_utils import parse_post_datetime, parse_post_timestamp
 
@@ -305,6 +305,7 @@ def build_instagram_layout(
                 converted_url=converted_url,
                 timestamp=parse_post_timestamp(payload.get("timestamp")),
                 branding=footer_branding,
+                translated_from=translated_source_name(payload),
             )
         )
     )
@@ -409,8 +410,13 @@ async def _download_instagram_carousel(
     return tuple(downloads)
 
 
-async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
+async def _fetch_instagram_payload(
+    source_url: str,
+    translation_language: Optional[str] = None,
+) -> Mapping[str, Any]:
     api_url = f"{FIXEMBED_API}?url={quote(source_url, safe='')}"
+    if translation_language:
+        api_url += f"&lang={quote(translation_language, safe='')}"
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(api_url) as response:
@@ -437,9 +443,14 @@ async def _fetch_instagram_payload(source_url: str) -> Mapping[str, Any]:
 async def fetch_instagram_card(
     source_url: str,
     footer_icon_url: Optional[str] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> InstagramCard:
     """Fetch first-party metadata and return an exact Instagram card."""
-    return build_instagram_card(await _fetch_instagram_payload(source_url), footer_icon_url)
+    return build_instagram_card(
+        await _fetch_instagram_payload(source_url, translation_language),
+        footer_icon_url,
+    )
 
 
 async def fetch_instagram_layout(
@@ -447,10 +458,15 @@ async def fetch_instagram_layout(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> discord.ui.LayoutView:
     """Fetch first-party metadata and return a playable Components V2 card."""
     return build_instagram_layout(
-        await _fetch_instagram_payload(source_url), converted_url, footer_branding, card_preferences
+        await _fetch_instagram_payload(source_url, translation_language),
+        converted_url,
+        footer_branding,
+        card_preferences,
     )
 
 
@@ -459,9 +475,11 @@ async def fetch_instagram_delivery(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> InstagramDelivery:
     """Fetch Instagram metadata and prepare a fast Components V2 delivery."""
-    payload = await _fetch_instagram_payload(source_url)
+    payload = await _fetch_instagram_payload(source_url, translation_language)
     video = payload.get("video")
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
     raw_image_urls = payload.get("images")

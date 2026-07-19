@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from discord.utils import escape_markdown
 
@@ -21,6 +22,17 @@ def escape_component_text(value: str) -> str:
     return escape_markdown(value.strip()).replace("@", "@\u200b")
 
 
+def translated_source_name(payload: Mapping[str, Any]) -> Optional[str]:
+    """Return the bounded source-language label attached by the Worker."""
+    translation = payload.get("translation")
+    if not isinstance(translation, Mapping):
+        return None
+    source_name = escape_component_text(
+        str(translation.get("sourceLanguageName") or "")
+    )
+    return source_name[:50] or None
+
+
 def build_component_footer(
     *,
     fixembed_emoji: str,
@@ -30,6 +42,7 @@ def build_component_footer(
     converted_url: Optional[str],
     timestamp: Optional[int],
     branding: Optional[FooterBranding] = None,
+    translated_from: Optional[str] = None,
 ) -> str:
     """Link the two destinations through their existing brand labels."""
     fixembed_label = (
@@ -54,4 +67,9 @@ def build_component_footer(
         parts.append(f"<t:{timestamp}:R>")
     if branding is not None:
         parts.append(f"via {fixembed_emoji} {fixembed_label}")
+    source_language = escape_component_text(translated_from or "")[:50]
+    if source_language:
+        parts.append(f"Translated from {source_language}")
+        if source_url:
+            parts.append(f"[Link]({source_url})")
     return "-# " + "  ·  ".join(parts)

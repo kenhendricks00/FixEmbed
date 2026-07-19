@@ -148,16 +148,28 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("layout = build_twitter_layout(", main_source)
         self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
 
-    def test_premium_card_controls_translation_and_exclusions_are_wired(self):
+    def test_premium_card_controls_free_translation_and_exclusions_are_wired(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
         self.assertIn("class CardStyleSettingsView(PremiumControlsPage)", main_source)
-        self.assertIn("class TwitterTranslationSettingsView(PremiumControlsPage)", main_source)
+        self.assertIn("class TranslationSettingsView(SettingsPageView)", main_source)
         self.assertIn("class ExclusionSettingsView(PremiumControlsPage)", main_source)
         self.assertIn("preferences_from_settings(guild_settings, premium=premium)", main_source)
-        self.assertIn("resolve_twitter_language(", main_source)
+        self.assertIn("resolve_translation_language(", main_source)
+        self.assertIn(
+            'label="Translation", description="Translate every supported platform",',
+            main_source,
+        )
         self.assertIn("should_skip_automatic(message, guild_settings, premium=premium)", main_source)
         self.assertGreaterEqual(main_source.count("card_preferences,"), 9)
+        self.assertIn(
+            "translated_item = replace(item, language=translation_language)",
+            main_source,
+        )
+        self.assertGreaterEqual(
+            main_source.count("translation_language=translation_language"),
+            12,
+        )
 
     def test_footer_branding_settings_option_is_visibly_premium(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
@@ -227,9 +239,9 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload", main_source)
         self.assertIn('elif item.service == "Twitter":', main_source)
         self.assertIn("payload = await fetch_twitter_payload(", main_source)
-        self.assertIn("twitter_language,", main_source)
+        self.assertIn("translation_language,", main_source)
         self.assertIn("item.mode,", main_source)
-        self.assertIn("fixed_url = build_fixembed_url(item, media_quality)", main_source)
+        self.assertIn("fixed_url = build_fixembed_url(translated_item, media_quality)", main_source)
         self.assertIn("component_layouts.append(delivery)", main_source)
         self.assertIn("fallback_content=delivery.fallback_url", main_source)
         self.assertNotIn("if is_animated_gif(payload):", main_source)

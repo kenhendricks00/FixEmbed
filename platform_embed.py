@@ -11,7 +11,7 @@ import discord
 
 from card_preferences import CardPreferences, apply_caption_preferences
 from component_emojis import format_component_stats
-from embed_footer import FooterBranding, build_component_footer
+from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from timestamp_utils import parse_post_timestamp
 
 
@@ -141,6 +141,7 @@ def build_platform_layout(
                     converted_url=converted_url,
                     timestamp=parse_post_timestamp(payload.get("timestamp")),
                     branding=footer_branding,
+                    translated_from=translated_source_name(payload),
                 )
             ),
         )
@@ -158,9 +159,13 @@ def build_platform_layout(
 async def fetch_platform_payload(
     source_url: str,
     expected_platform: str,
+    language: Optional[str] = None,
 ) -> Mapping[str, Any]:
     """Fetch one validated platform payload from FixEmbed's public API."""
-    query = urlencode({"url": source_url, "renderer": "components-v2"})
+    query_params = {"url": source_url, "renderer": "components-v2"}
+    if language:
+        query_params["lang"] = language
+    query = urlencode(query_params)
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(f"{FIXEMBED_API}?{query}") as response:

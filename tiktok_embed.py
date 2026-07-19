@@ -39,9 +39,15 @@ async def fetch_tiktok_layout(
     converted_url: Optional[str] = None,
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
 ) -> discord.ui.LayoutView:
     return build_tiktok_layout(
-        await fetch_platform_payload(source_url, TIKTOK_SPEC.api_name),
+        await fetch_platform_payload(
+            source_url,
+            TIKTOK_SPEC.api_name,
+            translation_language,
+        ),
         converted_url,
         footer_branding,
         card_preferences,
