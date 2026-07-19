@@ -128,9 +128,6 @@ function devanagariLanguage(text: string): { code: string; name: string } | unde
     if (hindiScore >= 2 && hindiScore > marathiScore) {
         return { code: 'hi', name: 'Hindi' };
     }
-    if (marathiScore >= 2 && marathiScore > hindiScore) {
-        return { code: 'mr', name: 'Marathi' };
-    }
     return undefined;
 }
 
@@ -254,6 +251,68 @@ function translatedData(
     };
 }
 
+const DEVANAGARI_PROSE = /[\p{Script=Devanagari}\p{Mark}]+(?:\p{Zs}+[\p{Script=Devanagari}\p{Mark}]+)*/gu;
+const PROTECTED_CONTEXT = /(?:https?:\/\/|www\.)\S+|[#@][\p{L}\p{N}\p{M}_]+/giu;
+
+function protectedContextRanges(text: string): Array<{ start: number; end: number }> {
+    return Array.from(text.matchAll(PROTECTED_CONTEXT)).map((match) => ({
+        start: match.index,
+        end: match.index + match[0].length,
+    }));
+}
+
+async function translatedText(
+    env: Env,
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
+): Promise<string> {
+    const translation = await env.AI!.run(TRANSLATION_MODEL, {
+        text,
+        source_lang: sourceLanguage,
+        target_lang: targetLanguage,
+    }) as { translated_text?: string };
+    const translated = translation.translated_text?.trim();
+    if (!translated || translated === text) throw new Error('Empty translation');
+    return translated;
+}
+
+async function translatePreservingContext(
+    env: Env,
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
+): Promise<string | undefined> {
+    if (sourceLanguage !== 'hi') {
+        return translatedText(env, text, sourceLanguage, targetLanguage);
+    }
+
+    const maskedText = protectedContextRanges(text).reduceRight(
+        (value, range) => (
+            value.slice(0, range.start)
+            + '\0'.repeat(range.end - range.start)
+            + value.slice(range.end)
+        ),
+        text,
+    );
+    const matches = Array.from(maskedText.matchAll(DEVANAGARI_PROSE));
+    if (!matches.length) {
+        return undefined;
+    }
+
+    const replacements = await Promise.all(matches.map((match) => (
+        translatedText(env, match[0], sourceLanguage, targetLanguage)
+    )));
+    let translated = '';
+    let cursor = 0;
+    matches.forEach((match, index) => {
+        translated += text.slice(cursor, match.index);
+        translated += replacements[index];
+        cursor = match.index + match[0].length;
+    });
+    return translated + text.slice(cursor);
+}
+
 export async function applyRequestedTranslation(
     result: HandlerResponse,
     env: Env,
@@ -305,16 +364,20 @@ export async function applyRequestedTranslation(
     if (!jobs.length) return result;
 
     try {
-        const translatedTargets = await Promise.all(jobs.map(async ({ source, target }) => {
-            const translation = await env.AI!.run(TRANSLATION_MODEL, {
-                text: target.text,
-                source_lang: source.code,
-                target_lang: targetLanguage,
-            }) as { translated_text?: string };
-            const text = translation.translated_text?.trim();
-            if (!text || text === target.text) throw new Error('Empty translation');
-            return { target, text };
-        }));
+        const translatedTargets = (await Promise.all(jobs.map(async ({ source, target }) => {
+            const text = await translatePreservingContext(
+                env,
+                target.text,
+                source.code,
+                targetLanguage,
+            );
+            return text ? { target, text } : undefined;
+        }))).filter(
+            (translation): translation is { target: TranslationTarget; text: string } => (
+                translation !== undefined
+            ),
+        );
+        if (!translatedTargets.length) return result;
 
         return {
             ...result,

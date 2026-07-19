@@ -4015,14 +4015,13 @@ const tests: TestCase[] = [
                         source_lang?: string;
                         target_lang?: string;
                     }) => {
-                        assert.equal(input.text, caption);
+                        assert.equal(
+                            input.text,
+                            '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948',
+                        );
                         assert.equal(input.source_lang, 'hi');
                         assert.equal(input.target_lang, 'en');
-                        return {
-                            translated_text: 'I feel like eating \ud83e\udd70\ud83d\ude18 Jyoti Thakur '
-                                + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
-                                + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #',
-                        };
+                        return { translated_text: 'I feel like eating' };
                     },
                 } as unknown as Ai,
             };
@@ -4045,7 +4044,12 @@ const tests: TestCase[] = [
                 } };
 
                 assert.equal(response.status, 200);
-                assert.match(payload.data?.caption || '', /^I feel like eating/);
+                assert.equal(
+                    payload.data?.caption,
+                    'I feel like eating\ud83e\udd70\ud83d\ude18 Jyoti Thakur '
+                        + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
+                        + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #',
+                );
                 assert.equal(payload.data?.description, payload.data?.caption);
                 assert.equal(payload.data?.translation?.sourceLanguage, 'hi');
                 assert.equal(payload.data?.translation?.sourceLanguageName, 'Hindi');
@@ -4087,6 +4091,110 @@ const tests: TestCase[] = [
             assert.equal(result.data?.title, 'r/FixEmbed \u2022 We released a new feature');
             assert.equal(result.data?.description, '');
             assert.equal(result.data?.translation?.sourceLanguageName, 'Japanese');
+        },
+    },
+    {
+        name: 'shared Hindi translation preserves line breaks links hashtags and mentions',
+        run: async () => {
+            const translatedInputs: string[] = [];
+            const caption = '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948\n'
+                + '\u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948 \u2728\n'
+                + '(https://example.com/\u092e\u0947\u0930\u093e) (#food\u092e\u0947\u0930\u093e) '
+                + '[#\u092e\u0947\u0930\u093e_\u0939\u0948] [@user\u092e\u0941\u091d\u0947]\n'
+                + '#food,\u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948\n'
+                + '#\u0939\u093f\u0902\u0926\u0940 \u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948\n'
+                + '\u092e\u0941\u091d\u0947 #\u0939\u093f\u0902\u0926\u0940 \u092a\u0938\u0902\u0926 \u0939\u0948';
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string }) => {
+                        translatedInputs.push(input.text || '');
+                        return {
+                            translated_text: input.text?.startsWith('\u0916\u093e\u0928\u0947')
+                                ? 'I feel like eating'
+                                : input.text === '\u092e\u0941\u091d\u0947'
+                                    ? 'I'
+                                    : input.text === '\u092a\u0938\u0902\u0926 \u0939\u0948'
+                                        ? 'like this'
+                                        : 'I like this',
+                        };
+                    },
+                } as unknown as Ai,
+            };
+
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    data: {
+                        title: 'Hindi caption',
+                        description: caption,
+                        caption,
+                        url: 'https://www.instagram.com/reel/HindiContext/',
+                        siteName: 'FixEmbed \u2022 Instagram',
+                        platform: 'instagram',
+                        sourceLanguage: 'hi',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.deepEqual(translatedInputs, [
+                '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948',
+                '\u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948',
+                '\u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948',
+                '\u092e\u0941\u091d\u0947 \u092f\u0939 \u092a\u0938\u0902\u0926 \u0939\u0948',
+                '\u092e\u0941\u091d\u0947',
+                '\u092a\u0938\u0902\u0926 \u0939\u0948',
+            ]);
+            assert.equal(
+                result.data?.caption,
+                'I feel like eating\nI like this \u2728\n'
+                    + '(https://example.com/\u092e\u0947\u0930\u093e) (#food\u092e\u0947\u0930\u093e) '
+                    + '[#\u092e\u0947\u0930\u093e_\u0939\u0948] [@user\u092e\u0941\u091d\u0947]\n'
+                    + '#food,I like this\n#\u0939\u093f\u0902\u0926\u0940 I like this\n'
+                    + 'I #\u0939\u093f\u0902\u0926\u0940 like this',
+            );
+            assert.equal(result.data?.description, result.data?.caption);
+        },
+    },
+    {
+        name: 'shared Hindi translation leaves protected-only text untouched',
+        run: async () => {
+            let aiCalls = 0;
+            const caption = '(#food\u092f\u0939) [#\u0939\u0948_\u092e\u0941\u091d\u0947] (@user\u092e\u0941\u091d\u0947) '
+                + '[link](https://example.com/\u092e\u0947\u0930\u093e)';
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async () => {
+                        aiCalls += 1;
+                        return { translated_text: 'must not be used' };
+                    },
+                } as unknown as Ai,
+            };
+
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    data: {
+                        title: 'Protected Hindi tokens',
+                        description: caption,
+                        caption,
+                        url: 'https://www.instagram.com/reel/HindiTokens/',
+                        siteName: 'FixEmbed \u2022 Instagram',
+                        platform: 'instagram',
+                        sourceLanguage: 'hi',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.equal(aiCalls, 0);
+            assert.equal(result.data?.caption, caption);
+            assert.equal(result.data?.description, caption);
+            assert.equal(result.data?.translation, undefined);
         },
     },
     {
@@ -4294,6 +4402,7 @@ const tests: TestCase[] = [
             const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
             const entries = new Map<string, Response>();
             const cacheKeys: string[] = [];
+            const cacheNames: string[] = [];
             const pendingWrites: Promise<unknown>[] = [];
             let upstreamRequests = 0;
             const cacheKey = (key: Request | string) => typeof key === 'string' ? key : key.url;
@@ -4305,7 +4414,8 @@ const tests: TestCase[] = [
             Object.defineProperty(globalThis, 'caches', {
                 configurable: true,
                 value: {
-                    async open() {
+                    async open(name: string) {
+                        cacheNames.push(name);
                         return {
                             async match(key: Request | string) {
                                 const response = entries.get(cacheKey(key));
@@ -4369,6 +4479,7 @@ const tests: TestCase[] = [
                 assert.equal(requestsAfterHit, requestsAfterFirst);
                 assert.ok(upstreamRequests > requestsAfterHit + 1);
                 assert.equal(cacheKeys.length, 3);
+                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v3']);
                 assert.equal(
                     Array.from(entries.values()).every((entry) => (
                         entry.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=300'

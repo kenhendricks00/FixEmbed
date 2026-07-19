@@ -4,7 +4,8 @@
 - Made the default translation setting free and applied it to every supported social platform.
 - Matched Embedded-style cards by replacing primary and quoted-post text when translation succeeds and adding `Translated from [language]` to the footer.
 - Preserved X translation fidelity by using the platform-provided Grok translation for primary and quoted posts, including emojis, links, line breaks, and surrounding context.
-- Improved source-language detection for short Hindi and Marathi captions mixed with Latin names and hashtags.
+- Improved source-language detection for short Hindi captions mixed with Latin names and hashtags.
+- Preserved emojis, creator names, hashtags, links, and spacing around translated Hindi prose.
 - Preserved original-language cards whenever language detection or Workers AI translation is unavailable.
 - Migrated existing default X translation preferences automatically.
 
