@@ -1942,116 +1942,100 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'redditHandler prefers direct Reddit image media over blocked crawler thumbnails',
+        name: 'redditHandler prefers direct Reddit image media across source paths',
         run: async () => {
             const originalFetch = globalThis.fetch;
             const directImageUrl = 'https://i.redd.it/f1kl5zwvy7eh1.jpeg';
             const blockedThumbnailUrl = 'https://preview.redd.it/f1kl5zwvy7eh1.jpeg?width=140&height=140&crop=1:1,smart&auto=webp';
-            globalThis.fetch = async (input) => {
-                const url = String(input);
-                if (url.includes('/comments/') && url.includes('.json')) {
-                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
-                }
-                if (url.startsWith('https://old.reddit.com/')) {
-                    return new Response(`
-                        <meta property="og:image" content="${blockedThumbnailUrl.replace(/&/g, '&amp;')}">
-                        <div class="thing link" id="thing_t3_1v0w99k"
-                            data-author="enterpriseF-love"
-                            data-subreddit="soccer"
-                            data-timestamp="1784481360000"
-                            data-url="${directImageUrl}"
-                            data-permalink="/r/soccer/comments/1v0w99k/conmebol_poster_ahead_of_the_world_cup_final_today/"
-                            data-comments-count="676"
-                            data-score="3521"
-                            data-nsfw="false">
-                            <a class="title may-blank outbound" href="${directImageUrl}">CONMEBOL poster ahead of the World Cup final today</a>
-                        </div>
-                    `, {
-                        status: 200,
-                        headers: { 'Content-Type': 'text/html' },
-                    });
-                }
-                if (url === 'https://api.reddit.com/r/soccer/about?raw_json=1') {
-                    return new Response(JSON.stringify({
+            const postPath = '/r/soccer/comments/1v0w99k/conmebol_poster_ahead_of_the_world_cup_final_today/';
+            const jsonPost = [{
+                data: {
+                    children: [{
                         data: {
-                            community_icon: 'https://styles.redditmedia.com/soccer-ball-community-icon.png',
-                        },
-                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-                }
-                if (url.includes('/about.json')) {
-                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
-                }
-                throw new Error(`Unexpected request: ${url}`);
-            };
-
-            try {
-                const response = await redditHandler.handle(
-                    'https://old.reddit.com/r/soccer/comments/1v0w99k/conmebol_poster_ahead_of_the_world_cup_final_today/',
-                    env,
-                );
-
-                assert.equal(response.success, true);
-                assert.equal(response.data?.image, directImageUrl);
-                assert.equal(response.data?.sections, undefined);
-            } finally {
-                globalThis.fetch = originalFetch;
-            }
-        },
-    },
-    {
-        name: 'redditHandler prefers direct Reddit image media in JSON responses',
-        run: async () => {
-            const originalFetch = globalThis.fetch;
-            const directImageUrl = 'https://i.redd.it/f1kl5zwvy7eh1.jpeg';
-            const blockedThumbnailUrl = 'https://preview.redd.it/f1kl5zwvy7eh1.jpeg?width=140&height=140&crop=1:1,smart&auto=webp';
-            globalThis.fetch = async (input) => {
-                const url = String(input);
-                if (url.includes('/comments/') && url.includes('.json')) {
-                    return new Response(JSON.stringify([{
-                        data: {
-                            children: [{
-                                data: {
-                                    title: 'CONMEBOL poster ahead of the World Cup final today',
-                                    author: 'enterpriseF-love',
-                                    subreddit: 'soccer',
-                                    permalink: '/r/soccer/comments/1v0w99k/conmebol_poster_ahead_of_the_world_cup_final_today/',
-                                    url: directImageUrl,
-                                    score: 3521,
-                                    num_comments: 676,
-                                    created_utc: 1784481360,
-                                    preview: {
-                                        images: [{
-                                            source: {
-                                                url: blockedThumbnailUrl.replace(/&/g, '&amp;'),
-                                                width: 140,
-                                                height: 140,
-                                            },
-                                        }],
+                            title: 'CONMEBOL poster ahead of the World Cup final today',
+                            author: 'enterpriseF-love',
+                            subreddit: 'soccer',
+                            permalink: postPath,
+                            url: directImageUrl,
+                            score: 3521,
+                            num_comments: 676,
+                            created_utc: 1784481360,
+                            preview: {
+                                images: [{
+                                    source: {
+                                        url: blockedThumbnailUrl.replace(/&/g, '&amp;'),
+                                        width: 140,
+                                        height: 140,
                                     },
-                                },
-                            }],
+                                }],
+                            },
                         },
-                    }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-                }
-                if (url === 'https://api.reddit.com/r/soccer/about?raw_json=1') {
-                    return new Response(JSON.stringify({
-                        data: {
-                            community_icon: 'https://styles.redditmedia.com/soccer-ball-community-icon.png',
-                        },
-                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-                }
-                throw new Error(`Unexpected request: ${url}`);
-            };
+                    }],
+                },
+            }];
+            const sourcePaths = [
+                {
+                    name: 'crawler',
+                    postUrl: `https://old.reddit.com${postPath}`,
+                    jsonStatus: 403,
+                },
+                {
+                    name: 'JSON',
+                    postUrl: `https://www.reddit.com${postPath}`,
+                    jsonStatus: 200,
+                },
+            ];
 
             try {
-                const response = await redditHandler.handle(
-                    'https://www.reddit.com/r/soccer/comments/1v0w99k/conmebol_poster_ahead_of_the_world_cup_final_today/',
-                    env,
-                );
+                for (const sourcePath of sourcePaths) {
+                    globalThis.fetch = async (input) => {
+                        const url = String(input);
+                        if (url.includes('/comments/') && url.includes('.json')) {
+                            return sourcePath.jsonStatus === 200
+                                ? new Response(JSON.stringify(jsonPost), {
+                                    status: 200,
+                                    headers: { 'Content-Type': 'application/json' },
+                                })
+                                : new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                        }
+                        if (url.startsWith('https://old.reddit.com/')) {
+                            return new Response(`
+                                <meta property="og:image" content="${blockedThumbnailUrl.replace(/&/g, '&amp;')}">
+                                <div class="thing link" id="thing_t3_1v0w99k"
+                                    data-author="enterpriseF-love"
+                                    data-subreddit="soccer"
+                                    data-timestamp="1784481360000"
+                                    data-url="${directImageUrl}"
+                                    data-permalink="${postPath}"
+                                    data-comments-count="676"
+                                    data-score="3521"
+                                    data-nsfw="false">
+                                    <a class="title may-blank outbound" href="${directImageUrl}">CONMEBOL poster ahead of the World Cup final today</a>
+                                </div>
+                            `, {
+                                status: 200,
+                                headers: { 'Content-Type': 'text/html' },
+                            });
+                        }
+                        if (url === 'https://api.reddit.com/r/soccer/about?raw_json=1') {
+                            return new Response(JSON.stringify({
+                                data: {
+                                    community_icon: 'https://styles.redditmedia.com/soccer-ball-community-icon.png',
+                                },
+                            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                        }
+                        if (url.includes('/about.json')) {
+                            return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                        }
+                        throw new Error(`Unexpected request: ${url}`);
+                    };
 
-                assert.equal(response.success, true);
-                assert.equal(response.data?.image, directImageUrl);
-                assert.equal(response.data?.sections, undefined);
+                    const response = await redditHandler.handle(sourcePath.postUrl, env);
+
+                    assert.equal(response.success, true, `${sourcePath.name} recovery should succeed`);
+                    assert.equal(response.data?.image, directImageUrl, `${sourcePath.name} recovery should use direct media`);
+                    assert.equal(response.data?.sections, undefined, `${sourcePath.name} recovery should not add an article card`);
+                }
             } finally {
                 globalThis.fetch = originalFetch;
             }
