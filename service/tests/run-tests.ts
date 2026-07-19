@@ -1942,6 +1942,122 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler recovers current link-post metadata and the article preview image',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            const articleUrl = 'https://www.bbc.com/sport/football/articles/c24m30v0gy9o';
+            const articleImage = 'https://ichef.bbci.co.uk/ace/branded_sport/1200/article.jpg';
+            globalThis.fetch = async (input, init) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/comments/') && url.includes('.json')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                if (url.startsWith('https://embed.reddit.com/')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                if (url.startsWith('https://old.reddit.com/')) {
+                    assert.match(new Headers(init?.headers).get('User-Agent') || '', /Discordbot/);
+                    return new Response(`
+                        <meta property="og:image" content="https://external-preview.redd.it/article.jpeg?width=140&amp;height=78">
+                        <img id="header-img" src="//a.thumbs.redditmedia.com/soccer-icon.jpg" alt="soccer">
+                        <div class="thing link" id="thing_t3_1v0mvcg"
+                            data-author="Commonmispelingbot"
+                            data-subreddit="soccer"
+                            data-timestamp="1784456384317"
+                            data-url="${articleUrl}"
+                            data-permalink="/r/soccer/comments/1v0mvcg/world_cup_2026_hydration_breaks_not_popular_and/"
+                            data-comments-count="318"
+                            data-score="3337"
+                            data-nsfw="false">
+                            <a class="title may-blank outbound" href="${articleUrl}">World Cup 2026: Hydration breaks not popular and Fifa will review, says Arsene Wenger</a>
+                        </div>
+                    `, {
+                        status: 200,
+                        headers: { 'Content-Type': 'text/html' },
+                    });
+                }
+                if (url === articleUrl) {
+                    assert.equal(init?.redirect, 'manual');
+                    return new Response(
+                        `<meta data-rh="true" property="og:image" content="${articleImage}"/>`,
+                        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+                    );
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/soccer/comments/1v0mvcg/world_cup_2026_hydration_breaks_not_popular_and/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(
+                    response.data?.title,
+                    'r/soccer \u2022 World Cup 2026: Hydration breaks not popular and Fifa will review, says Arsene Wenger',
+                );
+                assert.equal(response.data?.authorName, 'u/Commonmispelingbot');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://a.thumbs.redditmedia.com/soccer-icon.jpg',
+                );
+                assert.equal(response.data?.image, articleImage);
+                assert.match(response.data?.stats || '', /3\.3K/);
+                assert.match(response.data?.stats || '', /318/);
+                assert.equal(response.data?.timestamp, '2026-07-19T10:19:44.317Z');
+                assert.equal(response.data?.sections?.[0]?.kind, 'link-card');
+                assert.equal(response.data?.sections?.[0]?.url, articleUrl);
+                assert.equal(requested.includes(articleUrl), true);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler does not fetch article previews from private destinations',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/comments/') && url.includes('.json')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                if (url.startsWith('https://embed.reddit.com/')) {
+                    return new Response(`
+                        <shreddit-screenview-data data="{&quot;post&quot;:{&quot;url&quot;:&quot;https://127.0.0.1/private&quot;,&quot;created_timestamp&quot;:1784456384317,&quot;type&quot;:&quot;link&quot;}}"></shreddit-screenview-data>
+                        <a href="https://www.reddit.com/user/example/">author</a>
+                        <h1>Private destination</h1>
+                    `, { status: 200 });
+                }
+                if (url.includes('/about.json') || url.includes('/oembed?')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                }
+                throw new Error(`Unsafe article preview request: ${url}`);
+            };
+
+            try {
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/example/comments/unsafe/private_destination/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(
+                    requested.some((url) => url.startsWith('https://127.0.0.1/')),
+                    false,
+                );
+                assert.equal(response.data?.image, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'bilibiliHandler recovers API rejection from official mobile page state',
         run: async () => {
             const originalFetch = globalThis.fetch;
