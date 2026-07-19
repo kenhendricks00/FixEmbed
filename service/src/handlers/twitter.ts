@@ -14,7 +14,7 @@ import type {
 } from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
-import { languageName } from '../utils/translation.ts';
+import { languageName, normalizeLanguage } from '../utils/translation.ts';
 import {
     fetchTwitterGraphQL,
     normalizeTwitterPoll,
@@ -82,8 +82,7 @@ interface FxTwitterTweet {
 }
 
 function requestedTranslationLanguage(options: HandlerOptions): string | undefined {
-    const language = options.language?.trim().toLowerCase();
-    return language && /^[a-z]{2}$/.test(language) ? language : undefined;
+    return normalizeLanguage(options.language);
 }
 
 async function fetchFxTwitterTweet(
@@ -106,7 +105,8 @@ async function fetchFxTwitterTweet(
         );
         if (!response.ok) return undefined;
         const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
-        return body.code === 200 && body.tweet ? body.tweet : undefined;
+        const tweet = body.code === 200 ? body.tweet : undefined;
+        return tweet?.id === tweetId ? tweet : undefined;
     } catch {
         return undefined;
     }
@@ -535,9 +535,11 @@ export const twitterHandler: PlatformHandler = {
             const primaryTranslation = requestedLanguage
                 ? fxTranslation(translatedTweet, requestedLanguage)
                 : undefined;
-            const quoteIdsMatch = !translatedTweet?.quote?.id
-                || !tweet.quote?.id_str
-                || translatedTweet.quote.id === tweet.quote.id_str;
+            const quoteIdsMatch = Boolean(
+                translatedTweet?.quote?.id
+                && tweet.quote?.id_str
+                && translatedTweet.quote.id === tweet.quote.id_str,
+            );
             const quoteTranslation = requestedLanguage && quoteIdsMatch
                 ? fxTranslation(translatedTweet?.quote, requestedLanguage)
                 : undefined;

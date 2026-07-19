@@ -3477,6 +3477,91 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler rejects mismatched or unbound FxTwitter translation identities',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const scenarios = [
+                {
+                    translatedTweet: {
+                        id: '9999999999',
+                        translation: {
+                            text: 'Wrong primary translation',
+                            source_lang: 'ja',
+                            target_lang: 'en',
+                        },
+                        quote: {
+                            id: '456',
+                            translation: {
+                                text: 'Wrong quote translation',
+                                source_lang: 'ja',
+                                target_lang: 'en',
+                            },
+                        },
+                    },
+                },
+                {
+                    translatedTweet: {
+                        id: '1234567890',
+                        quote: {
+                            translation: {
+                                text: 'Unbound quote translation',
+                                source_lang: 'ja',
+                                target_lang: 'en',
+                            },
+                        },
+                    },
+                },
+            ];
+
+            try {
+                for (const scenario of scenarios) {
+                    globalThis.fetch = async (input) => {
+                        if (String(input).startsWith('https://api.fxtwitter.com/')) {
+                            return Response.json({ code: 200, tweet: scenario.translatedTweet });
+                        }
+                        return Response.json({
+                            __typename: 'Tweet',
+                            id_str: '1234567890',
+                            text: '\u5143\u306e\u6295\u7a3f',
+                            lang: 'ja',
+                            user: {
+                                name: 'Example',
+                                screen_name: 'example',
+                                profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
+                            },
+                            quote: {
+                                id_str: '456',
+                                text: '\u5143\u306e\u5f15\u7528\u6295\u7a3f',
+                                user: {
+                                    name: 'Quoted Author',
+                                    screen_name: 'quoted',
+                                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                                },
+                                mediaDetails: [],
+                            },
+                            created_at: '2026-07-12T00:00:00.000Z',
+                        });
+                    };
+
+                    const response = await twitterHandler.handle(
+                        'https://x.com/example/status/1234567890',
+                        env,
+                        { language: 'en' },
+                    );
+                    const quote = response.data?.sections?.find(
+                        (section) => section.kind === 'quote',
+                    );
+
+                    assert.equal(response.data?.description, '\u5143\u306e\u6295\u7a3f');
+                    assert.equal(quote?.body, '\u5143\u306e\u5f15\u7528\u6295\u7a3f');
+                    assert.equal(response.data?.translation, undefined);
+                }
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler renders GraphQL polls quotes notes articles and Community Notes',
         run: async () => {
             const originalFetch = globalThis.fetch;

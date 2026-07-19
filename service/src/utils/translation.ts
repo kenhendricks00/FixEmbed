@@ -75,7 +75,7 @@ export function languageName(language: string): string {
         : 'Unknown';
 }
 
-function normalizeLanguage(value: unknown): string | undefined {
+export function normalizeLanguage(value: unknown): string | undefined {
     const language = String(value || '').trim().toLowerCase();
     return /^[a-z]{2}$/.test(language) ? language : undefined;
 }
