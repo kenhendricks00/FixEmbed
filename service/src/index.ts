@@ -87,6 +87,7 @@ interface ActivityEmbedData {
     ts?: string;
     au?: string;
     sn?: string;
+    l?: string;
 }
 
 function decodeActivitySource(encodedData: string): ActivityEmbedData {
@@ -523,9 +524,36 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         return c.json({ error: 'Invalid activity status token' }, 400);
     }
     if ((embedData.src || embedData.i) && !embedData.u) {
-        const sourceUrl = embedData.src
+        let sourceUrl = embedData.src
             || 'https://x.com/' + encodeURIComponent(author) + '/status/' + embedData.i;
-        const result = await findHandler(sourceUrl)?.handle(sourceUrl, c.env);
+        let translationLanguage = /^[a-z]{2}$/.test(embedData.l || '')
+            ? embedData.l
+            : undefined;
+        if (embedData.src) {
+            try {
+                const parsedSource = new URL(sourceUrl);
+                const requestedLanguage = parsedSource.searchParams.get('fixembed_lang');
+                if (/^[a-z]{2}$/.test(requestedLanguage || '')) {
+                    translationLanguage = requestedLanguage || undefined;
+                }
+                parsedSource.searchParams.delete('fixembed_lang');
+                sourceUrl = parsedSource.toString();
+            } catch {
+                return c.json({ error: 'Invalid activity source URL' }, 400);
+            }
+        }
+        const handlerResult = await findHandler(sourceUrl)?.handle(
+            sourceUrl,
+            c.env,
+            { language: translationLanguage },
+        );
+        const result = handlerResult
+            ? await applyRequestedTranslation(
+                handlerResult,
+                c.env,
+                { language: translationLanguage },
+            )
+            : undefined;
         if (!result?.success || !result.data) {
             return c.json({ error: result?.error || 'Unable to rebuild activity status' }, 502);
         }

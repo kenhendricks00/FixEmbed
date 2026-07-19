@@ -218,17 +218,35 @@ async function fetchFxTwitterFallback(
         const translationPath = language && /^[a-z]{2}$/.test(language)
             ? `/${language}`
             : '';
-        const response = await fetchWithTimeout(
-            `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}${translationPath}`,
-            { headers: { 'Accept': 'application/json', 'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)' } },
-            5000,
-        );
-        if (!response.ok) return fallbackResponse(username, tweetId, firstPartyError);
+        const baseUrl = `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}`;
+        const requestPayload = async (path: string) => {
+            try {
+                const response = await fetchWithTimeout(
+                    `${baseUrl}${path}`,
+                    { headers: { 'Accept': 'application/json', 'User-Agent': 'FixEmbed/1.4 (+https://fixembed.app)' } },
+                    5000,
+                );
+                if (!response.ok) return undefined;
+                const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
+                const author = body.tweet?.author;
+                return body.code === 200
+                    && body.tweet
+                    && author?.screen_name
+                    && author.name
+                    && author.avatar_url
+                    ? body
+                    : undefined;
+            } catch {
+                return undefined;
+            }
+        };
+        const body = await requestPayload(translationPath)
+            || (translationPath ? await requestPayload('') : undefined);
+        if (!body) return fallbackResponse(username, tweetId, firstPartyError);
 
-        const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
         const tweet = body.tweet;
         const author = tweet?.author;
-        if (body.code !== 200 || !tweet || !author?.screen_name || !author.name || !author.avatar_url) {
+        if (!tweet || !author?.screen_name || !author.name || !author.avatar_url) {
             return fallbackResponse(username, tweetId, firstPartyError);
         }
 

@@ -162,13 +162,14 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
         )
         self.assertIn("should_skip_automatic(message, guild_settings, premium=premium)", main_source)
         self.assertGreaterEqual(main_source.count("card_preferences,"), 9)
-        self.assertIn(
-            "translated_item = replace(item, language=translation_language)",
-            main_source,
-        )
+        self.assertIn("def with_translation_language(item, guild_settings):", main_source)
         self.assertGreaterEqual(
             main_source.count("translation_language=translation_language"),
             12,
+        )
+        self.assertGreaterEqual(
+            main_source.count("with_translation_language(item, guild_settings)"),
+            3,
         )
 
     def test_footer_branding_settings_option_is_visibly_premium(self):

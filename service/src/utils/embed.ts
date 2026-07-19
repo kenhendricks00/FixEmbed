@@ -246,11 +246,20 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
 
     if (supportsDiscordActivityCard) {
         const twitterStatusId = embed.url.match(/\/status\/(\d+)/)?.[1];
-        const activitySourceUrl = embed.platform === 'instagram'
+        let activitySourceUrl = embed.platform === 'instagram'
             ? `${embed.url}${embed.url.includes('?') ? '&' : '?'}fixembed_activity=${INSTAGRAM_ACTIVITY_REVISION}`
             : embed.url;
+        const translationLanguage = embed.translation?.targetLanguage;
+        if (translationLanguage && /^[a-z]{2}$/.test(translationLanguage)) {
+            const parsedSourceUrl = new URL(activitySourceUrl);
+            parsedSourceUrl.searchParams.set('fixembed_lang', translationLanguage);
+            activitySourceUrl = parsedSourceUrl.toString();
+        }
         const encodedActivity = embed.platform === 'twitter' && twitterStatusId
-            ? encodeSnowcode({ i: twitterStatusId })
+            ? encodeSnowcode({
+                i: twitterStatusId,
+                ...(translationLanguage ? { l: translationLanguage } : {}),
+            })
             : encodeActivitySource(activitySourceUrl);
         const activityUrl = `https://fixembed.app/users/${encodeURIComponent(activityActorSlug(embed))}/statuses/${encodedActivity}`;
         html += "  <link href='" + activityUrl + "' rel='alternate' type='application/activity+json'>\n";

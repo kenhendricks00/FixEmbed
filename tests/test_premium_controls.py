@@ -108,10 +108,18 @@ class PremiumControlsTests(unittest.IsolatedAsyncioTestCase):
         try:
             await init_premium_controls(legacy_db)
             loaded = await load_premium_controls(legacy_db)
+            await save_premium_controls(
+                legacy_db,
+                456,
+                {**loaded[456], "translation_language": None},
+            )
+            await init_premium_controls(legacy_db)
+            reloaded = await load_premium_controls(legacy_db)
         finally:
             await legacy_db.close()
 
         self.assertEqual(loaded[456]["translation_language"], "ja")
+        self.assertIsNone(reloaded[456]["translation_language"])
 
     def test_member_or_role_exclusion_requires_premium(self):
         message = SimpleNamespace(

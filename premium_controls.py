@@ -77,12 +77,12 @@ async def init_premium_controls(db) -> None:
             "ALTER TABLE guild_premium_controls "
             "ADD COLUMN translation_language TEXT DEFAULT NULL"
         )
-    if "twitter_language" in columns:
-        await db.execute(
-            "UPDATE guild_premium_controls "
-            "SET translation_language = COALESCE("
-            "translation_language, twitter_language)"
-        )
+        if "twitter_language" in columns:
+            await db.execute(
+                "UPDATE guild_premium_controls "
+                "SET translation_language = twitter_language "
+                "WHERE translation_language IS NULL"
+            )
     await db.execute(
         """CREATE TABLE IF NOT EXISTS guild_daily_analytics (
             guild_id INTEGER NOT NULL,

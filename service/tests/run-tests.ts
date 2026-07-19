@@ -42,6 +42,7 @@ import {
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
+import { applyRequestedTranslation } from '../src/utils/translation.ts';
 import {
     cleanUrl,
     createTimeoutBudget,
@@ -3769,6 +3770,40 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'shared translation replaces a title-only Reddit post without losing its subreddit',
+        run: async () => {
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string }) => {
+                        assert.equal(input.text, '\u65b0\u3057\u3044\u6a5f\u80fd\u3092\u516c\u958b\u3057\u307e\u3057\u305f');
+                        return { translated_text: 'We released a new feature' };
+                    },
+                } as unknown as Ai,
+            };
+
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    source: 'first-party',
+                    data: {
+                        title: 'r/FixEmbed \u2022 \u65b0\u3057\u3044\u6a5f\u80fd\u3092\u516c\u958b\u3057\u307e\u3057\u305f',
+                        description: '',
+                        url: 'https://reddit.com/r/FixEmbed/comments/title_only/post/',
+                        siteName: 'FixEmbed \u2022 Reddit',
+                        platform: 'reddit',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.equal(result.data?.title, 'r/FixEmbed \u2022 We released a new feature');
+            assert.equal(result.data?.description, '');
+            assert.equal(result.data?.translation?.sourceLanguageName, 'Japanese');
+        },
+    },
+    {
         name: '/api/embed preserves the original card when translation is unavailable',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4546,6 +4581,77 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: '/embed preserves translation when Discord rebuilds the Activity card',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('resolveHandle')) {
+                    return Response.json({ did: 'did:plc:translated' });
+                }
+                if (url.includes('getPostThread')) {
+                    return Response.json({
+                        thread: {
+                            post: {
+                                author: {
+                                    did: 'did:plc:translated',
+                                    handle: 'translated.test',
+                                    avatar: 'https://cdn.bsky.app/translated-avatar.jpg',
+                                },
+                                record: {
+                                    text: '\u65b0\u3057\u3044\u6a5f\u80fd\u3092\u516c\u958b\u3057\u307e\u3057\u305f',
+                                    createdAt: '2026-07-19T12:00:00.000Z',
+                                },
+                                likeCount: 3,
+                            },
+                        },
+                    });
+                }
+                throw new Error('Unexpected request: ' + url);
+            };
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: {
+                        text?: string;
+                        source_lang?: string;
+                        target_lang?: string;
+                    }) => {
+                        assert.equal(input.text, '\u65b0\u3057\u3044\u6a5f\u80fd\u3092\u516c\u958b\u3057\u307e\u3057\u305f');
+                        assert.equal(input.source_lang, 'ja');
+                        assert.equal(input.target_lang, 'en');
+                        return { translated_text: 'We released a new feature' };
+                    },
+                } as unknown as Ai,
+            };
+
+            try {
+                const sourceUrl = 'https://bsky.app/profile/translated.test/post/abc123';
+                const embedResponse = await app.request(
+                    `/embed?url=${encodeURIComponent(sourceUrl)}&lang=en`,
+                    { headers: { 'User-Agent': 'Discordbot/2.0' } },
+                    translationEnv,
+                );
+                const html = await embedResponse.text();
+                const encoded = html.match(/\/users\/translated_test\/statuses\/(\d+)/)?.[1];
+                assert.ok(encoded);
+
+                const activityResponse = await app.request(
+                    '/api/v1/statuses/' + encoded,
+                    {},
+                    translationEnv,
+                );
+                const activity = await activityResponse.json() as any;
+
+                assert.equal(activityResponse.status, 200);
+                assert.match(activity.content, /We released a new feature/);
+                assert.doesNotMatch(activity.content, /\u65b0\u3057\u3044\u6a5f\u80fd/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4708,6 +4814,53 @@ const tests: TestCase[] = [
                 stale: false,
             });
             assert.equal(refreshes, 1);
+        },
+    },
+    {
+        name: 'twitterHandler preserves the original FxTwitter card when translation recovery fails',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    fxRequests.push(url);
+                    if (url.endsWith('/en')) {
+                        return new Response('translation unavailable', { status: 503 });
+                    }
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '1234567890',
+                            text: 'Original fallback post',
+                            author: {
+                                name: 'Fallback Author',
+                                screen_name: 'fallback',
+                                avatar_url: 'https://pbs.twimg.com/profile_images/fallback_normal.jpg',
+                            },
+                        },
+                    });
+                }
+                return new Response('upstream unavailable', { status: 503 });
+            };
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/fallback/status/1234567890',
+                    env,
+                    { language: 'en' },
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.description, 'Original fallback post');
+                assert.equal(response.data?.translation, undefined);
+                assert.deepEqual(fxRequests, [
+                    'https://api.fxtwitter.com/fallback/status/1234567890/en',
+                    'https://api.fxtwitter.com/fallback/status/1234567890',
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {

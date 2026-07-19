@@ -91,19 +91,58 @@ function sourceLanguage(data: EmbedData, text: string): { code: string; name: st
     return LANGUAGE_CODES[franc(text, { minLength: 3 })];
 }
 
-function translatableText(data: EmbedData): string {
-    return String(data.caption || data.description || '').trim();
+type TranslationTarget = {
+    field: 'caption' | 'description' | 'title';
+    text: string;
+    prefix?: string;
+};
+
+function translatableTarget(data: EmbedData): TranslationTarget | undefined {
+    const caption = String(data.caption || '').trim();
+    if (caption) return { field: 'caption', text: caption };
+
+    const description = String(data.description || '').trim();
+    if (description) return { field: 'description', text: description };
+
+    const title = String(data.title || '').trim();
+    if (!title) return undefined;
+    if (data.platform === 'reddit') {
+        const match = title.match(/^(r\/[^•]+ • )(.*)$/);
+        if (match?.[2]?.trim()) {
+            return {
+                field: 'title',
+                prefix: match[1],
+                text: match[2].trim(),
+            };
+        }
+    }
+    return { field: 'title', text: title };
 }
 
 function translatedData(
     data: EmbedData,
     translatedText: string,
     metadata: TranslationMetadata,
+    target: TranslationTarget,
 ): EmbedData {
+    if (target.field === 'title') {
+        return {
+            ...data,
+            title: `${target.prefix || ''}${translatedText}`,
+            translation: metadata,
+        };
+    }
+    if (target.field === 'description') {
+        return {
+            ...data,
+            description: translatedText,
+            translation: metadata,
+        };
+    }
     return {
         ...data,
         description: translatedText,
-        ...(data.caption ? { caption: translatedText } : {}),
+        caption: translatedText,
         translation: metadata,
     };
 }
@@ -119,20 +158,20 @@ export async function applyRequestedTranslation(
         return result;
     }
 
-    const originalText = translatableText(data);
-    if (!originalText) return result;
+    const target = translatableTarget(data);
+    if (!target) return result;
 
-    const source = sourceLanguage(data, originalText);
+    const source = sourceLanguage(data, target.text);
     if (!source || source.code === targetLanguage) return result;
 
     try {
         const translation = await env.AI.run(TRANSLATION_MODEL, {
-            text: originalText,
+            text: target.text,
             source_lang: source.code,
             target_lang: targetLanguage,
         }) as { translated_text?: string };
         const translatedText = translation.translated_text?.trim();
-        if (!translatedText || translatedText === originalText) return result;
+        if (!translatedText || translatedText === target.text) return result;
 
         return {
             ...result,
@@ -141,7 +180,7 @@ export async function applyRequestedTranslation(
                 sourceLanguageName: source.name,
                 targetLanguage,
                 originalUrl: data.url,
-            }),
+            }, target),
         };
     } catch (error) {
         console.error('post_translation_failed', {

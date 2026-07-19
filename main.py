@@ -718,11 +718,8 @@ async def build_components_v2_link(
 ):
     """Build the same Components V2 card for automatic and command entry points."""
     media_quality = guild_settings.get("media_quality", "balanced")
-    translation_language = resolve_translation_language(
-        item.language,
-        guild_settings,
-    )
-    translated_item = replace(item, language=translation_language)
+    translated_item = with_translation_language(item, guild_settings)
+    translation_language = translated_item.language
     automatic_url = build_automatic_url(
         translated_item,
         media_quality,
@@ -851,6 +848,14 @@ async def build_components_v2_link(
     )
 
 
+def with_translation_language(item, guild_settings):
+    """Apply an explicit or guild-default translation to every delivery path."""
+    return replace(
+        item,
+        language=resolve_translation_language(item.language, guild_settings),
+    )
+
+
 async def send_components_v2_links(interaction, links):
     """Respond to a user command with modern cards and safe URL fallbacks."""
     guild_id = interaction.guild.id if interaction.guild else None
@@ -870,8 +875,9 @@ async def send_components_v2_links(interaction, links):
 
     await interaction.response.defer()
     for item in links:
+        translated_item = with_translation_language(item, guild_settings)
         fallback_url = build_automatic_url(
-            item,
+            translated_item,
             guild_settings.get("media_quality", "balanced"),
             os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
         )
@@ -2212,8 +2218,12 @@ async def on_message(message):
 
                 if service_enabled and not recently_processed:
                     rich_card_built = False
-                    automatic_url = build_automatic_url(
+                    translated_item = with_translation_language(
                         item,
+                        guild_settings,
+                    )
+                    automatic_url = build_automatic_url(
+                        translated_item,
                         media_quality,
                         os.getenv("AUTO_TWITTER_PROVIDER", "fixembed"),
                     )
