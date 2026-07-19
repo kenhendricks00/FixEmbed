@@ -14,6 +14,7 @@ import type {
 } from '../types.ts';
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
+import { languageName } from '../utils/translation.ts';
 import {
     fetchTwitterGraphQL,
     normalizeTwitterPoll,
@@ -236,9 +237,18 @@ async function fetchFxTwitterFallback(
         const galleryMode = options.mode === 'gallery';
         const originalText = truncateText(tweet.text?.trim() || '', 3000);
         const translatedText = tweet.translation?.text?.trim();
-        const translatedLanguage = (tweet.translation?.target_lang || language || '').toUpperCase();
+        const sourceLanguage = tweet.translation?.source_lang?.toLowerCase();
+        const targetLanguage = (tweet.translation?.target_lang || language)?.toLowerCase();
+        const translation = translatedText && sourceLanguage && targetLanguage
+            ? {
+                sourceLanguage,
+                sourceLanguageName: languageName(sourceLanguage),
+                targetLanguage,
+                originalUrl: canonicalUrl,
+            }
+            : undefined;
         const description = translatedText
-            ? truncateText(`${originalText}\n\n🌐 Translation (${translatedLanguage}): ${translatedText}`, 3000)
+            ? truncateText(translatedText, 3000)
             : originalText;
         const sections = [
             fxTwitterPollSection(tweet.poll),
@@ -274,6 +284,8 @@ async function fetchFxTwitterFallback(
                 video,
                 color: platformColors.twitter,
                 platform: 'twitter',
+                sourceLanguage,
+                translation,
                 timestamp: tweet.created_at,
                 stats: galleryMode ? undefined : formatStats({
                     comments: Number(tweet.replies) || undefined,
@@ -359,35 +371,10 @@ export const twitterHandler: PlatformHandler = {
             }
 
             const handle = tweet.user.screen_name;
-            let description = truncateText(
+            const description = truncateText(
                 tweet.text.replace(/https?:\/\/t\.co\/\w+/g, '').trim(),
                 3000,
             );
-            const targetLanguage = options.language?.toLowerCase();
-            if (
-                env.AI
-                && tweet.lang
-                && targetLanguage
-                && /^[a-z]{2}$/.test(targetLanguage)
-                && tweet.lang.toLowerCase() !== targetLanguage
-                && description
-            ) {
-                try {
-                    const translation = await env.AI.run('@cf/meta/m2m100-1.2b', {
-                        text: description,
-                        source_lang: tweet.lang.toLowerCase(),
-                        target_lang: targetLanguage,
-                    }) as { translated_text?: string };
-                    if (translation.translated_text?.trim()) {
-                        description = truncateText(
-                            `${description}\n\n🌐 Translation (${targetLanguage.toUpperCase()}): ${translation.translated_text.trim()}`,
-                            3000,
-                        );
-                    }
-                } catch (error) {
-                    console.error('Twitter translation failed:', error);
-                }
-            }
             const media = tweet.mediaDetails || tweet.extended_entities?.media || tweet.entities?.media || [];
             const photos = media
                 .filter((item) => item.type === 'photo')
@@ -513,6 +500,7 @@ export const twitterHandler: PlatformHandler = {
                     video,
                     color: platformColors.twitter,
                     platform: 'twitter',
+                    sourceLanguage: tweet.lang?.toLowerCase(),
                     timestamp: tweet.created_at,
                     stats: options.mode === 'gallery' ? undefined : formatStats({
                         comments: tweet.conversation_count,

@@ -3296,7 +3296,7 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: 'twitterHandler appends an explicitly requested first-party translation',
+        name: 'twitterHandler exposes source language for shared translation',
         run: async () => {
             const originalFetch = globalThis.fetch;
             globalThis.fetch = async () => new Response(JSON.stringify({
@@ -3311,10 +3311,12 @@ const tests: TestCase[] = [
                 },
                 created_at: '2026-07-12T00:00:00.000Z',
             }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            let aiCalls = 0;
             const translationEnv: Env = {
                 ...env,
                 AI: {
                     run: async (model: string, input: unknown) => {
+                        aiCalls += 1;
                         assert.equal(model, '@cf/meta/m2m100-1.2b');
                         assert.deepEqual(input, {
                             text: 'こんにちは世界',
@@ -3333,7 +3335,9 @@ const tests: TestCase[] = [
                     { language: 'en' },
                 );
 
-                assert.equal(response.data?.description, 'こんにちは世界\n\n🌐 Translation (EN): Hello world');
+                assert.equal(response.data?.description, 'こんにちは世界');
+                assert.equal(response.data?.sourceLanguage, 'ja');
+                assert.equal(aiCalls, 0);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -3690,6 +3694,124 @@ const tests: TestCase[] = [
                     'https://pbs.twimg.com/media/gallery-one.jpg',
                     'https://pbs.twimg.com/media/gallery-two.jpg',
                 ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: '/api/embed translates non-X post text with Embedded-style source metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify([{
+                data: { children: [{ data: {
+                    title: 'FixEmbed のお知らせ',
+                    selftext: 'たくさんの返信をありがとうございます。新しい機能を公開しました。',
+                    author: 'translation_author',
+                    subreddit: 'FixEmbed',
+                    permalink: '/r/FixEmbed/comments/translated/post/',
+                    url: 'https://www.reddit.com/r/FixEmbed/comments/translated/post/',
+                    created_utc: 1783900800,
+                    score: 42,
+                    num_comments: 5,
+                } }] },
+            }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (model: string, input: {
+                        text?: string;
+                        source_lang?: string;
+                        target_lang?: string;
+                    }) => {
+                        assert.equal(model, '@cf/meta/m2m100-1.2b');
+                        assert.equal(input.text, 'たくさんの返信をありがとうございます。新しい機能を公開しました。');
+                        assert.equal(input.source_lang, 'ja');
+                        assert.equal(input.target_lang, 'en');
+                        return {
+                            translated_text: 'Thank you for the many replies. We released a new feature.',
+                        };
+                    },
+                } as unknown as Ai,
+            };
+
+            try {
+                const sourceUrl = 'https://www.reddit.com/r/FixEmbed/comments/translated/post/';
+                const response = await app.request(
+                    `/api/embed?url=${encodeURIComponent(sourceUrl)}&lang=en`,
+                    {},
+                    translationEnv,
+                );
+                const payload = await response.json() as { data?: {
+                    description?: string;
+                    translation?: {
+                        sourceLanguage?: string;
+                        sourceLanguageName?: string;
+                        targetLanguage?: string;
+                        originalUrl?: string;
+                    };
+                } };
+
+                assert.equal(response.status, 200);
+                assert.equal(
+                    payload.data?.description,
+                    'Thank you for the many replies. We released a new feature.',
+                );
+                assert.deepEqual(payload.data?.translation, {
+                    sourceLanguage: 'ja',
+                    sourceLanguageName: 'Japanese',
+                    targetLanguage: 'en',
+                    originalUrl: 'https://reddit.com/r/FixEmbed/comments/translated/post/',
+                });
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: '/api/embed preserves the original card when translation is unavailable',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async () => new Response(JSON.stringify([{
+                data: { children: [{ data: {
+                    title: 'Translation fallback',
+                    selftext: 'たくさんの返信をありがとうございます。新しい機能を公開しました。',
+                    author: 'fallback_author',
+                    subreddit: 'FixEmbed',
+                    permalink: '/r/FixEmbed/comments/fallback/post/',
+                    url: 'https://www.reddit.com/r/FixEmbed/comments/fallback/post/',
+                    created_utc: 1783900800,
+                    score: 1,
+                    num_comments: 0,
+                } }] },
+            }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            const unavailableEnv: Env = {
+                ...env,
+                AI: {
+                    run: async () => {
+                        throw new Error('Workers AI unavailable');
+                    },
+                } as unknown as Ai,
+            };
+
+            try {
+                const sourceUrl = 'https://www.reddit.com/r/FixEmbed/comments/fallback/post/';
+                const response = await app.request(
+                    `/api/embed?url=${encodeURIComponent(sourceUrl)}&lang=en`,
+                    {},
+                    unavailableEnv,
+                );
+                const payload = await response.json() as { data?: {
+                    description?: string;
+                    translation?: unknown;
+                } };
+
+                assert.equal(response.status, 200);
+                assert.equal(
+                    payload.data?.description,
+                    'たくさんの返信をありがとうございます。新しい機能を公開しました。',
+                );
+                assert.equal(payload.data?.translation, undefined);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -4403,7 +4525,13 @@ const tests: TestCase[] = [
                     body.data.authorAvatar,
                     'https://pbs.twimg.com/profile_images/avatar.jpg',
                 );
-                assert.equal(body.data.description, 'Fallback post text\n\n🌐 Translation (ES): Texto traducido');
+                assert.equal(body.data.description, 'Texto traducido');
+                assert.deepEqual(body.data.translation, {
+                    sourceLanguage: 'en',
+                    sourceLanguageName: 'English',
+                    targetLanguage: 'es',
+                    originalUrl: 'https://x.com/kuriimu0203/status/2022261416439525543',
+                });
                 assert.equal(body.data.image, 'https://pbs.twimg.com/media/video.jpg');
                 assert.deepEqual(body.data.images, ['https://pbs.twimg.com/media/photo.jpg?name=orig']);
                 assert.equal(body.data.video.url, 'https://video.twimg.com/video.mp4');

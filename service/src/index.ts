@@ -29,6 +29,7 @@ import {
     withStatusProbeDeadline,
 } from './utils/status_report_cache.ts';
 import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
+import { applyRequestedTranslation } from './utils/translation.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
 import { proxyInstagramImage } from './routes/instagram_media_proxy.ts';
 import {
@@ -734,7 +735,12 @@ app.get('/embed', async (c) => {
     }
 
     try {
-        const result = await handler.handle(url, c.env, { language, mode });
+        const options: HandlerOptions = { language, mode };
+        const result = await applyRequestedTranslation(
+            await handler.handle(url, c.env, options),
+            c.env,
+            options,
+        );
 
         if (!result.success) {
             // Handler failed, redirect if available
@@ -1516,7 +1522,11 @@ app.get('/api/embed', async (c) => {
         const cached = await readEmbedCache(cacheContext);
         if (cached) return cached;
 
-        const result = await handler.handle(url, c.env, options);
+        const result = await applyRequestedTranslation(
+            await handler.handle(url, c.env, options),
+            c.env,
+            options,
+        );
 
         if (!result.success) {
             return c.json({

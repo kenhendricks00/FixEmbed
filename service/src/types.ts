@@ -72,6 +72,17 @@ export interface EmbedData {
     mediaOrigin?: 'post' | 'quote';
     /** True when source-platform metadata says media should be hidden until revealed. */
     sensitive?: boolean;
+    /** Source language supplied by a platform when available. */
+    sourceLanguage?: string;
+    /** Present when FixEmbed replaced the primary post text with a requested translation. */
+    translation?: TranslationMetadata;
+}
+
+export interface TranslationMetadata {
+    sourceLanguage: string;
+    sourceLanguageName: string;
+    targetLanguage: string;
+    originalUrl: string;
 }
 
 export interface EmbedSection {
