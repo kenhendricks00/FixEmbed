@@ -728,6 +728,59 @@ function decodeInstagramText(value: string): string {
         .replace(/&gt;/g, '>');
 }
 
+function trustedInstagramAvatarUrl(value: string): string | undefined {
+    try {
+        const decoded = decodeInstagramMediaUrl(value);
+        const url = new URL(decoded);
+        const hostname = url.hostname.toLowerCase();
+        const trustedHost = hostname === 'cdninstagram.com'
+            || hostname.endsWith('.cdninstagram.com')
+            || hostname === 'fbcdn.net'
+            || hostname.endsWith('.fbcdn.net');
+        if (
+            url.protocol !== 'https:'
+            || !trustedHost
+            || url.username
+            || url.password
+        ) {
+            return undefined;
+        }
+        return url.toString();
+    } catch {
+        return undefined;
+    }
+}
+
+function extractInstagramOwnerAvatar(
+    html: string,
+    expectedUsername: string,
+): string | undefined {
+    const ownerFormats = [
+        /\\"owner\\"\s*:\s*\{[^{}]{0,4096}?\\"username\\"\s*:\s*\\"([^"\\]+)\\"[^{}]{0,4096}?\\"profile_pic_url\\"\s*:\s*\\"([\s\S]{1,4096}?)\\"(?=\s*[,}])/gi,
+        /"owner"\s*:\s*\{[^{}]{0,4096}?"username"\s*:\s*"([^"]+)"[^{}]{0,4096}?"profile_pic_url"\s*:\s*"([^"]{1,4096})"(?=\s*[,}])/gi,
+    ];
+
+    for (const format of ownerFormats) {
+        for (const ownerMatch of html.matchAll(format)) {
+            const ownerUsername = ownerMatch[1];
+            const avatar = ownerMatch[2];
+            if (
+                !ownerUsername
+                || !avatar
+                || (
+                    expectedUsername
+                    && ownerUsername.toLowerCase() !== expectedUsername.toLowerCase()
+                )
+            ) {
+                continue;
+            }
+            const trustedAvatar = trustedInstagramAvatarUrl(avatar);
+            if (trustedAvatar) return trustedAvatar;
+        }
+    }
+    return undefined;
+}
+
 function parseInstagramCount(value: string | undefined): number | undefined {
     const match = value?.trim().match(/^([\d,.]+)\s*([KMB])?$/i);
     if (!match) return undefined;
@@ -897,7 +950,7 @@ async function scrapeEmbedHtml(
         );
         const authorAvatar = avatarMatch
             ? decodeInstagramMediaUrl(avatarMatch[1])
-            : undefined;
+            : extractInstagramOwnerAvatar(html, username);
 
         // Extract media URL - check multiple patterns
         let mediaUrl = '';

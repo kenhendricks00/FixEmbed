@@ -7,6 +7,7 @@
 - Improved source-language detection for short Hindi captions mixed with Latin names and hashtags.
 - Preserved emojis, creator names, hashtags, links, and spacing around translated Hindi prose.
 - Kept emoji variation selectors out of Hindi translation jobs so valid translations are not discarded.
+- Restored Instagram profile pictures from owner-bound reel metadata when the legacy avatar markup is absent.
 - Preserved original-language cards whenever language detection or Workers AI translation is unavailable.
 - Migrated existing default X translation preferences automatically.
 

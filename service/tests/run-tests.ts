@@ -1842,6 +1842,38 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler recovers the owner avatar from escaped reel metadata',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/OwnerAvatarReel/embed/captioned')) {
+                    return new Response([
+                        '<span class="UsernameText">creator</span>',
+                        '<div class="Caption">creator<br /><br />A reel caption</div>',
+                        '<video src="https://scontent.example/reel.mp4"></video>',
+                        String.raw`<script>window.__data={\"music_metadata\":{\"profile_pic_url\":\"https:\\\/\\\/scontent.example.cdninstagram.com\\\/wrong-avatar.jpg\"},\"owner\":{\"id\":\"1\",\"username\":\"creator\",\"is_verified\":false,\"profile_pic_url\":\"https:\\\/\\\/scontent.example.cdninstagram.com\\\/owner-avatar.jpg?stp=dst-jpg_s100x100_tt6\u0026s=signed\",\"friendship_status\":{\"following\":false}}}</script>`,
+                    ].join(''), { status: 200 });
+                }
+                return new Response('', { status: 404 });
+            };
+
+            try {
+                const response = await instagramHandler.handle(
+                    'https://www.instagram.com/reel/OwnerAvatarReel/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://scontent.example.cdninstagram.com/owner-avatar.jpg?stp=dst-jpg_s100x100_tt6&s=signed',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'redditHandler recovers post data from Reddit embed HTML when JSON is forbidden',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4479,7 +4511,7 @@ const tests: TestCase[] = [
                 assert.equal(requestsAfterHit, requestsAfterFirst);
                 assert.ok(upstreamRequests > requestsAfterHit + 1);
                 assert.equal(cacheKeys.length, 3);
-                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v4']);
+                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v5']);
                 assert.equal(
                     Array.from(entries.values()).every((entry) => (
                         entry.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=300'
