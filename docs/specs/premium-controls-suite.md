@@ -15,11 +15,11 @@ Give subscribing server administrators durable customization, automation, and in
   - full or compact captions.
 - Defaults preserve the current free and Premium output exactly.
 
-### Default X translation
+### Free default translation
 
-- Let Premium administrators choose an optional two-letter default language for X posts.
-- A language explicitly present in an X link overrides the server default.
-- Non-Premium servers always use the source post unless the link itself requests a translation.
+- Let administrators choose an optional two-letter default language for every supported platform.
+- A language explicitly present in a link overrides the server default.
+- Translation is available without Premium and fails open to the source post.
 
 ### Advanced exclusions
 
@@ -37,7 +37,7 @@ Give subscribing server administrators durable customization, automation, and in
 ## Authorization and Safety
 
 - `/settings` remains restricted to members with Manage Server.
-- Premium is checked when a protected page opens, when its controls are used, and when messages are processed.
+- Premium is checked when a protected page opens, when its controls are used, and when protected behavior is processed. Translation is not protected.
 - All database writes use parameters.
 - Role and member exclusions are limited to IDs supplied by Discord's native selectors.
 - Subscription lapse preserves settings but disables their effects.
@@ -61,7 +61,7 @@ python scripts/check_release_metadata.py
 
 - A Premium custom color visibly changes every supported social-card accent.
 - Card-style settings consistently affect all supported social renderers.
-- Default X translation is applied only when appropriate.
+- Free default translation is applied across supported platforms when appropriate.
 - Selected members and roles bypass automatic conversion only while Premium is active.
 - The analytics page reports accurate 30-day aggregate results without content-level storage.
 - All tests and release-metadata checks pass, and the worktree is clean after commits.

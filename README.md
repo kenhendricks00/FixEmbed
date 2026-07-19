@@ -83,9 +83,10 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - Available in 8 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, and Chinese.
     - Change language via `/settings` → Language.
 
-8. **X Translation**:
-    - Append `/en`, `/es`, or another two-letter language code to an X status URL to include both the original and translated post text.
-    - Translation applies to X posts; other platforms keep their source-language text.
+8. **Free Post Translation**:
+    - Choose a default language in `/settings` → Translation for every supported platform.
+    - Successful translations replace the primary post text and add `Translated from [language] · Link` to the card footer.
+    - X links can still use `/en`, `/es`, or another two-letter language code as a per-link override.
 9. **X Layout Modifiers**:
     - Append `/gallery` for media-and-author-only cards or `/mosaic` to force native multi-image attachments.
     - Modifiers can be combined, such as `https://x.com/user/status/123/es/mosaic`.
@@ -97,7 +98,6 @@ Make FixEmbed fit your server with **FixEmbed Premium** for **$1.99/month**. Use
 - 🎨 **Custom Social Card Colors** — Choose a custom accent color for every supported Components V2 social card
 - 🖼️ **Social Card Controls** — Show or hide available engagement stats and hashtags, and choose full or compact captions
 - 🏷️ **Server-Branded Footers** — Display your server's current name and an optional server emoji while retaining subtle `via FixEmbed` attribution
-- 🌐 **Automatic X Translations** — Choose a default language for X posts while preserving per-link translation overrides
 - 🤖 **Bot and Webhook Link Fixing** — Automatically process supported links posted by bots and webhooks, not just members
 - 🚫 **Member and Role Exclusions** — Exclude selected members or roles from automatic conversion while keeping manual `/fix` usage available
 - 📊 **Private 30-Day Analytics** — Review aggregate rich-card and fallback counts by platform without storing URLs, post text, usernames, message IDs, or channel IDs

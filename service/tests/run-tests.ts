@@ -4988,7 +4988,10 @@ const tests: TestCase[] = [
             assert.match(docsHtml, /DeviantArt Deviations/);
             assert.match(docsHtml, /sta\.sh/);
             assert.match(docsHtml, /Twitch Clips, VODs, and Channels/);
-            assert.match(docsHtml, /Translation modifiers currently apply to X posts only/);
+            assert.match(
+                docsHtml,
+                /Translation requests work across every supported platform/,
+            );
         },
     },
     {

@@ -2430,7 +2430,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>DeviantArt Deviations</td><td>deviantart.com/*/art/*, sta.sh</td></tr>
                         </tbody>
                     </table>
-                    <p style="color: var(--text-secondary); margin-top: 1rem;">Cards preserve mixed media, galleries, creator identity, and platform-specific context when available. Source-marked sensitive media is hidden behind Discord spoilers. Translation modifiers currently apply to X posts only.</p>
+                    <p style="color: var(--text-secondary); margin-top: 1rem;">Cards preserve mixed media, galleries, creator identity, and platform-specific context when available. Source-marked sensitive media is hidden behind Discord spoilers. Translation requests work across every supported platform, replace the primary post text when successful, and preserve a source-language link.</p>
                 </div>
             </div>
         </div>

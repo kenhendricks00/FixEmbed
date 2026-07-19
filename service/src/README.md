@@ -28,7 +28,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 - **Mixed Media and Galleries**: Complete image/video collections retain source order when available
 - **Sensitive Media**: Source-marked sensitive content is hidden behind Discord spoilers
 - **Platform Context**: Creator identity, timestamps, engagement, games, communities, and other source-specific context are preserved when available
-- **X Translation**: Explicit X language modifiers include original and translated text; other platforms preserve source-language text
+- **Post Translation**: `lang=<two-letter-code>` works across every supported platform, replaces the primary post text when successful, and preserves source-language metadata for the card footer
 - **Engagement Stats**: Metrics displayed via oEmbed (💬 comments, ❤️ likes, � reposts, 👁 views)
   - Zero values are automatically hidden for cleaner display
 - **Author Attribution**: Consistent `@handle` display across all social platforms

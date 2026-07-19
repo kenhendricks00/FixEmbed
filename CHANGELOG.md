@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Free all-platform translation**
+- Made the default translation setting free and applied it to every supported social platform.
+- Matched Embedded-style cards by replacing the primary post text when translation succeeds and adding `Translated from [language] · Link` to the footer.
+- Preserved original-language cards whenever language detection or Workers AI translation is unavailable.
+- Migrated existing default X translation preferences automatically.
+
 #### **Instagram Reel diagnostics**
 - Added correlated, privacy-safe relay telemetry for Instagram Reel streams, upstream response degradation, and fetch failures without recording source URLs or shortcodes.
 
@@ -29,7 +35,6 @@
 - Routed Instagram carousel images through a restricted FixEmbed relay, downloaded them concurrently, and attached them to the Components V2 message so Discord receives all ten images in source order without remote-media stalls.
 - Restored the 15-second rich-card delivery deadline now that large Instagram galleries no longer depend on Discord fetching ten remote image URLs.
 - Source-marked sensitive media now renders behind Discord spoilers across all Components V2 cards.
-- Clarified that post translation is an X-specific feature; other platforms preserve source-language text.
 
 ## v1.5.0 (07/17/2026)
 

@@ -21,7 +21,7 @@ A unified embed service for Discord, Telegram, and other platforms. Built with C
 - **Rich Embeds**: Consistent `FixEmbed • [emoji] Platform` branding across all platforms
 - **Video Playback**: Native video support for Twitter, Instagram Reels, Threads, Reddit, and Bilibili
 - **Carousel Images**: Multi-image posts display as grids (Twitter/X, Instagram, Threads)
-- **Opt-in X Translation**: Add `&lang=<two-letter-code>` to the embed endpoint to show original and translated post text using Workers AI
+- **Free Post Translation**: Add `&lang=<two-letter-code>` to the embed endpoint for any supported platform. Successful translations replace the primary post text and preserve a source-language link in the card metadata.
 - **Complete X Context**: Polls, quoted posts, long-form notes, X Articles, Community Notes, and website cards render inline
 - **X Layout Modes**: `mode=gallery` hides text/stats; `mode=mosaic` advertises every image as a native ActivityPub attachment
 - **Engagement Stats**: Metrics displayed via oEmbed (💬 comments, ❤️ likes, � reposts, 👁 views)
