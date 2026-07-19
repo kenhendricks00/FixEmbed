@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from '../utils/fetch.ts';
+import { decodeHtmlEntities, fetchWithTimeout } from '../utils/fetch.ts';
 
 const X_API_ROOT = 'https://api.x.com';
 // Public bearer used by X's logged-out web client; this is not an account credential or private API key.
@@ -230,7 +230,9 @@ function normalizeQuote(value: unknown): TwitterQuote | undefined {
     if (!user || typeof legacy.full_text !== 'string') return { unavailableReason: 'Unavailable' };
     return {
         id_str: String(quote.rest_id ?? legacy.id_str ?? ''),
-        text: quote.note_tweet?.note_tweet_results?.result?.text ?? legacy.full_text,
+        text: decodeHtmlEntities(
+            quote.note_tweet?.note_tweet_results?.result?.text ?? legacy.full_text,
+        ),
         user,
         mediaDetails: normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media),
     };
@@ -253,7 +255,7 @@ export function normalizeGraphQLTweet(value: unknown): TwitterTweetData | null {
     return {
         __typename: 'Tweet',
         id_str: id,
-        text: typeof noteText === 'string' ? noteText : legacy.full_text,
+        text: decodeHtmlEntities(typeof noteText === 'string' ? noteText : legacy.full_text),
         user,
         created_at: String(legacy.created_at ?? ''),
         favorite_count: Number(legacy.favorite_count) || undefined,

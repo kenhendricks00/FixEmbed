@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import app, { STATUS_PROBES } from '../src/index.ts';
 import { findHandler } from '../src/handlers/index.ts';
 import { twitterHandler } from '../src/handlers/twitter.ts';
-import { normalizeTwitterWebsiteCard } from '../src/handlers/twitter_graphql.ts';
+import {
+    normalizeGraphQLTweet,
+    normalizeTwitterWebsiteCard,
+} from '../src/handlers/twitter_graphql.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
 import { redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
@@ -3826,6 +3829,42 @@ const tests: TestCase[] = [
             } finally {
                 globalThis.fetch = originalFetch;
             }
+        },
+    },
+    {
+        name: 'normalizeGraphQLTweet decodes HTML entities in primary and quoted post text',
+        run: () => {
+            const normalized = normalizeGraphQLTweet({
+                __typename: 'Tweet',
+                rest_id: '2078923298616836503',
+                core: { user_results: { result: {
+                    core: { name: 'j aubrey', screen_name: 'jaubreyYT' },
+                    avatar: { image_url: 'https://pbs.twimg.com/profile_images/primary.jpg' },
+                } } },
+                legacy: {
+                    id_str: '2078923298616836503',
+                    full_text: 'Wait &amp; see what happens',
+                    created_at: 'Sun Jul 19 00:00:00 +0000 2026',
+                },
+                quoted_status_result: { result: {
+                    __typename: 'Tweet',
+                    rest_id: '2078910000000000000',
+                    core: { user_results: { result: {
+                        core: { name: 'Daily Loud', screen_name: 'DailyLoud' },
+                        avatar: { image_url: 'https://pbs.twimg.com/profile_images/quoted.jpg' },
+                    } } },
+                    legacy: {
+                        id_str: '2078910000000000000',
+                        full_text: 'Leaked bodycam footage of Andrew Tate &amp; Tristan Tate\u2019s arrest shows Duel owner Monarch and Freakbob \ud83d\udc40',
+                    },
+                } },
+            });
+
+            assert.equal(normalized?.text, 'Wait & see what happens');
+            assert.equal(
+                normalized?.quote?.text,
+                'Leaked bodycam footage of Andrew Tate & Tristan Tate\u2019s arrest shows Duel owner Monarch and Freakbob \ud83d\udc40',
+            );
         },
     },
     {
