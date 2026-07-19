@@ -45,7 +45,8 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 - **Permission-Aware Delivery**: If delete or suppress mode lacks Manage Messages, FixEmbed keeps the original and still replies with the fixed card; Settings, Debug, and Reliability explain the recovery.
 - **Continuous Embed Conformance**: Scheduled privacy-safe canaries verify live metadata, evaluate cards against reviewed cold-latency budgets, build the real Discord Components V2 card for every supported platform, and fetch a bounded byte from approved rendered media targets so slow or broken cards surface before users report them.
 - **Advanced X Regression Coverage**: Production canaries continuously exercise X carousels, GIFs, videos, translations, and unavailable quoted-post context instead of testing only a simple text post.
-- **Direct-First Embeds**: FixEmbed fetches source-platform data and renders every supported service through its own Cloudflare Worker. External embed services are used only as emergency fallbacks.
+- **DeviantArt Artwork Cards**: Public deviations and Sta.sh links render as Discord Components V2 cards with the artist's profile picture, artwork title and media, original publication time, views, favorites, comments, downloads, copyright context, sensitive-media spoilers, and dedicated DeviantArt/download application emojis.
+- **Direct-First Embeds**: FixEmbed fetches source-platform data through its bot runtime or Cloudflare Worker and renders every supported service as a bot-authored Components V2 card. External embed services are used only as emergency fallbacks.
 - **Fast Repeated Links**: Successful cards are reused briefly at the edge with privacy-safe hashed keys; failures and distinct translation/layout options are never mixed.
 - **Richer X Posts**: First-party X embeds preserve polls, quotes, Community Notes, long-form notes/articles, link cards, videos, GIFs, and complete photo carousels.
 - **Complete Instagram Carousels**: Components V2 cards preserve up to ten images in source order, normalize trusted Instagram media through FixEmbed, and attach the gallery for fast, reliable Discord delivery.
@@ -65,6 +66,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - **Tumblr Posts**
     - **Twitch Clips, VODs, and Channels**
     - **DeviantArt Deviations and Sta.sh Links**
+        - Public artwork cards preserve artist attribution and profile imagery, signed media, engagement statistics, copyright context, safety state, and the original publication time.
 2. **User-Installable App**:
     - Install FixEmbed to your personal account
     - Use `/fix [link]` or right-click → Apps → Fix Embed anywhere
