@@ -1954,6 +1954,17 @@ const tests: TestCase[] = [
                 if (url.includes('/comments/') && url.includes('.json')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
                 }
+                if (url.includes('/about.json')) {
+                    const cookie = new Headers(init?.headers).get('Cookie') || '';
+                    if (!cookie.includes('loid=anonymous-session')) {
+                        return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                    }
+                    return new Response(JSON.stringify({
+                        data: {
+                            community_icon: 'https://styles.redditmedia.com/soccer-icon.png?width=256&amp;s=signed',
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                }
                 if (url.startsWith('https://embed.reddit.com/')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
                 }
@@ -1975,7 +1986,10 @@ const tests: TestCase[] = [
                         </div>
                     `, {
                         status: 200,
-                        headers: { 'Content-Type': 'text/html' },
+                        headers: {
+                            'Content-Type': 'text/html',
+                            'Set-Cookie': 'loid=anonymous-session; Domain=.reddit.com; Path=/; Secure',
+                        },
                     });
                 }
                 if (url === articleUrl) {
@@ -2002,7 +2016,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorName, 'u/Commonmispelingbot');
                 assert.equal(
                     response.data?.authorAvatar,
-                    'https://a.thumbs.redditmedia.com/soccer-icon.jpg',
+                    'https://styles.redditmedia.com/soccer-icon.png?width=256&s=signed',
                 );
                 assert.equal(response.data?.image, articleImage);
                 assert.match(response.data?.stats || '', /3\.3K/);

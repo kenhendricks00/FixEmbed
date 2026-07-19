@@ -287,10 +287,15 @@ async function recoverFromRedditCrawlerPage(
     const comments = Number(htmlAttribute(postTag, 'data-comments-count')) || undefined;
     const timestampMs = Number(htmlAttribute(postTag, 'data-timestamp'));
     const iconTag = html.match(/<img\b(?=[^>]*\bid=["']header-img["'])[^>]*>/i)?.[0] || '';
-    const authorAvatar = publicHttpsUrl(
+    const fallbackAuthorAvatar = publicHttpsUrl(
         htmlAttribute(iconTag, 'src'),
         'https://old.reddit.com',
     )?.toString();
+    const authorAvatar = await fetchSubredditIcon(
+        subreddit,
+        fallbackAuthorAvatar,
+        redditCookieHeader(response),
+    );
     const fallbackImage = articleMetaContent(html, 'og:image');
     const image = await fetchArticleImage(articleUrl)
         || (fallbackImage ? publicHttpsUrl(fallbackImage, pageUrl)?.toString() : undefined);
@@ -330,6 +335,16 @@ async function recoverFromRedditEmbed(
     const encodedSubreddit = encodeURIComponent(displaySubreddit);
     const encodedPostId = encodeURIComponent(safeDecodeURIComponent(postId));
     const canonicalUrl = `https://www.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`;
+    try {
+        const crawlerRecovery = await recoverFromRedditCrawlerPage(
+            displaySubreddit,
+            safeDecodeURIComponent(postId),
+        );
+        if (crawlerRecovery) return crawlerRecovery;
+    } catch {
+        // Continue to Reddit's compact embed when the crawler-facing page is unavailable.
+    }
+
     try {
         const response = await fetchWithTimeout(`https://embed.reddit.com/r/${encodedSubreddit}/comments/${encodedPostId}/`, {
             headers: {
@@ -383,16 +398,6 @@ async function recoverFromRedditEmbed(
         }
     } catch {
         // Continue to the metadata-only recovery when rich embeds are blocked.
-    }
-
-    try {
-        const crawlerRecovery = await recoverFromRedditCrawlerPage(
-            displaySubreddit,
-            safeDecodeURIComponent(postId),
-        );
-        if (crawlerRecovery) return crawlerRecovery;
-    } catch {
-        // Continue to Reddit oEmbed when the crawler-facing page is unavailable.
     }
 
     try {
