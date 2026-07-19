@@ -3896,6 +3896,80 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'shared translation translates quoted-post text in an already translated X card',
+        run: async () => {
+            const translatedInputs: string[] = [];
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: {
+                        text?: string;
+                        source_lang?: string;
+                        target_lang?: string;
+                    }) => {
+                        translatedInputs.push(input.text || '');
+                        assert.equal(input.source_lang, 'ja');
+                        assert.equal(input.target_lang, 'en');
+                        return { translated_text: 'Quoted post text' };
+                    },
+                } as unknown as Ai,
+            };
+
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    source: 'fallback',
+                    data: {
+                        title: '@primary',
+                        description: 'Main post text',
+                        url: 'https://x.com/primary/status/123',
+                        siteName: 'FixEmbed \u2022 \ud835\udd4f Twitter',
+                        platform: 'twitter',
+                        sourceLanguage: 'ja',
+                        translation: {
+                            sourceLanguage: 'ja',
+                            sourceLanguageName: 'Japanese',
+                            targetLanguage: 'en',
+                            originalUrl: 'https://x.com/primary/status/123',
+                        },
+                        sections: [{
+                            kind: 'quote',
+                            title: 'Quoted post',
+                            body: '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f',
+                            url: 'https://x.com/quoted/status/456',
+                            authorName: 'Quoted Author',
+                            authorHandle: '@quoted',
+                            images: ['https://pbs.twimg.com/media/quoted.jpg'],
+                        }],
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.equal(result.data?.description, 'Main post text');
+            assert.deepEqual(result.data?.translation, {
+                sourceLanguage: 'ja',
+                sourceLanguageName: 'Japanese',
+                targetLanguage: 'en',
+                originalUrl: 'https://x.com/primary/status/123',
+            });
+            assert.equal(result.data?.sections?.[0]?.title, 'Quoted post');
+            assert.equal(result.data?.sections?.[0]?.body, 'Quoted post text');
+            assert.equal(result.data?.sections?.[0]?.authorName, 'Quoted Author');
+            assert.equal(result.data?.sections?.[0]?.authorHandle, '@quoted');
+            assert.equal(
+                result.data?.sections?.[0]?.url,
+                'https://x.com/quoted/status/456',
+            );
+            assert.deepEqual(
+                result.data?.sections?.[0]?.images,
+                ['https://pbs.twimg.com/media/quoted.jpg'],
+            );
+            assert.deepEqual(translatedInputs, ['\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f']);
+        },
+    },
+    {
         name: '/api/embed preserves the original card when translation is unavailable',
         run: async () => {
             const originalFetch = globalThis.fetch;

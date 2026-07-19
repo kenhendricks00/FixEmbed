@@ -2,7 +2,7 @@
 
 #### **Free all-platform translation**
 - Made the default translation setting free and applied it to every supported social platform.
-- Matched Embedded-style cards by replacing the primary post text when translation succeeds and adding `Translated from [language] · Link` to the footer.
+- Matched Embedded-style cards by replacing primary and quoted-post text when translation succeeds and adding `Translated from [language] · Link` to the footer.
 - Preserved original-language cards whenever language detection or Workers AI translation is unavailable.
 - Migrated existing default X translation preferences automatically.
 

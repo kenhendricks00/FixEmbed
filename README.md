@@ -85,7 +85,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 
 8. **Free Post Translation**:
     - Choose a default language in `/settings` → Translation for every supported platform.
-    - Successful translations replace the primary post text and add `Translated from [language] · Link` to the card footer.
+    - Successful translations replace primary and quoted-post text and add `Translated from [language] · Link` to the card footer.
     - X links can still use `/en`, `/es`, or another two-letter language code as a per-link override.
 9. **X Layout Modifiers**:
     - Append `/gallery` for media-and-author-only cards or `/mosaic` to force native multi-image attachments.

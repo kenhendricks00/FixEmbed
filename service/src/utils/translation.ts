@@ -80,6 +80,10 @@ function normalizeLanguage(value: unknown): string | undefined {
     return /^[a-z]{2}$/.test(language) ? language : undefined;
 }
 
+function detectedLanguage(text: string): { code: string; name: string } | undefined {
+    return LANGUAGE_CODES[franc(text, { minLength: 3 })];
+}
+
 function sourceLanguage(data: EmbedData, text: string): { code: string; name: string } | undefined {
     const explicit = normalizeLanguage(data.sourceLanguage);
     if (explicit) {
@@ -88,13 +92,19 @@ function sourceLanguage(data: EmbedData, text: string): { code: string; name: st
             name: languageName(explicit),
         };
     }
-    return LANGUAGE_CODES[franc(text, { minLength: 3 })];
+    return detectedLanguage(text);
 }
 
 type TranslationTarget = {
-    field: 'caption' | 'description' | 'title';
+    field: 'caption' | 'description' | 'section' | 'title';
     text: string;
     prefix?: string;
+    sectionIndex?: number;
+};
+
+type TranslationJob = {
+    source: { code: string; name: string };
+    target: TranslationTarget;
 };
 
 const MULTI_FIELD_PLATFORMS = new Set([
@@ -150,20 +160,36 @@ function translatableTargets(data: EmbedData): TranslationTarget[] {
     return title ? [title] : [];
 }
 
+function translatableQuoteTargets(data: EmbedData): TranslationTarget[] {
+    return (data.sections || []).flatMap((section, sectionIndex) => {
+        const body = String(section.body || '').trim();
+        if (section.kind !== 'quote' || !body) return [];
+        return [{ field: 'section', sectionIndex, text: body }];
+    });
+}
+
 function translatedData(
     data: EmbedData,
     translations: Array<{ target: TranslationTarget; text: string }>,
     metadata: TranslationMetadata,
 ): EmbedData {
-    const translated = { ...data };
+    const translated = {
+        ...data,
+        sections: data.sections?.map((section) => ({ ...section })),
+    };
     for (const { target, text } of translations) {
         if (target.field === 'title') {
             translated.title = `${target.prefix || ''}${text}`;
         } else if (target.field === 'description') {
             translated.description = text;
-        } else {
+        } else if (target.field === 'caption') {
             translated.description = text;
             translated.caption = text;
+        } else if (
+            target.sectionIndex !== undefined
+            && translated.sections?.[target.sectionIndex]
+        ) {
+            translated.sections[target.sectionIndex].body = text;
         }
     }
     return {
@@ -179,21 +205,48 @@ export async function applyRequestedTranslation(
 ): Promise<HandlerResponse> {
     const targetLanguage = normalizeLanguage(options.language);
     const data = result.data;
-    if (!targetLanguage || !result.success || !data || data.translation || !env.AI) {
+    if (!targetLanguage || !result.success || !data || !env.AI) {
+        return result;
+    }
+    if (
+        data.translation
+        && normalizeLanguage(data.translation.targetLanguage) !== targetLanguage
+    ) {
         return result;
     }
 
-    const targets = translatableTargets(data);
-    if (!targets.length) return result;
+    const primaryTargets = data.translation ? [] : translatableTargets(data);
+    const quoteTargets = translatableQuoteTargets(data);
+    if (!primaryTargets.length && !quoteTargets.length) return result;
 
-    const source = sourceLanguage(
-        data,
-        targets.map((target) => target.text).join('\n\n'),
-    );
-    if (!source || source.code === targetLanguage) return result;
+    const primarySource = primaryTargets.length
+        ? sourceLanguage(
+            data,
+            primaryTargets.map((target) => target.text).join('\n\n'),
+        )
+        : undefined;
+    const existingSource = data.translation
+        ? {
+            code: data.translation.sourceLanguage,
+            name: data.translation.sourceLanguageName,
+        }
+        : undefined;
+    const jobs: TranslationJob[] = [];
+    if (primarySource?.code !== targetLanguage) {
+        for (const target of primaryTargets) {
+            if (primarySource) jobs.push({ source: primarySource, target });
+        }
+    }
+    for (const target of quoteTargets) {
+        const source = detectedLanguage(target.text) || primarySource || existingSource;
+        if (source && source.code !== targetLanguage) {
+            jobs.push({ source, target });
+        }
+    }
+    if (!jobs.length) return result;
 
     try {
-        const translatedTargets = await Promise.all(targets.map(async (target) => {
+        const translatedTargets = await Promise.all(jobs.map(async ({ source, target }) => {
             const translation = await env.AI!.run(TRANSLATION_MODEL, {
                 text: target.text,
                 source_lang: source.code,
@@ -206,12 +259,16 @@ export async function applyRequestedTranslation(
 
         return {
             ...result,
-            data: translatedData(data, translatedTargets, {
-                sourceLanguage: source.code,
-                sourceLanguageName: source.name,
-                targetLanguage,
-                originalUrl: data.url,
-            }),
+            data: translatedData(
+                data,
+                translatedTargets,
+                data.translation || {
+                    sourceLanguage: (primarySource || jobs[0].source).code,
+                    sourceLanguageName: (primarySource || jobs[0].source).name,
+                    targetLanguage,
+                    originalUrl: data.url,
+                },
+            ),
         };
     } catch (error) {
         console.error('post_translation_failed', {

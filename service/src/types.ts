@@ -74,7 +74,7 @@ export interface EmbedData {
     sensitive?: boolean;
     /** Source language supplied by a platform when available. */
     sourceLanguage?: string;
-    /** Present when FixEmbed replaced the primary post text with a requested translation. */
+    /** Present when FixEmbed replaced primary or quoted-post text with a requested translation. */
     translation?: TranslationMetadata;
 }
 
