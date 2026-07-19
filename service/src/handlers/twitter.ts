@@ -218,7 +218,10 @@ function fxTwitterMedia(tweet: FxTwitterTweet): {
     };
 }
 
-function fxTwitterQuoteSection(tweet: FxTwitterTweet): EmbedSection | undefined {
+function fxTwitterQuoteSection(
+    tweet: FxTwitterTweet,
+    translatedText?: string,
+): EmbedSection | undefined {
     const quote = tweet.quote;
     const author = quote?.author;
     if (!quote || !author?.screen_name || !author.name) return undefined;
@@ -230,7 +233,7 @@ function fxTwitterQuoteSection(tweet: FxTwitterTweet): EmbedSection | undefined 
         kind: 'quote',
         title: 'Quoted post',
         body: truncateText(
-            quote.translation?.text?.trim()
+            translatedText
             || quote.text?.replace(/https?:\/\/t\.co\/\w+/g, '').trim()
             || '',
             900,
@@ -282,11 +285,13 @@ async function fetchFxTwitterFallback(
         const galleryMode = options.mode === 'gallery';
         const originalText = truncateText(tweet.text?.trim() || '', 3000);
         const platformTranslation = language ? fxTranslation(tweet, language) : undefined;
-        const translation = platformTranslation
+        const quoteTranslation = language ? fxTranslation(tweet.quote, language) : undefined;
+        const translationSource = platformTranslation || quoteTranslation;
+        const translation = translationSource
             ? {
-                sourceLanguage: platformTranslation.sourceLanguage,
-                sourceLanguageName: languageName(platformTranslation.sourceLanguage),
-                targetLanguage: platformTranslation.targetLanguage,
+                sourceLanguage: translationSource.sourceLanguage,
+                sourceLanguageName: languageName(translationSource.sourceLanguage),
+                targetLanguage: translationSource.targetLanguage,
                 originalUrl: canonicalUrl,
             }
             : undefined;
@@ -295,7 +300,7 @@ async function fetchFxTwitterFallback(
             : originalText;
         const sections = [
             fxTwitterPollSection(tweet.poll),
-            fxTwitterQuoteSection(tweet),
+            fxTwitterQuoteSection(tweet, quoteTranslation?.text),
         ].filter((section): section is EmbedSection => Boolean(section));
         const quoteSection = sections.find((section) => section.kind === 'quote');
         let image = media.image;
@@ -327,7 +332,7 @@ async function fetchFxTwitterFallback(
                 video,
                 color: platformColors.twitter,
                 platform: 'twitter',
-                sourceLanguage: platformTranslation?.sourceLanguage,
+                sourceLanguage: translationSource?.sourceLanguage,
                 translation,
                 timestamp: tweet.created_at,
                 stats: galleryMode ? undefined : formatStats({
@@ -520,7 +525,10 @@ export const twitterHandler: PlatformHandler = {
             const canonicalUrl = `https://x.com/${handle}/status/${parsed.tweetId}`;
             const requestedLanguage = requestedTranslationLanguage(options);
             const translatedTweet = requestedLanguage
-                && requestedLanguage !== tweet.lang?.toLowerCase()
+                && (
+                    requestedLanguage !== tweet.lang?.toLowerCase()
+                    || Boolean(tweet.quote)
+                )
                 && options.mode !== 'gallery'
                 ? await fetchFxTwitterTweet(parsed.username, parsed.tweetId, requestedLanguage)
                 : undefined;

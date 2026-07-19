@@ -674,7 +674,7 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
         visibility: 'public',
         application: {
             name: translationSourceName
-                ? `Translated from ${translationSourceName} · Link`
+                ? `Translated from ${translationSourceName}`
                 : embedData.sn || 'FixEmbed',
             website: translationOriginalUrl || 'https://fixembed.app',
         },

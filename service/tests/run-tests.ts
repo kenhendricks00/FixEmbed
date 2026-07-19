@@ -3399,6 +3399,84 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler translates a quoted post when the primary X post already matches the target language',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    fxRequests.push(url);
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '1234567890',
+                            text: 'English primary post',
+                            quote: {
+                                id: '456',
+                                text: '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f',
+                                translation: {
+                                    text: 'Quoted post context \u2728\nhttps://example.com/context',
+                                    source_lang: 'ja',
+                                    target_lang: 'en',
+                                    provider: 'grok',
+                                },
+                            },
+                        },
+                    });
+                }
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '1234567890',
+                    text: 'English primary post',
+                    lang: 'en',
+                    user: {
+                        name: 'Example',
+                        screen_name: 'example',
+                        profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
+                    },
+                    quote: {
+                        id_str: '456',
+                        text: '\u5f15\u7528\u3055\u308c\u305f\u6295\u7a3f',
+                        user: {
+                            name: 'Quoted Author',
+                            screen_name: 'quoted',
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/quoted.jpg',
+                        },
+                        mediaDetails: [],
+                    },
+                    created_at: '2026-07-12T00:00:00.000Z',
+                });
+            };
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/example/status/1234567890',
+                    env,
+                    { language: 'en' },
+                );
+                const quote = response.data?.sections?.find((section) => section.kind === 'quote');
+
+                assert.equal(response.data?.description, 'English primary post');
+                assert.equal(
+                    quote?.body,
+                    'Quoted post context \u2728\nhttps://example.com/context',
+                );
+                assert.deepEqual(response.data?.translation, {
+                    sourceLanguage: 'ja',
+                    sourceLanguageName: 'Japanese',
+                    targetLanguage: 'en',
+                    originalUrl: 'https://x.com/example/status/1234567890',
+                });
+                assert.deepEqual(fxRequests, [
+                    'https://api.fxtwitter.com/example/status/1234567890/en',
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler renders GraphQL polls quotes notes articles and Community Notes',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4726,6 +4804,11 @@ const tests: TestCase[] = [
                                 id: '1999999999999999999',
                                 url: 'https://x.com/quoted/status/1999999999999999999',
                                 text: 'Fallback quoted post',
+                                translation: {
+                                    text: 'Traduction incorrecte',
+                                    source_lang: 'en',
+                                    target_lang: 'fr',
+                                },
                                 author: {
                                     name: 'Quoted Author',
                                     screen_name: 'quoted',
@@ -4779,6 +4862,7 @@ const tests: TestCase[] = [
                 assert.equal(body.data.video.mediaType, 'gif');
                 assert.deepEqual(body.data.sections.map((section: any) => section.kind), ['poll', 'quote']);
                 assert.equal(body.data.sections[1].authorVerification, 'organization');
+                assert.equal(body.data.sections[1].body, 'Fallback quoted post');
                 assert.deepEqual(body.data.sections[1].images, ['https://pbs.twimg.com/media/quoted.jpg']);
                 assert.match(body.data.stats, /56/);
             } finally {
@@ -4854,7 +4938,7 @@ const tests: TestCase[] = [
                 assert.doesNotMatch(activity.content, /\u65b0\u3057\u3044\u6a5f\u80fd/);
                 assert.equal(
                     activity.application.name,
-                    'Translated from Japanese \u00b7 Link',
+                    'Translated from Japanese',
                 );
                 assert.equal(activity.application.website, sourceUrl);
             } finally {
