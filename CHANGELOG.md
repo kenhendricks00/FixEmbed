@@ -6,6 +6,7 @@
 - Preserved X translation fidelity by using the platform-provided Grok translation for primary and quoted posts, including emojis, links, line breaks, and surrounding context.
 - Improved source-language detection for short Hindi captions mixed with Latin names and hashtags.
 - Preserved emojis, creator names, hashtags, links, and spacing around translated Hindi prose.
+- Kept emoji variation selectors out of Hindi translation jobs so valid translations are not discarded.
 - Preserved original-language cards whenever language detection or Workers AI translation is unavailable.
 - Migrated existing default X translation preferences automatically.
 

@@ -3990,10 +3990,10 @@ const tests: TestCase[] = [
         },
     },
     {
-        name: '/api/embed detects Hindi in a short Instagram caption with Latin hashtags',
+        name: '/api/embed translates Hindi without treating emoji variation selectors as prose',
         run: async () => {
             const originalFetch = globalThis.fetch;
-            const caption = '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948\ud83e\udd70\ud83d\ude18 Jyoti Thakur '
+            const caption = '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948\u263a\ufe0f\ud83d\ude18 Jyoti Thakur '
                 + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
                 + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #';
             globalThis.fetch = async (input) => {
@@ -4046,7 +4046,7 @@ const tests: TestCase[] = [
                 assert.equal(response.status, 200);
                 assert.equal(
                     payload.data?.caption,
-                    'I feel like eating\ud83e\udd70\ud83d\ude18 Jyoti Thakur '
+                    'I feel like eating\u263a\ufe0f\ud83d\ude18 Jyoti Thakur '
                         + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
                         + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #',
                 );
@@ -4479,7 +4479,7 @@ const tests: TestCase[] = [
                 assert.equal(requestsAfterHit, requestsAfterFirst);
                 assert.ok(upstreamRequests > requestsAfterHit + 1);
                 assert.equal(cacheKeys.length, 3);
-                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v3']);
+                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v4']);
                 assert.equal(
                     Array.from(entries.values()).every((entry) => (
                         entry.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=300'

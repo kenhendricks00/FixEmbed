@@ -251,7 +251,7 @@ function translatedData(
     };
 }
 
-const DEVANAGARI_PROSE = /[\p{Script=Devanagari}\p{Mark}]+(?:\p{Zs}+[\p{Script=Devanagari}\p{Mark}]+)*/gu;
+const DEVANAGARI_PROSE = /\p{Script=Devanagari}[\p{Script=Devanagari}\p{Mark}]*(?:\p{Zs}+\p{Script=Devanagari}[\p{Script=Devanagari}\p{Mark}]*)*/gu;
 const PROTECTED_CONTEXT = /(?:https?:\/\/|www\.)\S+|[#@][\p{L}\p{N}\p{M}_]+/giu;
 
 function protectedContextRanges(text: string): Array<{ start: number; end: number }> {
