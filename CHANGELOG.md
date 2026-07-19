@@ -3,6 +3,7 @@
 #### **Reddit link cards**
 - Expanded Reddit link posts with their linked article, preview image, subreddit identity, publication time, upvotes, and comments.
 - Corrected subreddit avatars to use Reddit's community icon instead of unrelated legacy header artwork.
+- Restored image posts by preferring Reddit's direct media files over crawler thumbnails that Discord cannot load.
 
 #### **Free all-platform translation**
 - Made the default translation setting free and applied it to every supported social platform.

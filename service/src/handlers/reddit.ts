@@ -197,6 +197,13 @@ function linkedArticleUrl(value: string): string | undefined {
     return destination.toString();
 }
 
+function directRedditImageUrl(value: string): string | undefined {
+    const destination = publicHttpsUrl(value);
+    if (!destination || destination.hostname.toLowerCase() !== 'i.redd.it') return undefined;
+    if (!/\.(?:jpe?g|png|gif|webp)$/i.test(destination.pathname)) return undefined;
+    return destination.toString();
+}
+
 function linkedArticleSection(value: string | undefined) {
     if (!value) return undefined;
     const destination = new URL(value);
@@ -293,7 +300,9 @@ async function recoverFromRedditCrawlerPage(
     if (!rawTitle) return null;
 
     const author = htmlAttribute(postTag, 'data-author');
-    const articleUrl = linkedArticleUrl(htmlAttribute(postTag, 'data-url'));
+    const postUrl = htmlAttribute(postTag, 'data-url');
+    const directImageUrl = directRedditImageUrl(postUrl);
+    const articleUrl = linkedArticleUrl(postUrl);
     const permalink = htmlAttribute(postTag, 'data-permalink');
     const score = Number(htmlAttribute(postTag, 'data-score')) || undefined;
     const comments = Number(htmlAttribute(postTag, 'data-comments-count')) || undefined;
@@ -304,7 +313,8 @@ async function recoverFromRedditCrawlerPage(
         redditCookieHeader(response),
     );
     const fallbackImage = articleMetaContent(html, 'og:image');
-    const image = await fetchArticleImage(articleUrl)
+    const image = directImageUrl
+        || await fetchArticleImage(articleUrl)
         || (fallbackImage ? publicHttpsUrl(fallbackImage, pageUrl)?.toString() : undefined);
     const canonicalUrl = permalink
         ? new URL(permalink, 'https://www.reddit.com').toString()
@@ -532,6 +542,7 @@ export const redditHandler: PlatformHandler = {
             // Check for media
             let image: string | undefined;
             const images = redditGalleryImages(post);
+            const directImageUrl = directRedditImageUrl(post.url);
             let video: { url: string; width: number; height: number; thumbnail?: string } | undefined;
 
             // Video content
@@ -545,6 +556,9 @@ export const redditHandler: PlatformHandler = {
                 };
             }
             // Image content
+            else if (!images.length && directImageUrl) {
+                image = directImageUrl;
+            }
             else if (!images.length && post.preview?.images?.[0]) {
                 const imageSource = post.preview.images[0].source;
                 // Reddit HTML-encodes URLs in the API response
