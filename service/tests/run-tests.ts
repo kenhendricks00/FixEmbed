@@ -3990,6 +3990,72 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: '/api/embed detects Hindi in a short Instagram caption with Latin hashtags',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const caption = '\u0916\u093e\u0928\u0947 \u0915\u093e \u092e\u0928 \u0939\u094b \u0930\u0939\u093e \u0939\u0948\ud83e\udd70\ud83d\ude18 Jyoti Thakur '
+                + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
+                + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #';
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('/p/HindiCaption/embed/captioned/')) {
+                    return new Response([
+                        '<span class="UsernameText">jyoti_thakur157</span>',
+                        `<div class="Caption">jyoti_thakur157<br /><br />${caption}</div>`,
+                        '<script>{"display_url":"https:\\/\\/scontent.example.com\\/hindi-reel.jpg"}</script>',
+                    ].join(''), { status: 200 });
+                }
+                return new Response('', { status: 404 });
+            };
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: {
+                        text?: string;
+                        source_lang?: string;
+                        target_lang?: string;
+                    }) => {
+                        assert.equal(input.text, caption);
+                        assert.equal(input.source_lang, 'hi');
+                        assert.equal(input.target_lang, 'en');
+                        return {
+                            translated_text: 'I feel like eating \ud83e\udd70\ud83d\ude18 Jyoti Thakur '
+                                + '#orchardlife #orchard #villagelife #village #fyp\u30b7 '
+                                + '#foryoupage\u30b7 #pahadan #viralnow #pahadivibes #pahadilifestyle #',
+                        };
+                    },
+                } as unknown as Ai,
+            };
+
+            try {
+                const sourceUrl = 'https://www.instagram.com/reel/HindiCaption/';
+                const response = await app.request(
+                    `/api/embed?url=${encodeURIComponent(sourceUrl)}&lang=en`,
+                    {},
+                    translationEnv,
+                );
+                const payload = await response.json() as { data?: {
+                    caption?: string;
+                    description?: string;
+                    translation?: {
+                        sourceLanguage?: string;
+                        sourceLanguageName?: string;
+                        targetLanguage?: string;
+                    };
+                } };
+
+                assert.equal(response.status, 200);
+                assert.match(payload.data?.caption || '', /^I feel like eating/);
+                assert.equal(payload.data?.description, payload.data?.caption);
+                assert.equal(payload.data?.translation?.sourceLanguage, 'hi');
+                assert.equal(payload.data?.translation?.sourceLanguageName, 'Hindi');
+                assert.equal(payload.data?.translation?.targetLanguage, 'en');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'shared translation replaces a title-only Reddit post without losing its subreddit',
         run: async () => {
             const translationEnv: Env = {

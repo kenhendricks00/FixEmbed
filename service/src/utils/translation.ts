@@ -80,7 +80,63 @@ export function normalizeLanguage(value: unknown): string | undefined {
     return /^[a-z]{2}$/.test(language) ? language : undefined;
 }
 
+const HINDI_SIGNALS = new Set([
+    'और',
+    'का',
+    'की',
+    'के',
+    'खाने',
+    'नहीं',
+    'मुझे',
+    'मेरा',
+    'मेरी',
+    'मेरे',
+    'यह',
+    'ये',
+    'रहा',
+    'रही',
+    'रहे',
+    'वह',
+    'है',
+    'हैं',
+]);
+
+const MARATHI_SIGNALS = new Set([
+    'आहे',
+    'आहेत',
+    'आहेस',
+    'आणि',
+    'केला',
+    'केली',
+    'तुमचा',
+    'तुमची',
+    'तुमचे',
+    'नाही',
+    'मला',
+    'माझा',
+    'माझी',
+    'माझे',
+    'होत',
+]);
+
+function devanagariLanguage(text: string): { code: string; name: string } | undefined {
+    const words = text.normalize('NFC').match(/[\p{Script=Devanagari}\p{Mark}]+/gu) || [];
+    if (words.length < 2) return undefined;
+
+    const hindiScore = words.filter((word) => HINDI_SIGNALS.has(word)).length;
+    const marathiScore = words.filter((word) => MARATHI_SIGNALS.has(word)).length;
+    if (hindiScore >= 2 && hindiScore > marathiScore) {
+        return { code: 'hi', name: 'Hindi' };
+    }
+    if (marathiScore >= 2 && marathiScore > hindiScore) {
+        return { code: 'mr', name: 'Marathi' };
+    }
+    return undefined;
+}
+
 function detectedLanguage(text: string): { code: string; name: string } | undefined {
+    const scriptLanguage = devanagariLanguage(text);
+    if (scriptLanguage) return scriptLanguage;
     return LANGUAGE_CODES[franc(text, { minLength: 3 })];
 }
 

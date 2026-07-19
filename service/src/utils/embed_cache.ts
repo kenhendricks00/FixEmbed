@@ -1,6 +1,6 @@
 import type { Env, HandlerOptions } from '../types.ts';
 
-const CACHE_NAME = 'fixembed-embed-api-v2';
+const CACHE_NAME = 'fixembed-embed-api-v3';
 const DEFAULT_TTL_SECONDS = 300;
 const MAX_TTL_SECONDS = 3600;
 
