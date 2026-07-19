@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Reddit link cards**
+- Expanded Reddit link posts with their linked article, preview image, subreddit identity, publication time, upvotes, and comments.
+- Corrected subreddit avatars to use Reddit's community icon instead of unrelated legacy header artwork.
+
 #### **Free all-platform translation**
 - Made the default translation setting free and applied it to every supported social platform.
 - Matched Embedded-style cards by replacing primary and quoted-post text when translation succeeds and adding `Translated from [language]` to the footer.

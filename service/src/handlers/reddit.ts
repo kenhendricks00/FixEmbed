@@ -125,16 +125,28 @@ async function fetchSubredditIcon(
     const fetchCommunityIcon = async (cookie = ''): Promise<string | undefined> => {
         const headers: Record<string, string> = {
             'Accept': 'application/json',
-            'User-Agent': 'FixEmbed/1.0 (embed service)',
+            'User-Agent': 'Discordbot/2.0; +https://fixembed.app',
         };
         if (cookie) headers.Cookie = cookie;
-        const community = await fetchJSON<RedditCommunityResponse>(
+        const urls = [
+            `https://api.reddit.com/r/${encodedSubreddit}/about?raw_json=1`,
             `https://www.reddit.com/r/${encodedSubreddit}/about.json?raw_json=1`,
-            { headers },
-        );
-        return decodeRedditHtml(
-            community?.data?.community_icon || community?.data?.icon_img || '',
-        ) || undefined;
+        ];
+        let lastError: unknown;
+        for (const url of urls) {
+            try {
+                const community = await fetchJSON<RedditCommunityResponse>(url, { headers });
+                const icon = decodeRedditHtml(
+                    community?.data?.community_icon || community?.data?.icon_img || '',
+                );
+                if (icon) return icon;
+            } catch (error) {
+                lastError = error;
+                // Try Reddit's alternate public community endpoint.
+            }
+        }
+        if (lastError) throw lastError;
+        return undefined;
     };
 
     try {
@@ -286,14 +298,9 @@ async function recoverFromRedditCrawlerPage(
     const score = Number(htmlAttribute(postTag, 'data-score')) || undefined;
     const comments = Number(htmlAttribute(postTag, 'data-comments-count')) || undefined;
     const timestampMs = Number(htmlAttribute(postTag, 'data-timestamp'));
-    const iconTag = html.match(/<img\b(?=[^>]*\bid=["']header-img["'])[^>]*>/i)?.[0] || '';
-    const fallbackAuthorAvatar = publicHttpsUrl(
-        htmlAttribute(iconTag, 'src'),
-        'https://old.reddit.com',
-    )?.toString();
     const authorAvatar = await fetchSubredditIcon(
         subreddit,
-        fallbackAuthorAvatar,
+        REDDIT_FALLBACK_ICON,
         redditCookieHeader(response),
     );
     const fallbackImage = articleMetaContent(html, 'og:image');
@@ -549,7 +556,7 @@ export const redditHandler: PlatformHandler = {
             }
 
             const fallbackSubredditIcon = decodeRedditHtml(
-                post.sr_detail?.icon_img || post.sr_detail?.community_icon || '',
+                post.sr_detail?.community_icon || post.sr_detail?.icon_img || '',
             );
             const subredditIcon = await fetchSubredditIcon(
                 post.subreddit,

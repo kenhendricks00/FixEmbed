@@ -1954,16 +1954,17 @@ const tests: TestCase[] = [
                 if (url.includes('/comments/') && url.includes('.json')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
                 }
-                if (url.includes('/about.json')) {
-                    const cookie = new Headers(init?.headers).get('Cookie') || '';
-                    if (!cookie.includes('loid=anonymous-session')) {
-                        return new Response('blocked', { status: 403, statusText: 'Forbidden' });
-                    }
+                if (url === 'https://api.reddit.com/r/soccer/about?raw_json=1') {
+                    assert.match(new Headers(init?.headers).get('User-Agent') || '', /Discordbot/);
                     return new Response(JSON.stringify({
                         data: {
-                            community_icon: 'https://styles.redditmedia.com/soccer-icon.png?width=256&amp;s=signed',
+                            community_icon: 'https://styles.redditmedia.com/soccer-ball-community-icon.png?width=256&amp;s=signed',
+                            header_img: 'https://a.thumbs.redditmedia.com/soccer-header-art.jpg',
                         },
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                }
+                if (url.includes('/about.json')) {
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
                 }
                 if (url.startsWith('https://embed.reddit.com/')) {
                     return new Response('blocked', { status: 403, statusText: 'Forbidden' });
@@ -1972,7 +1973,7 @@ const tests: TestCase[] = [
                     assert.match(new Headers(init?.headers).get('User-Agent') || '', /Discordbot/);
                     return new Response(`
                         <meta property="og:image" content="https://external-preview.redd.it/article.jpeg?width=140&amp;height=78">
-                        <img id="header-img" src="//a.thumbs.redditmedia.com/soccer-icon.jpg" alt="soccer">
+                        <img id="header-img" src="//a.thumbs.redditmedia.com/soccer-header-art.jpg" alt="soccer">
                         <div class="thing link" id="thing_t3_1v0mvcg"
                             data-author="Commonmispelingbot"
                             data-subreddit="soccer"
@@ -2016,7 +2017,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorName, 'u/Commonmispelingbot');
                 assert.equal(
                     response.data?.authorAvatar,
-                    'https://styles.redditmedia.com/soccer-icon.png?width=256&s=signed',
+                    'https://styles.redditmedia.com/soccer-ball-community-icon.png?width=256&s=signed',
                 );
                 assert.equal(response.data?.image, articleImage);
                 assert.match(response.data?.stats || '', /3\.3K/);
@@ -2025,6 +2026,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.sections?.[0]?.kind, 'link-card');
                 assert.equal(response.data?.sections?.[0]?.url, articleUrl);
                 assert.equal(requested.includes(articleUrl), true);
+                assert.equal(
+                    requested.includes('https://api.reddit.com/r/soccer/about?raw_json=1'),
+                    true,
+                );
             } finally {
                 globalThis.fetch = originalFetch;
             }
