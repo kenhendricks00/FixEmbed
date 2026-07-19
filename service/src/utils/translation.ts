@@ -131,6 +131,14 @@ function translatableTargets(data: EmbedData): TranslationTarget[] {
     if (caption) return [{ field: 'caption', text: caption }];
 
     const description = String(data.description || '').trim();
+    if (data.platform === 'youtube') {
+        if (data.title.trim().toLowerCase() === 'community post') {
+            return description ? [{ field: 'description', text: description }] : [];
+        }
+        const target = titleTarget(data);
+        return target ? [target] : [];
+    }
+
     const title = titleTarget(data);
     if (MULTI_FIELD_PLATFORMS.has(data.platform)) {
         return [

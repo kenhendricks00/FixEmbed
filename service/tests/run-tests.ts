@@ -3839,6 +3839,63 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'shared translation distinguishes YouTube video titles from Community Post text',
+        run: async () => {
+            const translatedInputs: string[] = [];
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string }) => {
+                        translatedInputs.push(input.text || '');
+                        return {
+                            translated_text: input.text === '\u65b0\u3057\u3044\u52d5\u753b'
+                                ? 'New video'
+                                : 'New community update',
+                        };
+                    },
+                } as unknown as Ai,
+            };
+
+            const video = await applyRequestedTranslation(
+                {
+                    success: true,
+                    data: {
+                        title: '\u65b0\u3057\u3044\u52d5\u753b',
+                        description: 'by Example Creator',
+                        url: 'https://www.youtube.com/watch?v=abc123',
+                        siteName: 'FixEmbed \u2022 YouTube',
+                        platform: 'youtube',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+            const communityPost = await applyRequestedTranslation(
+                {
+                    success: true,
+                    data: {
+                        title: 'Community post',
+                        description: '\u65b0\u3057\u3044\u30b3\u30df\u30e5\u30cb\u30c6\u30a3\u6295\u7a3f',
+                        url: 'https://www.youtube.com/post/UgkxExample',
+                        siteName: 'FixEmbed \u2022 YouTube',
+                        platform: 'youtube',
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+
+            assert.equal(video.data?.title, 'New video');
+            assert.equal(video.data?.description, 'by Example Creator');
+            assert.equal(communityPost.data?.title, 'Community post');
+            assert.equal(communityPost.data?.description, 'New community update');
+            assert.deepEqual(translatedInputs, [
+                '\u65b0\u3057\u3044\u52d5\u753b',
+                '\u65b0\u3057\u3044\u30b3\u30df\u30e5\u30cb\u30c6\u30a3\u6295\u7a3f',
+            ]);
+        },
+    },
+    {
         name: '/api/embed preserves the original card when translation is unavailable',
         run: async () => {
             const originalFetch = globalThis.fetch;
