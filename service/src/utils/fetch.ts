@@ -113,16 +113,36 @@ export function parseTwitterUrl(url: string): { username: string; tweetId: strin
 }
 
 /**
- * Parse Reddit post URL
+ * Parse Reddit post or comment URL.
+ * Comment permalinks: /r/{sub}/comments/{postId}/{slug}/{commentId}/
+ * or /r/{sub}/comments/{postId}/comment/{commentId}/
+ * or ?comment={commentId}
  */
-export function parseRedditUrl(url: string): { subreddit: string; postId: string } | null {
-    const pattern = /reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/i;
-    const match = url.match(pattern);
+export function parseRedditUrl(
+    url: string,
+): { subreddit: string; postId: string; commentId?: string } | null {
+    const match = url.match(
+        /reddit\.com\/r\/([^\/?#]+)\/comments\/([^\/?#]+)(?:\/([^\/?#]+))?(?:\/([^\/?#]+))?/i,
+    );
+    if (!match) return null;
 
-    if (match) {
-        return { subreddit: match[1], postId: match[2] };
+    const subreddit = match[1];
+    const postId = match[2];
+    const segmentA = match[3];
+    const segmentB = match[4];
+
+    let commentId: string | undefined;
+    // /{slug}/{commentId}/ or /comment/{commentId}/
+    if (segmentA && segmentB && /^[a-z0-9]+$/i.test(segmentB)) {
+        commentId = segmentB;
     }
-    return null;
+
+    if (!commentId) {
+        const queryMatch = url.match(/[?&]comment=([a-z0-9]+)/i);
+        if (queryMatch) commentId = queryMatch[1];
+    }
+
+    return commentId ? { subreddit, postId, commentId } : { subreddit, postId };
 }
 
 /**

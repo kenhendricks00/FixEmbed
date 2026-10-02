@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Reddit comment embeds**
+- Detect Reddit comment permalinks that include a comment id (`/comments/{postId}/…/{commentId}/`, `/comment/{commentId}/`, or `?comment=`).
+- Embed the linked comment (author, body, score, comment permalink) with parent-post title context instead of rendering only the parent post card.
+- Degrade cleanly when a comment is deleted or unavailable, without falling back to a parent-post-only card for comment URLs.
+- Keep plain post permalinks on the existing post card path; automatic conversion, `/fix`, and message-context use the same Worker metadata.
+- Align Reddit marketing copy with comment embed support.
+
 #### **Premium entitlement cache**
 - Added a 10-minute TTL to the in-memory guild Premium cache so missed Discord entitlement events cannot leave paid servers stuck on free (or cancelled servers stuck on Premium) until restart.
 - Update the cached Premium status from entitlement create, update, and delete handlers with a fresh timestamp so True↔False flips apply immediately.

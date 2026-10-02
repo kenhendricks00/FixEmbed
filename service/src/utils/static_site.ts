@@ -507,9 +507,9 @@ const growthPlatforms: Record<GrowthPlatform, {
     reddit: {
         name: 'Reddit',
         eyebrow: 'Better Reddit embeds for Discord',
-        headline: 'Reddit posts with the subreddit context still attached.',
-        description: 'FixEmbed turns shared posts into readable cards with community identity, content, media, and the public score Reddit exposes.',
-        capabilities: ['Subreddit identity and post author', 'Images, galleries, video, and linked media', 'Comments, score, and original publication time'],
+        headline: 'Reddit posts and comments with the subreddit context still attached.',
+        description: 'FixEmbed turns shared posts and comment permalinks into readable cards with community identity, content, media, and the public score Reddit exposes.',
+        capabilities: ['Subreddit identity with post or comment author', 'Images, galleries, video, and linked media', 'Direct comment permalinks with parent context', 'Score and original publication time'],
         icon: 'fa-brands fa-reddit',
     },
 };
