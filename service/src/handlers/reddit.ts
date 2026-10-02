@@ -618,6 +618,10 @@ function buildRedditCommentCard(options: {
     parentAuthor?: string;
     parentCommentCount?: number;
     parentImage?: string;
+    /** Parent post `over_18`. Same NSFW classification post cards already use. */
+    parentOver18?: boolean;
+    /** Parent post `spoiler`. Same spoiler classification post cards already use. */
+    parentSpoiler?: boolean;
     authorAvatar?: string;
 }): EmbedData {
     const commentAuthor = options.commentAuthor.replace(/^u\//i, '');
@@ -640,6 +644,10 @@ function buildRedditCommentCard(options: {
     const stats = likes === undefined && comments === undefined
         ? undefined
         : formatStats({ likes, comments });
+    const sensitivityTypes = [
+        ...(options.parentOver18 === true ? ['nsfw' as const] : []),
+        ...(options.parentSpoiler === true ? ['spoiler' as const] : []),
+    ];
 
     return {
         title: `r/${options.subreddit} \u2022 ${displayTitle}`,
@@ -656,6 +664,8 @@ function buildRedditCommentCard(options: {
         platform: 'reddit',
         stats,
         image: options.parentImage,
+        sensitive: sensitivityTypes.length > 0,
+        sensitivityTypes: sensitivityTypes.length ? sensitivityTypes : undefined,
         sections: [
             {
                 kind: 'quote' as const,
@@ -1251,6 +1261,8 @@ export const redditHandler: PlatformHandler = {
                         parentAuthor: post.author,
                         parentCommentCount: post.num_comments,
                         parentImage,
+                        parentOver18: post.over_18 === true,
+                        parentSpoiler: post.spoiler === true,
                         authorAvatar: subredditIcon,
                     }),
                 };

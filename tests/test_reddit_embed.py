@@ -187,6 +187,7 @@ class RedditEmbedTests(unittest.TestCase):
             gallery["items"][0]["media"]["url"],
             payload["image"],
         )
+        self.assertIs(gallery["items"][0]["spoiler"], False)
         self.assertIn("<:upvote:1526256000641007616> 64", rendered_text)
         self.assertIn("<:comment:1526254715250282506> 12", rendered_text)
         self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
@@ -227,6 +228,45 @@ class RedditEmbedTests(unittest.TestCase):
             if "items" in component
         ]
         self.assertEqual(gallery_items, [])
+
+    def test_comment_card_spoilers_nsfw_parent_image(self):
+        payload = {
+            "title": "r/gonewild • NSFW parent",
+            "description": "",
+            "url": "https://www.reddit.com/r/gonewild/comments/abc123/nsfw_parent/def4567/",
+            "authorName": "u/post_author",
+            "authorUrl": "https://www.reddit.com/user/post_author/",
+            "image": "https://i.redd.it/nsfw-parent.png",
+            "sensitive": True,
+            "sensitivityTypes": ["nsfw", "spoiler"],
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Comment by u/comment_author",
+                    "body": "Comment on an NSFW parent.",
+                    "authorName": "u/comment_author",
+                    "authorUrl": "https://www.reddit.com/user/comment_author/",
+                },
+                {
+                    "kind": "quote",
+                    "title": "NSFW parent",
+                    "body": "Parent post",
+                    "url": "https://www.reddit.com/r/gonewild/comments/abc123/nsfw_parent/",
+                    "authorName": "u/post_author",
+                    "authorUrl": "https://www.reddit.com/user/post_author/",
+                },
+            ],
+        }
+
+        container = build_reddit_layout(payload).to_components()[0]
+        gallery = next(
+            component for component in container["components"] if "items" in component
+        )
+        self.assertEqual(
+            gallery["items"][0]["media"]["url"],
+            payload["image"],
+        )
+        self.assertIs(gallery["items"][0]["spoiler"], True)
 
 
     def test_unavailable_comment_tombstone_renders_failure_card_without_media(self):

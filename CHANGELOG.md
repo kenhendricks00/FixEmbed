@@ -4,6 +4,7 @@
 - Comment permalink cards now match Embedded: header is `r/{sub}` with `Posted by u/{parent author}`, the title is the parent post title (not "Comment on …"), and the comment body is a Components V2 quote block labeled "Comment by {author}:".
 - Footer stats use the comment score and, when already available, the parent post comment count; the footer link stays the comment permalink.
 - Parent post thumbnails still render when the Worker already supplies one. Plain post cards are unchanged.
+- NSFW and spoiler parent posts mark that comment-card image sensitive the same way post cards do (`over_18` → `nsfw`, `spoiler` → `spoiler`), so Discord spoilers the media instead of showing it unspoilered.
 
 #### **Reddit comment AMA clean-fail / Discord OG suppress (#66)**
 - Unavailable or deleted Reddit **comment** permalinks now return a FixEmbed-owned tombstone card (no Reddit `redirect`, no community image/score) so Discord scrapers cannot fall through to Reddit OG (desk: AMA `…/damfr71/` → `[deleted by user] : r/shrimptank`).
