@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Premium activation checklist**
+- Active-subscriber `/premium` now shows a configured-vs-available checklist for card color, footer branding, card style, exclusions, analytics, and bot/webhook auto-fix.
+- Each configurable checklist row deep-links into the matching `/settings` page (or Embed Color modal) via a select control; bot/webhook auto-fix is called out as automatic with no toggle.
+- Adds clear Discord manage/cancel/billing instructions (User Settings → Subscriptions for Premium App Subscriptions; Server Settings → Integrations → FixEmbed → Store) with no in-bot billing portal.
+- Non-premium `/premium` stays the SKU subscribe flow and accurate perk list from #62.
+
 #### **Reddit comment quote-block layout (#68)**
 - Comment permalink cards now match Embedded: header is `r/{sub}` with `Posted by u/{parent author}`, the title is the parent post title (not "Comment on …"), and the comment body is a Components V2 quote block labeled "Comment by {author}:".
 - Footer stats use the comment score and, when already available, the parent post comment count; the footer link stays the comment permalink.
