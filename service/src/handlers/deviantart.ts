@@ -1,6 +1,11 @@
 /**
  * DeviantArt deviation metadata handler.
  * Uses DeviantArt's public oEmbed endpoint for documented deviation and Sta.sh URLs.
+ *
+ * Cloudflare Worker egress is often blocked by DeviantArt (HTTP 403) for both
+ * oEmbed and the public HTML page. When that happens, recover OG metadata through
+ * Bluesky Cardyb (emergency fallback) so Worker canaries and /api/embed keep a
+ * usable first-party media URL while Discord V2 cards continue to use the bot host.
  */
 import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { fetchWithTimeout, truncateText } from '../utils/fetch.ts';
@@ -8,6 +13,7 @@ import { formatNumber, getBrandedSiteName, platformColors } from '../utils/embed
 import { normalizePostTimestamp } from '../utils/timestamp.ts';
 
 const OEMBED_ENDPOINT = 'https://backend.deviantart.com/oembed';
+const CARDYB_EXTRACT_ENDPOINT = 'https://cardyb.bsky.app/v1/extract';
 const MAX_OEMBED_BYTES = 512_000;
 const MEDIA_HOST_SUFFIXES = ['wixmp.com', 'deviantart.net', 'deviantart.com'];
 const SUCCESS_CACHE_TTL_MS = 5 * 60_000;
@@ -275,6 +281,117 @@ function parseDeviantArtDescriptionStats(description: string): {
     };
 }
 
+
+function unwrapCardybImageUrl(value: unknown): string | undefined {
+    const raw = text(value);
+    if (!raw) return undefined;
+    try {
+        const url = new URL(raw);
+        const host = url.hostname.toLowerCase();
+        if (
+            url.protocol === 'https:'
+            && !url.username
+            && !url.password
+            && (!url.port || url.port === '443')
+            && host === 'cardyb.bsky.app'
+            && url.pathname === '/v1/image'
+        ) {
+            const nested = url.searchParams.get('url');
+            return nested ? trustedMediaUrl(nested) : undefined;
+        }
+    } catch {
+        // Ignore malformed cardyb wrappers.
+    }
+    return trustedMediaUrl(raw);
+}
+
+type CardybExtractPayload = {
+    error?: unknown;
+    title?: unknown;
+    description?: unknown;
+    image?: unknown;
+    url?: unknown;
+};
+
+async function recoverViaCardyb(
+    parsedUrl: DeviantArtUrl,
+    timeoutMs: number,
+): Promise<HandlerResponse> {
+    try {
+        const endpoint = new URL(CARDYB_EXTRACT_ENDPOINT);
+        endpoint.searchParams.set('url', parsedUrl.canonical);
+        const response = await fetchWithTimeout(endpoint.toString(), {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'FixEmbed/1.0 (+https://fixembed.app)',
+            },
+        }, timeoutMs);
+        if (!response.ok) {
+            return {
+                success: false,
+                error: `DeviantArt metadata fallback returned ${response.status}`,
+                redirect: parsedUrl.canonical,
+            };
+        }
+
+        const payload = await response.json() as CardybExtractPayload;
+        if (text(payload.error)) {
+            return {
+                success: false,
+                error: 'DeviantArt metadata unavailable',
+                redirect: parsedUrl.canonical,
+            };
+        }
+
+        const ogTitle = text(payload.title);
+        const ogImage = unwrapCardybImageUrl(payload.image);
+        const ogDescription = text(payload.description);
+        if (!ogTitle && !ogImage) {
+            return {
+                success: false,
+                error: 'DeviantArt metadata unavailable',
+                redirect: parsedUrl.canonical,
+            };
+        }
+
+        const titleMatch = ogTitle.match(/^(.*?)\s+by\s+(.+?)\s+on DeviantArt$/i);
+        const title = truncateText(
+            (titleMatch?.[1] || ogTitle || 'DeviantArt deviation').trim(),
+            300,
+        );
+        const authorFromTitle = titleMatch?.[2]?.trim();
+        const authorName = truncateText(
+            authorFromTitle || parsedUrl.artist || 'DeviantArt artist',
+            100,
+        );
+        const authorUrl = parsedUrl.artist
+            ? trustedAuthorUrl(`https://www.deviantart.com/${parsedUrl.artist}`)
+            : undefined;
+        const parsedDescription = parseDeviantArtDescriptionStats(ogDescription);
+        const data: EmbedData = {
+            title,
+            description: truncateText(parsedDescription.cleanDescription, 4000),
+            url: parsedUrl.canonical,
+            siteName: getBrandedSiteName('deviantart'),
+            authorName,
+            authorHandle: authorHandle(authorUrl || '', parsedUrl.artist),
+            authorUrl,
+            image: ogImage,
+            color: platformColors.deviantart,
+            timestamp: parsedDescription.timestamp,
+            platform: 'deviantart',
+            stats: parsedDescription.stats,
+        };
+        return { success: true, source: 'fallback', data };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
+            redirect: parsedUrl.canonical,
+        };
+    }
+}
+
 async function scrapeDeviantArtPage(
     parsedUrl: DeviantArtUrl,
     timeoutMs: number,
@@ -372,6 +489,7 @@ export const deviantartHandler: PlatformHandler = {
                 const response = await fetchWithTimeout(endpoint.toString(), {
                     headers: {
                         'Accept': 'application/json',
+                        'Accept-Encoding': 'gzip',
                         'User-Agent': 'FixEmbed/1.0 (+https://fixembed.app)',
                     },
                 }, 6_000);
@@ -383,14 +501,19 @@ export const deviantartHandler: PlatformHandler = {
                     };
                 }
                 if (!response.ok) {
-                    // Cloudflare Worker egress is often blocked by DeviantArt's
-                    // oEmbed edge with 403 while the public page still works.
+                    // Cloudflare Worker egress is often blocked by DeviantArt for
+                    // both oEmbed and the public HTML page (HTTP 403). Prefer a
+                    // direct page scrape when it works, then recover through
+                    // Cardyb so Worker /api/embed canaries stay useful.
                     if (response.status === 403) {
                         const pageResult = await scrapeDeviantArtPage(parsedUrl, 5_000);
                         if (pageResult.success) return pageResult;
+                        const cardybResult = await recoverViaCardyb(parsedUrl, 5_000);
+                        if (cardybResult.success) return cardybResult;
                         return {
                             success: false,
-                            error: pageResult.error || `DeviantArt returned ${response.status}`,
+                            error: pageResult.error || cardybResult.error
+                                || `DeviantArt returned ${response.status}`,
                             redirect: parsedUrl.canonical,
                         };
                     }
