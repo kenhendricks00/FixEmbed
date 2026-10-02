@@ -504,6 +504,21 @@ const tests: TestCase[] = [
             );
 
             assert.deepEqual(
+                parseRedditUrl('https://www.reddit.com/r/programming/comments/abc123/example_post/def4567/'),
+                { subreddit: 'programming', postId: 'abc123', commentId: 'def4567' },
+            );
+
+            assert.deepEqual(
+                parseRedditUrl('https://www.reddit.com/r/programming/comments/abc123/comment/def4567/'),
+                { subreddit: 'programming', postId: 'abc123', commentId: 'def4567' },
+            );
+
+            assert.deepEqual(
+                parseRedditUrl('https://old.reddit.com/r/programming/comments/abc123/example_post/?comment=def4567'),
+                { subreddit: 'programming', postId: 'abc123', commentId: 'def4567' },
+            );
+
+            assert.deepEqual(
                 parseBlueskyUrl('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t'),
                 { handle: 'bsky.app', postId: '3lb5u6adjs22t' },
             );
@@ -2504,6 +2519,249 @@ const tests: TestCase[] = [
                     response.data?.authorAvatar,
                     'https://scontent.example.cdninstagram.com/owner-avatar.jpg?stp=dst-jpg_s100x100_tt6&s=signed',
                 );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler embeds linked comments instead of only the parent post',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.includes('/comments/') && url.includes('.json')) {
+                        assert.match(url, /\/comments\/abc123\/_\/def4567\.json/);
+                        return new Response(JSON.stringify([
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't3',
+                                        data: {
+                                            title: 'Parent discussion thread',
+                                            selftext: 'Post body that should not replace the comment.',
+                                            author: 'post_author',
+                                            subreddit: 'programming',
+                                            url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
+                                            permalink: '/r/programming/comments/abc123/parent_discussion_thread/',
+                                            thumbnail: 'self',
+                                            is_video: false,
+                                            created_utc: 1_784_000_000,
+                                            score: 420,
+                                            num_comments: 12,
+                                            sr_detail: {
+                                                community_icon: 'https://styles.redditmedia.com/programming.png',
+                                            },
+                                        },
+                                    }],
+                                },
+                            },
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't1',
+                                        data: {
+                                            id: 'def4567',
+                                            author: 'comment_author',
+                                            body: 'This is the linked comment body with useful context.',
+                                            score: 64,
+                                            permalink: '/r/programming/comments/abc123/parent_discussion_thread/def4567/',
+                                            created_utc: 1_784_000_100,
+                                        },
+                                    }],
+                                },
+                            },
+                        ]), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    if (url.includes('/about')) {
+                        return new Response(JSON.stringify({
+                            data: {
+                                community_icon: 'https://styles.redditmedia.com/programming.png',
+                            },
+                        }), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.platform, 'reddit');
+                assert.equal(response.data?.title, 'r/programming • Comment on Parent discussion thread');
+                assert.equal(
+                    response.data?.description,
+                    'This is the linked comment body with useful context.',
+                );
+                assert.equal(response.data?.authorName, 'u/comment_author');
+                assert.equal(
+                    response.data?.url,
+                    'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
+                );
+                assert.match(response.data?.stats || '', /64/);
+                assert.equal(response.data?.image, undefined);
+                assert.equal(response.data?.video, undefined);
+                assert.deepEqual(response.data?.sections, [{
+                    kind: 'quote',
+                    title: 'Parent discussion thread',
+                    body: 'Parent post',
+                    url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
+                    authorName: 'u/post_author',
+                    authorUrl: 'https://www.reddit.com/user/post_author/',
+                }]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler keeps plain post permalinks on the post card path',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.includes('/comments/') && url.includes('.json')) {
+                        assert.doesNotMatch(url, /\/_\/[a-z0-9]+\.json/i);
+                        return new Response(JSON.stringify([
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't3',
+                                        data: {
+                                            title: 'Plain post title',
+                                            selftext: 'Self post body',
+                                            author: 'post_author',
+                                            subreddit: 'programming',
+                                            url: 'https://www.reddit.com/r/programming/comments/abc123/plain_post_title/',
+                                            permalink: '/r/programming/comments/abc123/plain_post_title/',
+                                            thumbnail: 'self',
+                                            is_video: false,
+                                            created_utc: 1_784_000_000,
+                                            score: 12,
+                                            num_comments: 3,
+                                            sr_detail: {
+                                                community_icon: 'https://styles.redditmedia.com/programming.png',
+                                            },
+                                        },
+                                    }],
+                                },
+                            },
+                            { data: { children: [] } },
+                        ]), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    if (url.includes('/about')) {
+                        return new Response(JSON.stringify({
+                            data: {
+                                community_icon: 'https://styles.redditmedia.com/programming.png',
+                            },
+                        }), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/programming/comments/abc123/plain_post_title/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.title, 'r/programming • Plain post title');
+                assert.equal(response.data?.description, 'Self post body');
+                assert.equal(response.data?.authorName, 'u/post_author');
+                assert.equal(
+                    response.data?.url,
+                    'https://reddit.com/r/programming/comments/abc123/plain_post_title/',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler degrades cleanly for deleted or unavailable comments',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.includes('/comments/') && url.includes('.json')) {
+                        return new Response(JSON.stringify([
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't3',
+                                        data: {
+                                            title: 'Parent discussion thread',
+                                            selftext: '',
+                                            author: 'post_author',
+                                            subreddit: 'programming',
+                                            url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
+                                            permalink: '/r/programming/comments/abc123/parent_discussion_thread/',
+                                            thumbnail: 'self',
+                                            is_video: false,
+                                            created_utc: 1_784_000_000,
+                                            score: 10,
+                                            num_comments: 1,
+                                        },
+                                    }],
+                                },
+                            },
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't1',
+                                        data: {
+                                            id: 'gone123',
+                                            author: '[deleted]',
+                                            body: '[removed]',
+                                            score: 0,
+                                            permalink: '/r/programming/comments/abc123/parent_discussion_thread/gone123/',
+                                            created_utc: 1_784_000_100,
+                                        },
+                                    }],
+                                },
+                            },
+                        ]), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    if (url.startsWith('https://old.reddit.com/')) {
+                        return new Response('<html></html>', {
+                            status: 200,
+                            headers: { 'Content-Type': 'text/html' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/gone123/',
+                    env,
+                );
+
+                assert.equal(response.success, false);
+                assert.match(response.error || '', /comment not found or unavailable/i);
+                assert.equal(response.data, undefined);
             } finally {
                 globalThis.fetch = originalFetch;
             }

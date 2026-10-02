@@ -36,6 +36,32 @@ def _section_text(section: Mapping[str, Any]) -> str:
     return "\n".join(part for part in (heading, body[:900]) if part)
 
 
+def _is_comment_payload(payload: Mapping[str, Any], sections: list[Any]) -> bool:
+    title = str(payload.get("title") or "")
+    if " • Comment on " in title or title.casefold().endswith("• comment"):
+        return True
+    return any(
+        isinstance(section, Mapping)
+        and section.get("kind") == "quote"
+        and str(section.get("body") or "").strip().casefold() == "parent post"
+        for section in sections
+    )
+
+
+def _parent_post_section(sections: list[Any]) -> Optional[Mapping[str, Any]]:
+    return next(
+        (
+            section
+            for section in sections
+            if isinstance(section, Mapping)
+            and section.get("kind") == "quote"
+            and str(section.get("body") or "").strip().casefold() == "parent post"
+            and str(section.get("url") or "").strip().startswith(("https://", "http://"))
+        ),
+        None,
+    )
+
+
 def build_reddit_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -49,7 +75,15 @@ def build_reddit_layout(
     subreddit_icon = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
     sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
-    linked_article = next(
+    is_comment = _is_comment_payload(payload, sections)
+    parent_post = _parent_post_section(sections) if is_comment else None
+    parent_post_url = (
+        str(parent_post.get("url") or "").strip() if parent_post else ""
+    )
+    parent_post_title = (
+        str(parent_post.get("title") or "").strip() if parent_post else ""
+    )
+    linked_article = None if is_comment else next(
         (
             section
             for section in sections
@@ -64,17 +98,30 @@ def build_reddit_layout(
     )
 
     author_text = f"[{author}]({author_url})" if author_url else author
-    identity = f"**{subreddit}**  ·  Posted by {author_text}"
+    identity = (
+        f"**{subreddit}**  ·  Commented by {author_text}"
+        if is_comment
+        else f"**{subreddit}**  ·  Posted by {author_text}"
+    )
     preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()
     description = apply_caption_preferences(description, preferences)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
-    title_text = (
-        f"### [{post_title}]({linked_article_url})"
-        if linked_article_url
-        else f"### {post_title}"
-    )
+    if is_comment:
+        # Keep the parent post title as context; body is the comment itself.
+        display_title = parent_post_title or post_title.removeprefix("Comment on ").strip() or "Comment"
+        title_text = (
+            f"### Comment on [{display_title}]({parent_post_url})"
+            if parent_post_url
+            else f"### Comment on {display_title}"
+        )
+    else:
+        title_text = (
+            f"### [{post_title}]({linked_article_url})"
+            if linked_article_url
+            else f"### {post_title}"
+        )
     header_text = "\n".join(part for part in (identity, title_text, description) if part)
 
     children: list[discord.ui.Item[Any]] = []
@@ -98,7 +145,10 @@ def build_reddit_layout(
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
     image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
     fallback_image = str(payload.get("image") or "").strip()
-    if video_url:
+    if is_comment:
+        # Comment cards keep parent context as text, not the parent post's media.
+        media_urls = []
+    elif video_url:
         media_urls = [video_url]
     elif image_urls:
         media_urls = [str(url) for url in image_urls if url]
@@ -124,7 +174,9 @@ def build_reddit_layout(
     rendered_sections = [
         _section_text(section)
         for section in sections[:4]
-        if isinstance(section, Mapping) and section is not linked_article
+        if isinstance(section, Mapping)
+        and section is not linked_article
+        and section is not parent_post
     ]
     if rendered_sections:
         children.append(discord.ui.Separator())

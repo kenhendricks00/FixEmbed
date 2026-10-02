@@ -129,5 +129,55 @@ class RedditEmbedTests(unittest.TestCase):
         )
 
 
+    def test_comment_permalink_renders_comment_card_not_parent_post_media(self):
+        payload = {
+            "title": "r/programming • Comment on Parent discussion thread",
+            "description": "This is the linked comment body with useful context.",
+            "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/",
+            "authorName": "u/comment_author",
+            "authorUrl": "https://www.reddit.com/user/comment_author/",
+            "authorAvatar": "https://styles.redditmedia.com/programming.png",
+            "stats": "❤️ 64",
+            "timestamp": "2026-07-13T00:01:40.000Z",
+            "image": "https://preview.redd.it/should-not-render.png",
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Parent discussion thread",
+                    "body": "Parent post",
+                    "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/",
+                    "authorName": "u/post_author",
+                    "authorUrl": "https://www.reddit.com/user/post_author/",
+                }
+            ],
+        }
+
+        container = build_reddit_layout(payload).to_components()[0]
+        header = container["components"][0]
+        header_text = header["components"][0]["content"]
+        rendered_text = "\n".join(
+            component.get("content", "")
+            for component in container["components"]
+            if component.get("type") == 10
+        )
+        gallery_items = [
+            component
+            for component in container["components"]
+            if "items" in component
+        ]
+
+        self.assertIn("Commented by [u/comment_author]", header_text)
+        self.assertIn(
+            "### Comment on [Parent discussion thread](https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/)",
+            header_text,
+        )
+        self.assertIn(payload["description"], header_text)
+        self.assertNotIn("Posted by", header_text)
+        self.assertEqual(gallery_items, [])
+        self.assertIn("<:upvote:1526256000641007616> 64", rendered_text)
+        self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
+        self.assertNotIn("Parent post\n", rendered_text)
+
+
 if __name__ == "__main__":
     unittest.main()
