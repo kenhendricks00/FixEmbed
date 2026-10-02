@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, Mapping, Optional
-from urllib.parse import urlencode
+import re
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 import discord
@@ -62,6 +63,105 @@ def _parent_post_section(sections: list[Any]) -> Optional[Mapping[str, Any]]:
     )
 
 
+
+def _is_unavailable_comment_payload(payload: Mapping[str, Any], sections: list[Any]) -> bool:
+    title = str(payload.get("title") or "")
+    if "comment unavailable" in title.casefold():
+        return True
+    return any(
+        isinstance(section, Mapping)
+        and section.get("kind") == "tombstone"
+        and "unavailable" in str(section.get("title") or "").casefold()
+        for section in sections
+    )
+
+
+def is_reddit_comment_permalink(url: str) -> bool:
+    """True when a Reddit URL targets a specific comment id."""
+    if parse_qs(urlparse(url).query).get("comment"):
+        return True
+    # Match Worker parseRedditUrl: /comments/{post}/{slug|comment}/{commentId}
+    return bool(
+        re.search(
+            r"reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/([a-z0-9]+)(?:/|\?|#|$)",
+            url,
+            re.IGNORECASE,
+        )
+    )
+
+
+def build_reddit_comment_unavailable_layout(
+    source_url: str,
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+) -> discord.ui.LayoutView:
+    """Bot-authored failure card when comment metadata cannot be recovered."""
+    return build_reddit_layout(
+        {
+            "title": "Reddit • Comment unavailable",
+            "description": (
+                "This Reddit comment was deleted or is no longer available."
+            ),
+            "url": source_url,
+            "sections": [
+                {
+                    "kind": "tombstone",
+                    "title": "Comment unavailable",
+                    "body": (
+                        "This Reddit comment was deleted or is no longer available."
+                    ),
+                }
+            ],
+        },
+        converted_url,
+        footer_branding,
+        card_preferences,
+    )
+
+
+def _build_unavailable_comment_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+) -> discord.ui.LayoutView:
+    """Render a clean FixEmbed failure card for deleted/missing comments."""
+    subreddit, _ = _split_title(payload.get("title"))
+    source_url = str(payload.get("url") or "").strip()
+    description = str(
+        payload.get("description")
+        or "This Reddit comment was deleted or is no longer available."
+    ).strip()
+    preferences = card_preferences or CardPreferences()
+    header_text = "\n".join(
+        part
+        for part in (
+            f"**{subreddit}**",
+            "### Comment unavailable",
+            description,
+        )
+        if part
+    )
+    children: list[discord.ui.Item[Any]] = [
+        discord.ui.TextDisplay(header_text),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(
+            build_component_footer(
+                fixembed_emoji=f"<:fixembed:{FIXEMBED_EMOJI_ID}>",
+                platform_emoji=f"<:reddit:{REDDIT_EMOJI_ID}>",
+                platform_name="Reddit",
+                source_url=source_url,
+                converted_url=converted_url,
+                timestamp=None,
+                branding=footer_branding,
+            )
+        ),
+    ]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(REDDIT_COLOR)))
+    return view
+
 def build_reddit_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -69,12 +169,20 @@ def build_reddit_layout(
     card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a Reddit Components V2 card using only remote media URLs."""
+    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
+    if _is_unavailable_comment_payload(payload, sections):
+        return _build_unavailable_comment_layout(
+            payload,
+            converted_url,
+            footer_branding,
+            card_preferences,
+        )
+
     subreddit, post_title = _split_title(payload.get("title"))
     author = str(payload.get("authorName") or "u/unknown").strip().lstrip("@")
     author_url = str(payload.get("authorUrl") or "").strip()
     subreddit_icon = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
-    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
     is_comment = _is_comment_payload(payload, sections)
     parent_post = _parent_post_section(sections) if is_comment else None
     parent_post_url = (

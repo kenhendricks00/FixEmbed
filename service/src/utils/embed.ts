@@ -281,18 +281,31 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
  * Generate a simple error page
  */
 export function generateErrorHTML(message: string, url: string): string {
+    const escape = escapeHtml;
+    const isCommentUnavailable = /comment not found or unavailable/i.test(message)
+        || /comment unavailable/i.test(message);
+    const title = isCommentUnavailable ? 'Comment unavailable' : 'FixEmbed Error';
+    const description = isCommentUnavailable
+        ? 'This Reddit comment was deleted or is no longer available.'
+        : message;
+    // Never redirect Discord scrapers to Reddit on comment failures — that resurfaces
+    // misleading community OG (e.g. deleted r/shrimptank after a wrong-sub 301).
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta property="og:title" content="FixEmbed Error">
-  <meta property="og:description" content="${message}">
-  <meta name="theme-color" content="#ff0000">
+  <meta property="og:title" content="${escape(title)}">
+  <meta property="og:description" content="${escape(description)}">
+  <meta property="og:site_name" content="FixEmbed • Reddit">
+  <meta name="theme-color" content="${isCommentUnavailable ? '#FF4500' : '#ff0000'}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${escape(title)}">
+  <meta name="twitter:description" content="${escape(description)}">
 </head>
 <body>
-  <h1>Error</h1>
-  <p>${message}</p>
-  <p><a href="${url}">Go to original URL</a></p>
+  <h1>${escape(title)}</h1>
+  <p>${escape(description)}</p>
+  <p><a href="${escape(url)}">Open original URL</a></p>
 </body>
 </html>`;
 }

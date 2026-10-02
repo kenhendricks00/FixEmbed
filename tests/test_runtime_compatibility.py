@@ -279,7 +279,12 @@ class DiscordRuntimeCompatibilityTests(unittest.TestCase):
     def test_reddit_uses_components_v2_without_uploading_media(self):
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
 
-        self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
+        # Accept single-line or parenthesized multi-line imports (whitespace-tolerant).
+        self.assertRegex(
+            main_source,
+            r"from\s+reddit_embed\s+import\s+"
+            r"(?:\([\s\S]*?\bfetch_reddit_layout\b[\s\S]*?\)|[^\n]*\bfetch_reddit_layout\b)",
+        )
         self.assertIn('elif item.service == "Reddit":', main_source)
         self.assertIn("fetch_reddit_layout(", main_source)
         self.assertIn("component_layouts.append(delivery)", main_source)

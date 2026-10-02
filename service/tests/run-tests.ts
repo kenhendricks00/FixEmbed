@@ -2771,10 +2771,20 @@ const tests: TestCase[] = [
                     env,
                 );
 
-                assert.equal(response.success, false);
-                assert.match(response.error || '', /comment not found or unavailable/i);
-                assert.equal(response.data, undefined);
+                assert.equal(response.success, true);
                 assert.equal(response.redirect, undefined);
+                assert.equal(response.data?.platform, 'reddit');
+                assert.match(response.data?.title || '', /Comment unavailable/i);
+                assert.match(
+                    response.data?.description || '',
+                    /deleted or is no longer available/i,
+                );
+                assert.equal(response.data?.image, undefined);
+                assert.equal(response.data?.stats, undefined);
+                assert.equal(
+                    response.data?.sections?.[0]?.kind,
+                    'tombstone',
+                );
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -2903,9 +2913,15 @@ const tests: TestCase[] = [
                 }) as typeof fetch;
 
                 const response = await redditHandler.handle(mismatched, env);
-                assert.equal(response.success, false);
-                assert.match(response.error || '', /comment not found or unavailable/i);
+                assert.equal(response.success, true);
                 assert.equal(response.redirect, undefined);
+                assert.match(response.data?.title || '', /Comment unavailable/i);
+                assert.match(response.data?.title || '', /r\/shrimptank/i);
+                assert.equal(response.data?.image, undefined);
+                assert.equal(response.data?.stats, undefined);
+                assert.equal(response.data?.sections?.[0]?.kind, 'tombstone');
+                // Must not surface the deleted post's Reddit OG title/score.
+                assert.doesNotMatch(response.data?.title || '', /deleted by user/i);
                 assert.equal(requested[0], mismatched);
                 assert.match(requested[1], /\/r\/shrimptank\/comments\/1bqy1n9\/_\/damfr71\.json/);
             } finally {

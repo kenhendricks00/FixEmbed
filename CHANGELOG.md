@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Reddit comment AMA clean-fail / Discord OG suppress (#66)**
+- Unavailable or deleted Reddit **comment** permalinks now return a FixEmbed-owned tombstone card (no Reddit `redirect`, no community image/score) so Discord scrapers cannot fall through to Reddit OG (desk: AMA `…/damfr71/` → `[deleted by user] : r/shrimptank`).
+- The Discord bot renders that tombstone as a clear "Comment unavailable" Components V2 failure card and still suppresses the original message embeds in suppress/delete delivery mode.
+- Residual Worker error HTML for comment failures uses a non-redirect "Comment unavailable" Open Graph page instead of a generic FixEmbed Error page.
+
 #### **Reddit comment embed hotfix (#66)**
 - Recover comment score from archived old.reddit crawler HTML when `data-score` is omitted (use the visible `score unvoted` title), so live comment cards keep the score row.
 - Follow Reddit's canonical 301 for mismatched `/r/{sub}/comments/{postId}/…` permalinks before fetching, so wrong-subreddit comment URLs resolve to the real community.

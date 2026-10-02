@@ -179,5 +179,66 @@ class RedditEmbedTests(unittest.TestCase):
         self.assertNotIn("Parent post\n", rendered_text)
 
 
+    def test_unavailable_comment_tombstone_renders_failure_card_without_media(self):
+        payload = {
+            "title": "r/shrimptank • Comment unavailable",
+            "description": "This Reddit comment was deleted or is no longer available.",
+            "url": "https://www.reddit.com/r/shrimptank/comments/1bqy1n9/_/damfr71/",
+            "sections": [
+                {
+                    "kind": "tombstone",
+                    "title": "Comment unavailable",
+                    "body": "This Reddit comment was deleted or is no longer available.",
+                }
+            ],
+        }
+        converted_url = "https://fixembed.app/embed?url=ama-comment"
+        container = build_reddit_layout(payload, converted_url).to_components()[0]
+        rendered_text = "\n".join(
+            component.get("content", "")
+            for component in container["components"]
+            if component.get("type") == 10
+        )
+        gallery_items = [
+            component
+            for component in container["components"]
+            if "items" in component
+        ]
+
+        self.assertIn("### Comment unavailable", rendered_text)
+        self.assertIn("deleted or is no longer available", rendered_text)
+        self.assertIn("r/shrimptank", rendered_text)
+        self.assertNotIn("deleted by user", rendered_text.casefold())
+        self.assertEqual(gallery_items, [])
+        self.assertNotIn("<:upvote:", rendered_text)
+        self.assertIn(f"[FixEmbed]({converted_url})", rendered_text)
+        self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
+
+    def test_is_reddit_comment_permalink_detects_comment_ids(self):
+        from reddit_embed import is_reddit_comment_permalink
+
+        self.assertTrue(
+            is_reddit_comment_permalink(
+                "https://www.reddit.com/r/reddit/comments/1bqy1n9/im_spez_ama/damfr71/"
+            )
+        )
+        self.assertTrue(
+            is_reddit_comment_permalink(
+                "https://www.reddit.com/r/programming/comments/abc123/comment/def4567/"
+            )
+        )
+        self.assertTrue(
+            is_reddit_comment_permalink(
+                "https://old.reddit.com/r/programming/comments/abc123/title/?comment=def4567"
+            )
+        )
+        self.assertFalse(
+            is_reddit_comment_permalink(
+                "https://www.reddit.com/r/programming/comments/abc123/example_post/"
+            )
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()
