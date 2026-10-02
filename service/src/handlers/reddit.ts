@@ -68,6 +68,7 @@ interface RedditComment {
     author: string;
     body: string;
     score: number;
+    ups?: number;
     permalink: string;
     created_utc: number;
     parent_id?: string;
@@ -603,6 +604,26 @@ function commentPermalink(
 }
 
 
+
+function commentScoreFromCrawlerHtml(commentTag: string, commentHtml: string): number | undefined {
+    const fromAttr = Number(htmlAttribute(commentTag, 'data-score'));
+    if (Number.isFinite(fromAttr) && htmlAttribute(commentTag, 'data-score') !== '') {
+        return fromAttr;
+    }
+
+    // Archived old.reddit comments often omit data-score; fall back to the visible score title.
+    const fromSpan = Number(
+        commentHtml.match(
+            /<span\b(?=[^>]*\bclass=["'][^"']*\bscore\s+unvoted\b[^"']*["'])[^>]*\btitle=["'](-?\d+)["']/i,
+        )?.[1]
+        || commentHtml.match(
+            /<span\b(?=[^>]*\btitle=["'](-?\d+)["'])[^>]*\bclass=["'][^"']*\bscore\s+unvoted\b[^"']*["']/i,
+        )?.[1],
+    );
+    if (Number.isFinite(fromSpan)) return fromSpan;
+    return undefined;
+}
+
 async function recoverRedditCommentFromCrawlerPage(
     subreddit: string,
     postId: string,
@@ -628,10 +649,10 @@ async function recoverRedditCommentFromCrawlerPage(
 
     const author = htmlAttribute(commentTag, 'data-author');
     const permalink = htmlAttribute(commentTag, 'data-permalink');
-    const score = Number(htmlAttribute(commentTag, 'data-score'));
     const timestampMs = Number(htmlAttribute(commentTag, 'data-timestamp'));
     const commentStart = html.indexOf(commentTag);
     const commentHtml = html.slice(commentStart, commentStart + 12_000);
+    const score = commentScoreFromCrawlerHtml(commentTag, commentHtml);
     const rawBody = commentHtml.match(
         /<div\b(?=[^>]*\bclass=["'][^"']*\bmd\b[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     )?.[1];
@@ -651,7 +672,7 @@ async function recoverRedditCommentFromCrawlerPage(
         id: commentId,
         author: author || '[deleted]',
         body: body || '[deleted]',
-        score: Number.isFinite(score) ? score : 0,
+        score: score ?? 0,
         permalink: permalink || '',
         created_utc: 0,
     })) {
@@ -693,7 +714,7 @@ async function recoverRedditCommentFromCrawlerPage(
             authorAvatar,
             color: platformColors.reddit,
             platform: 'reddit',
-            stats: Number.isFinite(score) && score > 0
+            stats: score !== undefined && score > 0
                 ? formatStats({ likes: score })
                 : undefined,
             timestamp: Number.isFinite(timestampMs) && timestampMs > 0
@@ -963,26 +984,50 @@ export const redditHandler: PlatformHandler = {
             const isShareUrl = candidate.protocol === 'https:'
                 && hostname === 'reddit.com'
                 && /^\/r\/[^/]+\/s\/[^/]+\/?$/i.test(candidate.pathname);
+            // Wrong-subreddit comment/post permalinks 301 to the canonical /r/{real}/comments/... path.
+            const isCommentsUrl = candidate.protocol === 'https:'
+                && hostname === 'reddit.com'
+                && /^\/r\/[^/]+\/comments\/[^/]+/i.test(candidate.pathname);
 
-            if (isShareUrl) {
-                const response = await fetchWithTimeout(url, {
-                    redirect: 'manual',
-                    headers: {
-                        'Accept': 'text/html',
-                        'User-Agent': 'FixEmbed/1.0 (embed service)',
-                    },
-                });
-                const location = response.headers.get('location');
-                if (!location) {
-                    return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
+            if (isShareUrl || isCommentsUrl) {
+                try {
+                    const response = await fetchWithTimeout(url, {
+                        redirect: 'manual',
+                        headers: {
+                            'Accept': 'text/html',
+                            'User-Agent': 'FixEmbed/1.0 (embed service)',
+                        },
+                    });
+                    const location = response.headers.get('location');
+                    if (!location) {
+                        if (isShareUrl) {
+                            return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
+                        }
+                    } else {
+                        const destination = new URL(location, url);
+                        const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
+                        if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
+                            return {
+                                success: false,
+                                error: isShareUrl ? 'Invalid Reddit share redirect' : 'Invalid Reddit comment redirect',
+                                redirect: url,
+                            };
+                        }
+                        resolvedUrl = destination.toString();
+                    }
+                } catch (resolveError) {
+                    if (isShareUrl) {
+                        return {
+                            success: false,
+                            error: resolveError instanceof Error
+                                ? resolveError.message
+                                : 'Could not resolve Reddit share link',
+                            redirect: url,
+                        };
+                    }
+                    // Comment/post permalinks can still be fetched from the original URL if
+                    // the canonical redirect probe is blocked or unavailable.
                 }
-
-                const destination = new URL(location, url);
-                const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
-                if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
-                    return { success: false, error: 'Invalid Reddit share redirect', redirect: url };
-                }
-                resolvedUrl = destination.toString();
             }
         } catch (error) {
             return {
@@ -1046,7 +1091,6 @@ export const redditHandler: PlatformHandler = {
                     return {
                         success: false,
                         error: 'Comment not found or unavailable',
-                        redirect: url,
                     };
                 }
 
@@ -1083,9 +1127,12 @@ export const redditHandler: PlatformHandler = {
                         timestamp,
                         color: platformColors.reddit,
                         platform: 'reddit',
-                        stats: Number.isFinite(comment.score) && comment.score > 0
-                            ? formatStats({ likes: comment.score })
-                            : undefined,
+                        stats: (() => {
+                            const commentScore = Number(comment.score ?? comment.ups);
+                            return Number.isFinite(commentScore) && commentScore > 0
+                                ? formatStats({ likes: commentScore })
+                                : undefined;
+                        })(),
                         sections: [{
                             kind: 'quote',
                             title: post.title,
@@ -1204,7 +1251,6 @@ export const redditHandler: PlatformHandler = {
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Comment not found or unavailable',
-                    redirect: url,
                 };
             }
 
