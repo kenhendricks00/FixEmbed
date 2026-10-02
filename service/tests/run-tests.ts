@@ -1183,7 +1183,7 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.timestamp, '2023-08-08T12:34:56.000Z');
                 assert.equal(
                     response.data?.stats,
-                    '👁️ 1.2K views  ❤️ 56 favorites  💬 7 comments  ⬇️ 8 downloads',
+                    '👁️ 1.2K  ❤️ 56  💬 7  ⬇️ 8',
                 );
                 assert.equal(response.data?.context, '© 2023 team');
                 assert.equal(response.data?.sensitive, false);

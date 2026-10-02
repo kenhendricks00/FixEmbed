@@ -1,5 +1,8 @@
 ## Unreleased
 
+#### **DeviantArt stats labels**
+- Removed literal `views`, `favorites`, `comments`, and `downloads` text from DeviantArt embed stats so cards show icon + number only, matching other platforms.
+
 #### **DeviantArt Worker recovery**
 - Fixed production DeviantArt Worker canaries after PR #57: DeviantArt returns HTTP 403 from Cloudflare Worker egress for both oEmbed and the public HTML page, so the page-scrape fallback never recovered.
 - When oEmbed is blocked, try the public page first, then recover title, artist, signed wixmp media, publication time, and engagement stats through Bluesky Cardyb as an emergency fallback.

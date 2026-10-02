@@ -140,7 +140,8 @@ class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
             payload["authorAvatar"],
             "https://a.deviantart.net/avatars/k/a/kabuvee.jpg?version=1",
         )
-        self.assertIn("510K views", payload["stats"])
+        self.assertIn("510K", payload["stats"])
+        self.assertNotIn("views", payload["stats"])
         self.assertEqual(payload["timestamp"], "2023-11-01T05:47:46+00:00")
 
 
