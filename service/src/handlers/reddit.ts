@@ -605,6 +605,35 @@ function commentPermalink(
 
 
 
+
+function unavailableRedditCommentResponse(
+    subreddit: string,
+    postId: string,
+    commentId: string,
+    permalink?: string,
+): HandlerResponse {
+    const displaySubreddit = safeDecodeURIComponent(subreddit);
+    const description = 'This Reddit comment was deleted or is no longer available.';
+    return {
+        success: true,
+        source: 'first-party',
+        data: {
+            // FixEmbed-owned tombstone so Discord scrapers never fall through to Reddit OG.
+            title: `r/${displaySubreddit} \u2022 Comment unavailable`,
+            description,
+            url: commentPermalink(displaySubreddit, postId, commentId, permalink),
+            siteName: getBrandedSiteName('reddit'),
+            color: platformColors.reddit,
+            platform: 'reddit',
+            sections: [{
+                kind: 'tombstone',
+                title: 'Comment unavailable',
+                body: description,
+            }],
+        },
+    };
+}
+
 function commentScoreFromCrawlerHtml(commentTag: string, commentHtml: string): number | undefined {
     const fromAttr = Number(htmlAttribute(commentTag, 'data-score'));
     if (Number.isFinite(fromAttr) && htmlAttribute(commentTag, 'data-score') !== '') {
@@ -1069,9 +1098,16 @@ export const redditHandler: PlatformHandler = {
             });
 
             if (!response || !response[0]?.data?.children?.[0]) {
+                if (commentId) {
+                    return unavailableRedditCommentResponse(
+                        safeDecodeURIComponent(parsed.subreddit),
+                        safeDecodeURIComponent(parsed.postId),
+                        safeDecodeURIComponent(commentId),
+                    );
+                }
                 return {
                     success: false,
-                    error: commentId ? 'Comment not found' : 'Post not found',
+                    error: 'Post not found',
                 };
             }
 
@@ -1088,10 +1124,12 @@ export const redditHandler: PlatformHandler = {
                 >;
                 const comment = findRedditComment(commentChildren, commentId);
                 if (!comment || isUnavailableRedditComment(comment)) {
-                    return {
-                        success: false,
-                        error: 'Comment not found or unavailable',
-                    };
+                    return unavailableRedditCommentResponse(
+                        post.subreddit || safeDecodeURIComponent(parsed.subreddit),
+                        safeDecodeURIComponent(parsed.postId),
+                        safeDecodeURIComponent(commentId),
+                        comment?.permalink,
+                    );
                 }
 
                 const fallbackSubredditIcon = decodeRedditHtml(
@@ -1248,10 +1286,11 @@ export const redditHandler: PlatformHandler = {
                     console.error('Reddit comment recovery error:', recoveryError);
                 }
                 console.error('Reddit comment handler error:', error);
-                return {
-                    success: false,
-                    error: error instanceof Error ? error.message : 'Comment not found or unavailable',
-                };
+                return unavailableRedditCommentResponse(
+                    safeDecodeURIComponent(parsed.subreddit),
+                    safeDecodeURIComponent(parsed.postId),
+                    safeDecodeURIComponent(parsed.commentId),
+                );
             }
 
             try {
