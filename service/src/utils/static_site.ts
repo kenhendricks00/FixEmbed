@@ -183,7 +183,7 @@ export const indexHtml = `<!DOCTYPE html>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-crown"></i></div>
                     <h3>Premium Perks</h3>
-                    <p>Unlock custom embed colors, bot compatibility, and a cleaner look with Server Subscriptions.</p>
+                    <p>Optional $1.99/mo server controls: card colors and styles, branded footers, bot/webhook auto-fix, exclusions, private analytics, and a cleaner look. Translation stays free.</p>
                 </div>
             </div>
         </div>
@@ -300,29 +300,54 @@ export const indexHtml = `<!DOCTYPE html>
         <div class="container">
             <div style="text-align: center; margin-bottom: 3rem;">
                 <h2>FixEmbed <span class="gradient-text">Premium</span></h2>
-                <p class="section-subtitle">Take your server to the next level with exclusive branding and power features</p>
+                <p class="section-subtitle">Server customization and ops controls for <strong>$1.99/month</strong>. Media quality, carousels, GIFs, and default translation stay free for everyone.</p>
             </div>
             
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-palette"></i></div>
-                    <h3>Custom Branding</h3>
-                    <p>Set a custom hex color for all bot command responses to match your server's theme perfectly.</p>
+                    <h3>Custom Card Colors</h3>
+                    <p>Match every supported Components V2 social card to your server's accent color.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-sliders-h"></i></div>
+                    <h3>Card Style Controls</h3>
+                    <p>Show or hide engagement stats and hashtags, and choose full or compact captions.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-tag"></i></div>
+                    <h3>Branded Footers</h3>
+                    <p>Display your server's live name and an optional server emoji with subtle via FixEmbed attribution.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-robot"></i></div>
-                    <h3>Bot Compatibility</h3>
-                    <p>Premium servers fix links even when sent by other bots or webhooks. Never miss a link again.</p>
+                    <h3>Bot &amp; Webhook Auto-Fix</h3>
+                    <p>Automatically fix supported links posted by other bots and webhooks, not just members.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-user-slash"></i></div>
+                    <h3>Member &amp; Role Exclusions</h3>
+                    <p>Exclude selected members or roles from automatic conversion while keeping manual /fix available.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                    <h3>Private 30-Day Analytics</h3>
+                    <p>Review aggregate rich-card and fallback counts by platform. No URLs, post text, or member identities stored.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><i class="fas fa-magic"></i></div>
-                    <h3>Clean Experience</h3>
-                    <p>Enjoy a cleaner look by removing the "Sent by @user" label from your fixed embeds.</p>
+                    <h3>Cleaner Automatic Posts</h3>
+                    <p>Remove the "Sent by" attribution from automatic replacements for a cleaner look.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fas fa-gem"></i></div>
+                    <h3>Supporters Role</h3>
+                    <p>Receive the Supporters role in the FixEmbed Support Server while your Premium entitlement is active.</p>
                 </div>
             </div>
             
             <div style="text-align: center; margin-top: 4rem;">
-                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Ready to upgrade? Use <code>/premium</code> in your server to get started!</p>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Ready to upgrade? Use <code>/premium</code> in your server to subscribe via Discord Server Subscriptions.</p>
                 <a href="/install/server/home-final" class="secondary-btn">Add Premium to a Server</a>
             </div>
         </div>
