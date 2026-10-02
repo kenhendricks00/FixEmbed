@@ -2610,27 +2610,39 @@ const tests: TestCase[] = [
 
                 assert.equal(response.success, true);
                 assert.equal(response.data?.platform, 'reddit');
-                assert.equal(response.data?.title, 'r/programming • Comment on Parent discussion thread');
+                assert.equal(response.data?.title, 'r/programming • Parent discussion thread');
+                assert.equal(response.data?.description, '');
+                assert.equal(response.data?.authorName, 'u/post_author');
                 assert.equal(
-                    response.data?.description,
-                    'This is the linked comment body with useful context.',
+                    response.data?.authorUrl,
+                    'https://www.reddit.com/user/post_author/',
                 );
-                assert.equal(response.data?.authorName, 'u/comment_author');
                 assert.equal(
                     response.data?.url,
                     'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
                 );
                 assert.match(response.data?.stats || '', /64/);
+                assert.match(response.data?.stats || '', /12/);
                 assert.equal(response.data?.image, undefined);
                 assert.equal(response.data?.video, undefined);
-                assert.deepEqual(response.data?.sections, [{
-                    kind: 'quote',
-                    title: 'Parent discussion thread',
-                    body: 'Parent post',
-                    url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
-                    authorName: 'u/post_author',
-                    authorUrl: 'https://www.reddit.com/user/post_author/',
-                }]);
+                assert.deepEqual(response.data?.sections, [
+                    {
+                        kind: 'quote',
+                        title: 'Comment by u/comment_author',
+                        body: 'This is the linked comment body with useful context.',
+                        authorName: 'u/comment_author',
+                        authorUrl: 'https://www.reddit.com/user/comment_author/',
+                        url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
+                    },
+                    {
+                        kind: 'quote',
+                        title: 'Parent discussion thread',
+                        body: 'Parent post',
+                        url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
+                        authorName: 'u/post_author',
+                        authorUrl: 'https://www.reddit.com/user/post_author/',
+                    },
+                ]);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -2833,12 +2845,20 @@ const tests: TestCase[] = [
 
                 const response = await redditHandler.handle(commentUrl, env);
                 assert.equal(response.success, true);
-                assert.equal(response.data?.authorName, 'u/kemitche');
-                assert.match(response.data?.description || '', /You're close/);
+                assert.equal(response.data?.description, '');
                 assert.match(response.data?.stats || '', /4/);
                 assert.equal(
                     response.data?.title,
-                    'r/redditdev • Comment on How are reddit urls constructed?',
+                    'r/redditdev • How are reddit urls constructed?',
+                );
+                const commentSection = response.data?.sections?.find(
+                    (section) => section.title?.startsWith('Comment by '),
+                );
+                assert.equal(commentSection?.authorName, 'u/kemitche');
+                assert.match(commentSection?.body || '', /You're close/);
+                assert.equal(
+                    response.data?.sections?.find((section) => section.body === 'Parent post')?.title,
+                    'How are reddit urls constructed?',
                 );
             } finally {
                 globalThis.fetch = originalFetch;
