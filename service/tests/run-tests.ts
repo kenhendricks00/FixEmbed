@@ -517,6 +517,18 @@ const tests: TestCase[] = [
                 parseRedditUrl('https://old.reddit.com/r/programming/comments/abc123/example_post/?comment=def4567'),
                 { subreddit: 'programming', postId: 'abc123', commentId: 'def4567' },
             );
+            assert.deepEqual(
+                parseRedditUrl('https://www.reddit.com/r/reddit/comments/1bqy1n9/im_spez_ama/damfr71/'),
+                { subreddit: 'reddit', postId: '1bqy1n9', commentId: 'damfr71' },
+            );
+            assert.deepEqual(
+                parseRedditUrl('https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/'),
+                { subreddit: 'redditdev', postId: 'e62riz', commentId: 'f9ncp3g' },
+            );
+            assert.deepEqual(
+                parseRedditUrl('https://www.reddit.com/r/shrimptank/comments/1bqy1n9/comment/damfr71/'),
+                { subreddit: 'shrimptank', postId: '1bqy1n9', commentId: 'damfr71' },
+            );
 
             assert.deepEqual(
                 parseBlueskyUrl('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t'),
@@ -2762,6 +2774,140 @@ const tests: TestCase[] = [
                 assert.equal(response.success, false);
                 assert.match(response.error || '', /comment not found or unavailable/i);
                 assert.equal(response.data, undefined);
+                assert.equal(response.redirect, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler recovers comment score from archived crawler HTML without data-score',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            const commentUrl = 'https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/';
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url === commentUrl || url.includes('/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g')) {
+                        // No Location — canonical already.
+                        if (!url.includes('.json') && !url.includes('old.reddit.com') && !url.includes('/about')) {
+                            return new Response(null, { status: 200 });
+                        }
+                    }
+                    if (url.includes('/comments/') && url.includes('.json')) {
+                        return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                    }
+                    if (url.startsWith('https://old.reddit.com/')) {
+                        return new Response(`
+                            <div class="thing link" id="thing_t3_e62riz"
+                                data-permalink="/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/">
+                                <a class="title" href="/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/">How are reddit urls constructed?</a>
+                            </div>
+                            <div class="thing comment" id="thing_t1_f9ncp3g"
+                                data-author="kemitche"
+                                data-permalink="/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/">
+                                <span class="score unvoted" title="4">4 points</span>
+                                <div class="md"><p>You're close. Let's take a look at the permalink.</p></div>
+                            </div>
+                        `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                    }
+                    if (url.includes('/about')) {
+                        return new Response(JSON.stringify({ data: {} }), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(commentUrl, env);
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorName, 'u/kemitche');
+                assert.match(response.data?.description || '', /You're close/);
+                assert.match(response.data?.stats || '', /4/);
+                assert.equal(
+                    response.data?.title,
+                    'r/redditdev • Comment on How are reddit urls constructed?',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler follows wrong-subreddit comment redirects before fetching',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            const mismatched = 'https://www.reddit.com/r/reddit/comments/1bqy1n9/im_spez_ama/damfr71/';
+            const requested: string[] = [];
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+                    const url = String(input);
+                    requested.push(url);
+                    if (url === mismatched) {
+                        assert.equal(init?.redirect, 'manual');
+                        return new Response(null, {
+                            status: 301,
+                            headers: { Location: '/r/shrimptank/comments/1bqy1n9/comment/damfr71/' },
+                        });
+                    }
+                    if (url.includes('/comments/1bqy1n9') && url.includes('.json')) {
+                        assert.match(url, /\/r\/shrimptank\/comments\/1bqy1n9/);
+                        return new Response(JSON.stringify([
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't3',
+                                        data: {
+                                            title: '[deleted by user]',
+                                            selftext: '',
+                                            author: '[deleted]',
+                                            subreddit: 'shrimptank',
+                                            url: 'https://www.reddit.com/r/shrimptank/comments/1bqy1n9/',
+                                            permalink: '/r/shrimptank/comments/1bqy1n9/',
+                                            thumbnail: 'self',
+                                            is_video: false,
+                                            created_utc: 1_700_000_000,
+                                            score: 1,
+                                            num_comments: 0,
+                                        },
+                                    }],
+                                },
+                            },
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't1',
+                                        data: {
+                                            id: 'damfr71',
+                                            author: '[deleted]',
+                                            body: '[deleted]',
+                                            score: 0,
+                                            permalink: '/r/shrimptank/comments/1bqy1n9/comment/damfr71/',
+                                            created_utc: 1_700_000_100,
+                                        },
+                                    }],
+                                },
+                            },
+                        ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                    }
+                    if (url.startsWith('https://old.reddit.com/')) {
+                        return new Response('<html></html>', {
+                            status: 200,
+                            headers: { 'Content-Type': 'text/html' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(mismatched, env);
+                assert.equal(response.success, false);
+                assert.match(response.error || '', /comment not found or unavailable/i);
+                assert.equal(response.redirect, undefined);
+                assert.equal(requested[0], mismatched);
+                assert.match(requested[1], /\/r\/shrimptank\/comments\/1bqy1n9\/_\/damfr71\.json/);
             } finally {
                 globalThis.fetch = originalFetch;
             }

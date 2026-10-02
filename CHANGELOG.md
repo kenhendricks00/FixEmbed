@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Reddit comment embed hotfix (#66)**
+- Recover comment score from archived old.reddit crawler HTML when `data-score` is omitted (use the visible `score unvoted` title), so live comment cards keep the score row.
+- Follow Reddit's canonical 301 for mismatched `/r/{sub}/comments/{postId}/…` permalinks before fetching, so wrong-subreddit comment URLs resolve to the real community.
+- Stop attaching a Reddit `redirect` on unavailable comment failures so Discord bots no longer scrape a misleading community OG card (e.g. deleted `r/shrimptank` post) when comment embeds fail.
+
 #### **Reddit comment embeds**
 - Detect Reddit comment permalinks that include a comment id (`/comments/{postId}/…/{commentId}/`, `/comment/{commentId}/`, or `?comment=`).
 - Embed the linked comment (author, body, score, comment permalink) with parent-post title context instead of rendering only the parent post card.
