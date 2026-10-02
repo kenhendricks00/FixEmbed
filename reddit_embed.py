@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import aiohttp
 import discord
 
-from component_emojis import format_component_stats
+from component_emojis import application_emoji, format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
 from timestamp_utils import parse_post_timestamp
@@ -35,18 +35,6 @@ def _section_text(section: Mapping[str, Any]) -> str:
     body = str(section.get("body") or "").strip()
     heading = f"### [{title}]({url})" if url else f"### {title}"
     return "\n".join(part for part in (heading, body[:900]) if part)
-
-
-def _is_comment_payload(payload: Mapping[str, Any], sections: list[Any]) -> bool:
-    title = str(payload.get("title") or "")
-    if " • Comment on " in title or title.casefold().endswith("• comment"):
-        return True
-    return any(
-        isinstance(section, Mapping)
-        and section.get("kind") == "quote"
-        and str(section.get("body") or "").strip().casefold() == "parent post"
-        for section in sections
-    )
 
 
 def _parent_post_section(sections: list[Any]) -> Optional[Mapping[str, Any]]:
@@ -162,6 +150,55 @@ def _build_unavailable_comment_layout(
     view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(REDDIT_COLOR)))
     return view
 
+
+def _comment_quote_section(sections: list[Any]) -> Optional[Mapping[str, Any]]:
+    return next(
+        (
+            section
+            for section in sections
+            if isinstance(section, Mapping)
+            and section.get("kind") == "quote"
+            and section is not _parent_post_section(sections)
+            and (
+                str(section.get("title") or "").strip().casefold().startswith("comment by ")
+                or bool(str(section.get("body") or "").strip())
+            )
+        ),
+        None,
+    )
+
+
+def _is_comment_payload(payload: Mapping[str, Any], sections: list[Any]) -> bool:
+    title = str(payload.get("title") or "")
+    if " • Comment on " in title or title.casefold().endswith("• comment"):
+        return True
+    return _parent_post_section(sections) is not None or _comment_quote_section(sections) is not None
+
+
+def _blockquote_comment(section: Mapping[str, Any]) -> str:
+    """Components V2 quote block: markdown blockquote with the quote emoji."""
+    author = str(section.get("authorName") or "").strip().lstrip("@")
+    title = str(section.get("title") or "").strip()
+    if not author and title.casefold().startswith("comment by "):
+        author = title.split(":", 1)[0][len("Comment by ") :].strip().lstrip("@")
+    author_url = str(section.get("authorUrl") or "").strip()
+    body = str(section.get("body") or "").strip()
+    if len(body) > 3000:
+        body = f"{body[:2997].rstrip()}…"
+
+    if author and author_url:
+        author_text = f"[{author}]({author_url})"
+    else:
+        author_text = author or "unknown"
+    heading = f"> {application_emoji('quote')} Comment by {author_text}:"
+    if not body:
+        return heading
+    quoted_body = "\n".join(
+        f"> {line}" if line else "> \u200b" for line in body.splitlines()
+    )
+    return f"{heading}\n> \u200b\n{quoted_body}"
+
+
 def build_reddit_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -185,12 +222,12 @@ def build_reddit_layout(
     source_url = str(payload.get("url") or "").strip()
     is_comment = _is_comment_payload(payload, sections)
     parent_post = _parent_post_section(sections) if is_comment else None
-    parent_post_url = (
-        str(parent_post.get("url") or "").strip() if parent_post else ""
-    )
-    parent_post_title = (
-        str(parent_post.get("title") or "").strip() if parent_post else ""
-    )
+    comment_quote = _comment_quote_section(sections) if is_comment else None
+    parent_post_url = str(parent_post.get("url") or "").strip() if parent_post else ""
+    parent_post_title = str(parent_post.get("title") or "").strip() if parent_post else ""
+    if is_comment and parent_post and str(parent_post.get("authorName") or "").strip():
+        author = str(parent_post.get("authorName") or "").strip().lstrip("@")
+        author_url = str(parent_post.get("authorUrl") or "").strip()
     linked_article = None if is_comment else next(
         (
             section
@@ -206,31 +243,33 @@ def build_reddit_layout(
     )
 
     author_text = f"[{author}]({author_url})" if author_url else author
-    identity = (
-        f"**{subreddit}**  ·  Commented by {author_text}"
-        if is_comment
-        else f"**{subreddit}**  ·  Posted by {author_text}"
-    )
+    identity = f"**{subreddit}**  ·  Posted by {author_text}"
     preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()
     description = apply_caption_preferences(description, preferences)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
+
     if is_comment:
-        # Keep the parent post title as context; body is the comment itself.
-        display_title = parent_post_title or post_title.removeprefix("Comment on ").strip() or "Comment"
-        title_text = (
-            f"### Comment on [{display_title}]({parent_post_url})"
-            if parent_post_url
-            else f"### Comment on {display_title}"
+        display_title = (
+            parent_post_title
+            or post_title.removeprefix("Comment on ").strip()
+            or "Reddit post"
         )
+        title_text = (
+            f"### [{display_title}]({parent_post_url})"
+            if parent_post_url
+            else f"### {display_title}"
+        )
+        header_description = ""
     else:
         title_text = (
             f"### [{post_title}]({linked_article_url})"
             if linked_article_url
             else f"### {post_title}"
         )
-    header_text = "\n".join(part for part in (identity, title_text, description) if part)
+        header_description = description
+    header_text = "\n".join(part for part in (identity, title_text, header_description) if part)
 
     children: list[discord.ui.Item[Any]] = []
     if subreddit_icon:
@@ -249,13 +288,27 @@ def build_reddit_layout(
     if linked_article_url:
         children.append(discord.ui.TextDisplay(linked_article_url))
 
+    if is_comment and comment_quote:
+        children.append(discord.ui.TextDisplay(_blockquote_comment(comment_quote)))
+    elif is_comment and description:
+        children.append(
+            discord.ui.TextDisplay(
+                _blockquote_comment(
+                    {
+                        "authorName": str(payload.get("authorName") or "").strip(),
+                        "authorUrl": str(payload.get("authorUrl") or "").strip(),
+                        "body": description,
+                    }
+                )
+            )
+        )
+
     video = payload.get("video")
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
     image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
     fallback_image = str(payload.get("image") or "").strip()
     if is_comment:
-        # Comment cards keep parent context as text, not the parent post's media.
-        media_urls = []
+        media_urls = [fallback_image] if fallback_image else []
     elif video_url:
         media_urls = [video_url]
     elif image_urls:
@@ -271,7 +324,7 @@ def build_reddit_layout(
                 *(
                     discord.MediaGalleryItem(
                         url,
-                        description=post_title[:1024] or None,
+                        description=(parent_post_title or post_title)[:1024] or None,
                         spoiler=preferences.content_visibility.should_spoiler(payload),
                     )
                     for url in media_urls[:10]
@@ -285,6 +338,7 @@ def build_reddit_layout(
         if isinstance(section, Mapping)
         and section is not linked_article
         and section is not parent_post
+        and section is not comment_quote
     ]
     if rendered_sections:
         children.append(discord.ui.Separator())

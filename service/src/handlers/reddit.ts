@@ -2,7 +2,7 @@
  * FixEmbed Service - Reddit Handler
  */
 
-import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
@@ -604,6 +604,91 @@ function commentPermalink(
 }
 
 
+function buildRedditCommentCard(options: {
+    subreddit: string;
+    postId: string;
+    commentId: string;
+    commentAuthor: string;
+    commentBody: string;
+    commentPermalinkPath?: string;
+    commentScore?: number;
+    commentTimestamp?: string;
+    parentTitle: string;
+    parentUrl: string;
+    parentAuthor?: string;
+    parentCommentCount?: number;
+    parentImage?: string;
+    /** Parent post `over_18`. Same NSFW classification post cards already use. */
+    parentOver18?: boolean;
+    /** Parent post `spoiler`. Same spoiler classification post cards already use. */
+    parentSpoiler?: boolean;
+    authorAvatar?: string;
+}): EmbedData {
+    const commentAuthor = options.commentAuthor.replace(/^u\//i, '');
+    const parentAuthor = options.parentAuthor?.replace(/^u\//i, '').trim();
+    const displayTitle = options.parentTitle.trim() || 'Reddit post';
+    const commentUrl = commentPermalink(
+        options.subreddit,
+        options.postId,
+        options.commentId,
+        options.commentPermalinkPath,
+    );
+    const commentScore = options.commentScore;
+    const likes = Number.isFinite(commentScore as number) && (commentScore as number) > 0
+        ? commentScore
+        : undefined;
+    const comments = Number.isFinite(options.parentCommentCount as number)
+        && (options.parentCommentCount as number) > 0
+        ? options.parentCommentCount
+        : undefined;
+    const stats = likes === undefined && comments === undefined
+        ? undefined
+        : formatStats({ likes, comments });
+    const sensitivityTypes = [
+        ...(options.parentOver18 === true ? ['nsfw' as const] : []),
+        ...(options.parentSpoiler === true ? ['spoiler' as const] : []),
+    ];
+
+    return {
+        title: `r/${options.subreddit} \u2022 ${displayTitle}`,
+        description: '',
+        url: commentUrl,
+        siteName: getBrandedSiteName('reddit'),
+        authorName: parentAuthor ? `u/${parentAuthor}` : undefined,
+        authorUrl: parentAuthor
+            ? `https://www.reddit.com/user/${encodeURIComponent(parentAuthor)}/`
+            : undefined,
+        authorAvatar: options.authorAvatar,
+        timestamp: options.commentTimestamp,
+        color: platformColors.reddit,
+        platform: 'reddit',
+        stats,
+        image: options.parentImage,
+        sensitive: sensitivityTypes.length > 0,
+        sensitivityTypes: sensitivityTypes.length ? sensitivityTypes : undefined,
+        sections: [
+            {
+                kind: 'quote' as const,
+                title: `Comment by u/${commentAuthor}`,
+                body: truncateText(options.commentBody, 3000),
+                authorName: `u/${commentAuthor}`,
+                authorUrl: `https://www.reddit.com/user/${encodeURIComponent(commentAuthor)}/`,
+                url: commentUrl,
+            },
+            {
+                kind: 'quote' as const,
+                title: displayTitle,
+                body: 'Parent post',
+                url: options.parentUrl,
+                authorName: parentAuthor ? `u/${parentAuthor}` : undefined,
+                authorUrl: parentAuthor
+                    ? `https://www.reddit.com/user/${encodeURIComponent(parentAuthor)}/`
+                    : undefined,
+            },
+        ],
+    };
+}
+
 
 
 function unavailableRedditCommentResponse(
@@ -724,6 +809,10 @@ async function recoverRedditCommentFromCrawlerPage(
         ? new URL(postPermalink, 'https://www.reddit.com').toString()
         : `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${encodeURIComponent(postId)}/`;
     const displayTitle = postTitle || 'Reddit post';
+    const parentAuthor = postTag ? htmlAttribute(postTag, 'data-author') : '';
+    const parentCommentCount = postTag
+        ? Number(htmlAttribute(postTag, 'data-comments-count')) || undefined
+        : undefined;
     const authorAvatar = await fetchSubredditIcon(
         subreddit,
         REDDIT_FALLBACK_ICON,
@@ -733,29 +822,23 @@ async function recoverRedditCommentFromCrawlerPage(
     return {
         success: true,
         source: 'first-party',
-        data: {
-            title: `r/${subreddit} \u2022 Comment on ${displayTitle}`,
-            description: truncateText(body, 3000),
-            url: commentPermalink(subreddit, postId, commentId, permalink),
-            siteName: getBrandedSiteName('reddit'),
-            authorName: `u/${author}`,
-            authorUrl: `https://www.reddit.com/user/${encodeURIComponent(author)}/`,
-            authorAvatar,
-            color: platformColors.reddit,
-            platform: 'reddit',
-            stats: score !== undefined && score > 0
-                ? formatStats({ likes: score })
-                : undefined,
-            timestamp: Number.isFinite(timestampMs) && timestampMs > 0
+        data: buildRedditCommentCard({
+            subreddit,
+            postId,
+            commentId,
+            commentAuthor: author,
+            commentBody: body,
+            commentPermalinkPath: permalink,
+            commentScore: score,
+            commentTimestamp: Number.isFinite(timestampMs) && timestampMs > 0
                 ? new Date(timestampMs).toISOString()
                 : undefined,
-            sections: [{
-                kind: 'quote' as const,
-                title: displayTitle,
-                body: 'Parent post',
-                url: parentUrl,
-            }],
-        },
+            parentTitle: displayTitle,
+            parentUrl,
+            parentAuthor: parentAuthor || undefined,
+            parentCommentCount,
+            authorAvatar,
+        }),
     };
 }
 
@@ -1109,6 +1192,10 @@ export const redditHandler: PlatformHandler = {
                     success: false,
                     error: 'Post not found',
                 };
+                return {
+                    success: false,
+                    error: 'Post not found',
+                };
             }
 
             const postChild = response[0].data.children[0];
@@ -1145,43 +1232,39 @@ export const redditHandler: PlatformHandler = {
                 const timestamp = Number.isFinite(comment.created_utc) && comment.created_utc > 0
                     ? new Date(comment.created_utc * 1000).toISOString()
                     : undefined;
+                const parentImage = (() => {
+                    const gallery = redditGalleryImages(post);
+                    if (gallery.length) return gallery[0];
+                    const direct = directRedditImageUrl(post.url);
+                    if (direct) return direct;
+                    const thumb = decodeRedditHtml(post.thumbnail || '');
+                    if (thumb && !['self', 'default', 'nsfw', 'spoiler', 'image'].includes(thumb)) {
+                        return thumb;
+                    }
+                    return undefined;
+                })();
 
                 return {
                     success: true,
                     source: 'first-party',
-                    data: {
-                        title: `r/${post.subreddit} • Comment on ${post.title}`,
-                        description: truncateText(comment.body, 3000),
-                        url: commentPermalink(
-                            post.subreddit,
-                            parsed.postId,
-                            commentId,
-                            comment.permalink,
-                        ),
-                        siteName: getBrandedSiteName('reddit'),
-                        authorName: `u/${comment.author}`,
-                        authorUrl: `https://www.reddit.com/user/${encodeURIComponent(comment.author)}/`,
+                    data: buildRedditCommentCard({
+                        subreddit: post.subreddit,
+                        postId: parsed.postId,
+                        commentId,
+                        commentAuthor: comment.author,
+                        commentBody: comment.body,
+                        commentPermalinkPath: comment.permalink,
+                        commentScore: Number(comment.score ?? comment.ups),
+                        commentTimestamp: timestamp,
+                        parentTitle: post.title,
+                        parentUrl,
+                        parentAuthor: post.author,
+                        parentCommentCount: post.num_comments,
+                        parentImage,
+                        parentOver18: post.over_18 === true,
+                        parentSpoiler: post.spoiler === true,
                         authorAvatar: subredditIcon,
-                        timestamp,
-                        color: platformColors.reddit,
-                        platform: 'reddit',
-                        stats: (() => {
-                            const commentScore = Number(comment.score ?? comment.ups);
-                            return Number.isFinite(commentScore) && commentScore > 0
-                                ? formatStats({ likes: commentScore })
-                                : undefined;
-                        })(),
-                        sections: [{
-                            kind: 'quote',
-                            title: post.title,
-                            body: 'Parent post',
-                            url: parentUrl,
-                            authorName: post.author ? `u/${post.author}` : undefined,
-                            authorUrl: post.author
-                                ? `https://www.reddit.com/user/${encodeURIComponent(post.author)}/`
-                                : undefined,
-                        }],
-                    },
+                    }),
                 };
             }
 

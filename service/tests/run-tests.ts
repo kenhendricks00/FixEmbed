@@ -2610,27 +2610,116 @@ const tests: TestCase[] = [
 
                 assert.equal(response.success, true);
                 assert.equal(response.data?.platform, 'reddit');
-                assert.equal(response.data?.title, 'r/programming • Comment on Parent discussion thread');
+                assert.equal(response.data?.title, 'r/programming • Parent discussion thread');
+                assert.equal(response.data?.description, '');
+                assert.equal(response.data?.authorName, 'u/post_author');
                 assert.equal(
-                    response.data?.description,
-                    'This is the linked comment body with useful context.',
+                    response.data?.authorUrl,
+                    'https://www.reddit.com/user/post_author/',
                 );
-                assert.equal(response.data?.authorName, 'u/comment_author');
                 assert.equal(
                     response.data?.url,
                     'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
                 );
                 assert.match(response.data?.stats || '', /64/);
+                assert.match(response.data?.stats || '', /12/);
                 assert.equal(response.data?.image, undefined);
                 assert.equal(response.data?.video, undefined);
-                assert.deepEqual(response.data?.sections, [{
-                    kind: 'quote',
-                    title: 'Parent discussion thread',
-                    body: 'Parent post',
-                    url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
-                    authorName: 'u/post_author',
-                    authorUrl: 'https://www.reddit.com/user/post_author/',
-                }]);
+                assert.equal(response.data?.sensitive, false);
+                assert.equal(response.data?.sensitivityTypes, undefined);
+                assert.deepEqual(response.data?.sections, [
+                    {
+                        kind: 'quote',
+                        title: 'Comment by u/comment_author',
+                        body: 'This is the linked comment body with useful context.',
+                        authorName: 'u/comment_author',
+                        authorUrl: 'https://www.reddit.com/user/comment_author/',
+                        url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/',
+                    },
+                    {
+                        kind: 'quote',
+                        title: 'Parent discussion thread',
+                        body: 'Parent post',
+                        url: 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/',
+                        authorName: 'u/post_author',
+                        authorUrl: 'https://www.reddit.com/user/post_author/',
+                    },
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler marks comment parent images sensitive when the post is over_18 or spoiler',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const env = {} as Env;
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.includes('/comments/') && url.includes('.json')) {
+                        return new Response(JSON.stringify([
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't3',
+                                        data: {
+                                            title: 'NSFW parent',
+                                            selftext: '',
+                                            author: 'post_author',
+                                            subreddit: 'gonewild',
+                                            url: 'https://i.redd.it/nsfw-parent.png',
+                                            permalink: '/r/gonewild/comments/abc123/nsfw_parent/',
+                                            thumbnail: 'https://preview.redd.it/nsfw-thumb.jpg',
+                                            over_18: true,
+                                            spoiler: true,
+                                            is_video: false,
+                                            created_utc: 1_784_000_000,
+                                            score: 10,
+                                            num_comments: 2,
+                                        },
+                                    }],
+                                },
+                            },
+                            {
+                                data: {
+                                    children: [{
+                                        kind: 't1',
+                                        data: {
+                                            id: 'def4567',
+                                            author: 'comment_author',
+                                            body: 'Comment on an NSFW parent.',
+                                            score: 3,
+                                            permalink: '/r/gonewild/comments/abc123/nsfw_parent/def4567/',
+                                            created_utc: 1_784_000_100,
+                                        },
+                                    }],
+                                },
+                            },
+                        ]), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    if (url.includes('/about')) {
+                        return new Response(JSON.stringify({ data: {} }), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/json' },
+                        });
+                    }
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+
+                const response = await redditHandler.handle(
+                    'https://www.reddit.com/r/gonewild/comments/abc123/nsfw_parent/def4567/',
+                    env,
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.data?.image, 'https://i.redd.it/nsfw-parent.png');
+                assert.equal(response.data?.sensitive, true);
+                assert.deepEqual(response.data?.sensitivityTypes, ['nsfw', 'spoiler']);
             } finally {
                 globalThis.fetch = originalFetch;
             }
@@ -2833,12 +2922,20 @@ const tests: TestCase[] = [
 
                 const response = await redditHandler.handle(commentUrl, env);
                 assert.equal(response.success, true);
-                assert.equal(response.data?.authorName, 'u/kemitche');
-                assert.match(response.data?.description || '', /You're close/);
+                assert.equal(response.data?.description, '');
                 assert.match(response.data?.stats || '', /4/);
                 assert.equal(
                     response.data?.title,
-                    'r/redditdev • Comment on How are reddit urls constructed?',
+                    'r/redditdev • How are reddit urls constructed?',
+                );
+                const commentSection = response.data?.sections?.find(
+                    (section) => section.title?.startsWith('Comment by '),
+                );
+                assert.equal(commentSection?.authorName, 'u/kemitche');
+                assert.match(commentSection?.body || '', /You're close/);
+                assert.equal(
+                    response.data?.sections?.find((section) => section.body === 'Parent post')?.title,
+                    'How are reddit urls constructed?',
                 );
             } finally {
                 globalThis.fetch = originalFetch;

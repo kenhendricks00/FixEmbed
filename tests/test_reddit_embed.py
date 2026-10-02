@@ -129,18 +129,26 @@ class RedditEmbedTests(unittest.TestCase):
         )
 
 
-    def test_comment_permalink_renders_comment_card_not_parent_post_media(self):
+    def test_comment_permalink_renders_embedded_style_quote_block(self):
         payload = {
-            "title": "r/programming • Comment on Parent discussion thread",
-            "description": "This is the linked comment body with useful context.",
+            "title": "r/programming • Parent discussion thread",
+            "description": "",
             "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/",
-            "authorName": "u/comment_author",
-            "authorUrl": "https://www.reddit.com/user/comment_author/",
+            "authorName": "u/post_author",
+            "authorUrl": "https://www.reddit.com/user/post_author/",
             "authorAvatar": "https://styles.redditmedia.com/programming.png",
-            "stats": "❤️ 64",
+            "stats": "💬 12  ❤️ 64",
             "timestamp": "2026-07-13T00:01:40.000Z",
-            "image": "https://preview.redd.it/should-not-render.png",
+            "image": "https://preview.redd.it/parent-thumb.png",
             "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Comment by u/comment_author",
+                    "body": "This is the linked comment body with useful context.",
+                    "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/",
+                    "authorName": "u/comment_author",
+                    "authorUrl": "https://www.reddit.com/user/comment_author/",
+                },
                 {
                     "kind": "quote",
                     "title": "Parent discussion thread",
@@ -148,7 +156,7 @@ class RedditEmbedTests(unittest.TestCase):
                     "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/",
                     "authorName": "u/post_author",
                     "authorUrl": "https://www.reddit.com/user/post_author/",
-                }
+                },
             ],
         }
 
@@ -160,23 +168,105 @@ class RedditEmbedTests(unittest.TestCase):
             for component in container["components"]
             if component.get("type") == 10
         )
+        gallery = next(
+            component for component in container["components"] if "items" in component
+        )
+
+        self.assertIn("Posted by [u/post_author]", header_text)
+        self.assertNotIn("Commented by", header_text)
+        self.assertIn(
+            "### [Parent discussion thread](https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/)",
+            header_text,
+        )
+        self.assertNotIn("Comment on", header_text)
+        self.assertNotIn(payload["sections"][0]["body"], header_text)
+        self.assertIn("Comment by [u/comment_author](https://www.reddit.com/user/comment_author/):", rendered_text)
+        self.assertIn("> This is the linked comment body with useful context.", rendered_text)
+        self.assertIn("<:quote:", rendered_text)
+        self.assertEqual(
+            gallery["items"][0]["media"]["url"],
+            payload["image"],
+        )
+        self.assertIs(gallery["items"][0]["spoiler"], False)
+        self.assertIn("<:upvote:1526256000641007616> 64", rendered_text)
+        self.assertIn("<:comment:1526254715250282506> 12", rendered_text)
+        self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
+        self.assertNotIn("Parent post\n", rendered_text)
+        self.assertIn("<t:1783900900:R>", rendered_text)
+
+    def test_comment_card_omits_parent_thumbnail_when_absent(self):
+        payload = {
+            "title": "r/programming • Parent discussion thread",
+            "description": "",
+            "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/def4567/",
+            "authorName": "u/post_author",
+            "authorUrl": "https://www.reddit.com/user/post_author/",
+            "stats": "❤️ 64",
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Comment by u/comment_author",
+                    "body": "Short comment.",
+                    "authorName": "u/comment_author",
+                    "authorUrl": "https://www.reddit.com/user/comment_author/",
+                },
+                {
+                    "kind": "quote",
+                    "title": "Parent discussion thread",
+                    "body": "Parent post",
+                    "url": "https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/",
+                    "authorName": "u/post_author",
+                    "authorUrl": "https://www.reddit.com/user/post_author/",
+                },
+            ],
+        }
+
+        container = build_reddit_layout(payload).to_components()[0]
         gallery_items = [
             component
             for component in container["components"]
             if "items" in component
         ]
-
-        self.assertIn("Commented by [u/comment_author]", header_text)
-        self.assertIn(
-            "### Comment on [Parent discussion thread](https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/)",
-            header_text,
-        )
-        self.assertIn(payload["description"], header_text)
-        self.assertNotIn("Posted by", header_text)
         self.assertEqual(gallery_items, [])
-        self.assertIn("<:upvote:1526256000641007616> 64", rendered_text)
-        self.assertIn(f"[Reddit]({payload['url']})", rendered_text)
-        self.assertNotIn("Parent post\n", rendered_text)
+
+    def test_comment_card_spoilers_nsfw_parent_image(self):
+        payload = {
+            "title": "r/gonewild • NSFW parent",
+            "description": "",
+            "url": "https://www.reddit.com/r/gonewild/comments/abc123/nsfw_parent/def4567/",
+            "authorName": "u/post_author",
+            "authorUrl": "https://www.reddit.com/user/post_author/",
+            "image": "https://i.redd.it/nsfw-parent.png",
+            "sensitive": True,
+            "sensitivityTypes": ["nsfw", "spoiler"],
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Comment by u/comment_author",
+                    "body": "Comment on an NSFW parent.",
+                    "authorName": "u/comment_author",
+                    "authorUrl": "https://www.reddit.com/user/comment_author/",
+                },
+                {
+                    "kind": "quote",
+                    "title": "NSFW parent",
+                    "body": "Parent post",
+                    "url": "https://www.reddit.com/r/gonewild/comments/abc123/nsfw_parent/",
+                    "authorName": "u/post_author",
+                    "authorUrl": "https://www.reddit.com/user/post_author/",
+                },
+            ],
+        }
+
+        container = build_reddit_layout(payload).to_components()[0]
+        gallery = next(
+            component for component in container["components"] if "items" in component
+        )
+        self.assertEqual(
+            gallery["items"][0]["media"]["url"],
+            payload["image"],
+        )
+        self.assertIs(gallery["items"][0]["spoiler"], True)
 
 
     def test_unavailable_comment_tombstone_renders_failure_card_without_media(self):
