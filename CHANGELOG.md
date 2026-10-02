@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Premium entitlement cache**
+- Added a 10-minute TTL to the in-memory guild Premium cache so missed Discord entitlement events cannot leave paid servers stuck on free (or cancelled servers stuck on Premium) until restart.
+- Update the cached Premium status from entitlement create, update, and delete handlers with a fresh timestamp so True↔False flips apply immediately.
+- Treat deleted entitlements like expired ones when resolving guild Premium, matching Supporters-role `entitlement_is_active` semantics.
+
 ## v1.6.0 (10/02/2026)
 
 #### **DeviantArt stats labels**
