@@ -1309,6 +1309,54 @@ const tests: TestCase[] = [
             }
         },
     },
+
+    {
+        name: 'deviantartHandler recovers public page metadata when oEmbed is blocked',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let oembedCalls = 0;
+            let pageCalls = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed')) {
+                    oembedCalls += 1;
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url === 'https://www.deviantart.com/team/art/Fella-Page-Recovery-971957230') {
+                    pageCalls += 1;
+                    return new Response([
+                        '<meta property="og:title" content="Fella Celebrates 100k by Team on DeviantArt" />',
+                        '<meta property="og:image" content="https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/art.jpg?token=abc" />',
+                        '<meta property="og:description" content="Fella Celebrates 100k — artwork by Team on DeviantArt. Published: 2023-07-14 · Likes: 1309 · Views: 636545 · Comments: 354" />',
+                    ].join(''), { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Page-Recovery-971957230',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.authorName, 'Team');
+                assert.equal(response.data?.authorHandle, '@team');
+                assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
+                assert.match(response.data?.image || '', /images-wixmp/);
+                assert.match(response.data?.stats || '', /636\.5K/);
+                assert.match(response.data?.stats || '', /1\.3K/);
+                assert.match(response.data?.stats || '', /354/);
+                assert.equal(response.data?.timestamp, '2023-07-14T12:00:00.000Z');
+                assert.equal(oembedCalls, 1);
+                assert.equal(pageCalls, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
     {
         name: 'deviantartHandler negatively caches not-found responses',
         run: async () => {
@@ -2068,33 +2116,31 @@ const tests: TestCase[] = [
             }
         },
     },
-    {
-        name: 'instagramHandler keeps the native reel poster with a fallback video',
+{
+        name: 'instagramHandler relays trusted first-party reel video without probing CDN',
         run: async () => {
             const originalFetch = globalThis.fetch;
             const requested: string[] = [];
             const fullCaption = 'Actual reel caption @cota_official with the complete event details, context, and creator notes that must survive beyond the compact title. #f1 #formula1 #motorsports #usgp';
+            const nativeVideo = 'https://scontent.example.cdninstagram.com/reel.mp4';
             globalThis.fetch = async (input) => {
                 const url = String(input);
                 requested.push(url);
                 if (url.includes('instagram.com/p/PreviewReel/embed/captioned')) {
                     return new Response([
-                        '<a class="Avatar"><img src="https://scontent.example/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
+                        '<a class="Avatar"><img src="https://scontent.example.cdninstagram.com/avatar.jpg?x=1&amp;y=2" alt="creator" /></a>',
                         '<span class="UsernameText">creator</span>',
                         `<div class="Caption">creator<br /><br />${fullCaption}View all 133 comments</div>`,
                         '<script>',
-                        'window.__data={"username":"creator","video_url":"https://scontent.example.cdninstagram.com/reel.mp4",',
-                        '"thumbnail_src":"https://scontent.example/reel.jpg","comment_count":12};',
+                        `window.__data={"username":"creator","video_url":"${nativeVideo}",`,
+                        '"thumbnail_src":"https://scontent.example.cdninstagram.com/reel.jpg","comment_count":12};',
                         '</script>',
                     ].join(''), { status: 200 });
                 }
-                if (url.includes('vxinstagram.com/reel/PreviewReel')) {
-                    return new Response(
-                        '<meta property="og:video" content="https://vxinstagram.com/offload/PreviewReel/0.mp4">',
-                        { status: 200 },
-                    );
+                if (url === nativeVideo) {
+                    throw new Error('Native Instagram CDN video must not be probed during recovery');
                 }
-                return new Response('', { status: 404 });
+                throw new Error(`Unexpected request: ${url}`);
             };
 
             try {
@@ -2103,23 +2149,33 @@ const tests: TestCase[] = [
                     env,
                 );
                 assert.equal(response.success, true);
-                assert.equal(response.source, 'fallback');
+                assert.equal(response.source, 'first-party');
                 assert.equal(
                     response.data?.video?.url,
-                    'https://fixembed.app/video/instagram?url=https%3A%2F%2Fvxinstagram.com%2Foffload%2FPreviewReel%2F0.mp4',
+                    `https://fixembed.app/video/instagram?url=${encodeURIComponent(nativeVideo)}`,
                 );
-                assert.equal(response.data?.video?.thumbnail, 'https://scontent.example/reel.jpg');
-                assert.equal(response.data?.image, 'https://scontent.example/reel.jpg');
+                assert.equal(
+                    response.data?.video?.thumbnail,
+                    'https://scontent.example.cdninstagram.com/reel.jpg',
+                );
+                assert.equal(
+                    response.data?.image,
+                    'https://scontent.example.cdninstagram.com/reel.jpg',
+                );
                 assert.equal(response.data?.authorName, 'creator');
                 assert.equal(response.data?.authorHandle, '@creator');
                 assert.equal(response.data?.authorUrl, 'https://www.instagram.com/creator/');
-                assert.equal(response.data?.authorAvatar, 'https://scontent.example/avatar.jpg?x=1&y=2');
+                assert.equal(
+                    response.data?.authorAvatar,
+                    'https://scontent.example.cdninstagram.com/avatar.jpg?x=1&y=2',
+                );
                 assert.notEqual(response.data?.title, fullCaption);
                 assert.match(response.data?.title || '', /\.\.\.$/);
                 assert.equal(response.data?.caption, fullCaption);
                 assert.doesNotMatch(response.data?.title || '', /^creator\b/i);
+                assert.equal(requested.includes(nativeVideo), false);
                 assert.equal(
-                    requested.includes('https://scontent.example.cdninstagram.com/reel.mp4'),
+                    requested.some((request) => request.includes('vxinstagram.com')),
                     false,
                 );
             } finally {
@@ -2255,8 +2311,8 @@ const tests: TestCase[] = [
             }
         },
     },
-    {
-        name: 'instagramHandler never probes canonical Instagram CDN video',
+{
+        name: 'instagramHandler relays escaped contextJSON reel video as first-party',
         run: async () => {
             const originalFetch = globalThis.fetch;
             const requested: string[] = [];
@@ -2268,29 +2324,12 @@ const tests: TestCase[] = [
                 if (url.includes('/p/BlockedCanonicalVideo/embed/captioned/')) {
                     return new Response([
                         '<span class="UsernameText">creator</span>',
-                        '<script>{"video_url":"https:\\/\\/scontent.example.cdninstagram.com\\/blocked-reel.mp4?token=private","display_url":"https:\\/\\/scontent.example.cdninstagram.com\\/poster.jpg"}</script>',
-                    ].join(''), { status: 200 });
-                }
-                if (url === sourceUrl) {
-                    return new Response([
-                        '<meta property="og:image" content="https://scontent.example.cdninstagram.com/poster.jpg" />',
-                        '<script>{"code":"BlockedCanonicalVideo","contentUrl":"https:\\/\\/scontent.example.cdninstagram.com\\/blocked-reel.mp4?token=private"}</script>',
+                        '<div class="Caption">creator<br /><br />Escaped reel caption</div>',
+                        '<script>window.__additionalDataLoaded(\'extra\', {\\"video_url\\":\\"https:\\\\\\/\\\\\\/scontent.example.cdninstagram.com\\\\\\/blocked-reel.mp4?token=private\\",\\"display_url\\":\\"https:\\\\\\/\\\\\\/scontent.example.cdninstagram.com\\\\\\/poster.jpg\\"});</script>',
                     ].join(''), { status: 200 });
                 }
                 if (url === canonicalVideo) {
                     throw new Error('Canonical Instagram CDN video must not be probed');
-                }
-                if (url.includes('vxinstagram.com/reel/BlockedCanonicalVideo')) {
-                    return new Response('', { status: 404 });
-                }
-                if (url.includes('kkinstagram.com/reel/BlockedCanonicalVideo')) {
-                    return new Response('video-chunk', {
-                        status: 206,
-                        headers: { 'Content-Type': 'video/mp4' },
-                    });
-                }
-                if (url.includes('snapsave.app')) {
-                    return new Response('', { status: 503 });
                 }
                 throw new Error(`Unexpected request: ${url}`);
             };
@@ -2299,14 +2338,18 @@ const tests: TestCase[] = [
                 const response = await instagramHandler.handle(sourceUrl, env);
 
                 assert.equal(response.success, true);
-                assert.equal(response.source, 'fallback');
+                assert.equal(response.source, 'first-party');
                 assert.equal(
                     response.data?.video?.url,
-                    'https://fixembed.app/video/instagram?url=https%3A%2F%2Fkkinstagram.com%2Freel%2FBlockedCanonicalVideo%2F',
+                    `https://fixembed.app/video/instagram?url=${encodeURIComponent(canonicalVideo)}`,
+                );
+                assert.equal(
+                    response.data?.image,
+                    'https://scontent.example.cdninstagram.com/poster.jpg',
                 );
                 assert.equal(requested.includes(canonicalVideo), false);
                 assert.equal(
-                    requested.some((request) => request.includes('snapsave.app')),
+                    requested.some((request) => request.includes('kkinstagram.com')),
                     false,
                 );
             } finally {

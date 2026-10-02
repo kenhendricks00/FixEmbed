@@ -384,14 +384,26 @@ export const instagramHandler: PlatformHandler = {
             if (nativeResult.data && !nativeResult.data.timestamp) {
                 nativeResult.data.timestamp = shortcodeTimestamp;
             }
-            if (parsed.type === 'reel' && nativeResult.data?.video) {
-                // Instagram CDN MP4s can accept one Worker request and reject the
-                // next, so a preflight cannot prove Discord will receive media.
-                // Preserve the poster and metadata, then use a stable fallback.
-                nativeResult.data = {
-                    ...nativeResult.data,
-                    video: undefined,
-                };
+            if (parsed.type === 'reel' && nativeResult.data?.video?.url) {
+                // Discord must fetch media through FixEmbed, not Instagram CDN
+                // directly. Relay trusted first-party MP4s so reel recovery does
+                // not depend on flaky third-party embed hosts.
+                const trustedVideo = trustedInstagramMediaUrl(nativeResult.data.video.url);
+                if (trustedVideo) {
+                    const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
+                    nativeResult.data = {
+                        ...nativeResult.data,
+                        video: {
+                            ...nativeResult.data.video,
+                            url: `https://${embedDomain}/video/instagram?url=${encodeURIComponent(trustedVideo)}`,
+                        },
+                    };
+                } else {
+                    nativeResult.data = {
+                        ...nativeResult.data,
+                        video: undefined,
+                    };
+                }
             }
             let nativeHasRequiredMedia = parsed.type === 'reel'
                 ? Boolean(nativeResult.data?.video)
@@ -554,19 +566,27 @@ export const instagramHandler: PlatformHandler = {
             const kkMediaUrl = `https://kkinstagram.com/${parsed.type === 'reel' ? 'reel' : 'p'}/${parsed.shortcode}/`;
             let kkAvailable = false;
             let kkContentType = '';
+            let kkRedirectedToVideo = false;
             try {
+                // KK returns 405 for Range probes and 302 to CDN MP4 for plain GET.
+                // Inspect redirects manually so availability checks stay cheap.
                 const kkResponse = await fetchWithTimeout(kkMediaUrl, {
+                    redirect: 'manual',
                     headers: {
                         'Accept': 'image/*,video/*',
-                        'Range': 'bytes=0-0',
                         'User-Agent': 'Discordbot/2.0',
                     },
                 }, remainingProviderTime(INSTAGRAM_KK_TIMEOUT_MS));
                 kkContentType = kkResponse.headers.get('Content-Type') || '';
-                kkAvailable = kkResponse.ok && (
-                    kkContentType.startsWith('image/')
-                    || kkContentType.startsWith('video/')
-                );
+                const kkLocation = kkResponse.headers.get('Location') || '';
+                kkRedirectedToVideo = [301, 302, 303, 307, 308].includes(kkResponse.status)
+                    && /\.mp4(?:$|[?#])/i.test(kkLocation);
+                kkAvailable = (
+                    kkResponse.ok && (
+                        kkContentType.startsWith('image/')
+                        || kkContentType.startsWith('video/')
+                    )
+                ) || kkRedirectedToVideo;
             } catch (error) {
                 console.warn('fallback_fetch_failed', {
                     platform: 'instagram',
@@ -578,7 +598,7 @@ export const instagramHandler: PlatformHandler = {
             if (
                 kkAvailable
                 && parsed.type === 'reel'
-                && kkContentType.startsWith('video/')
+                && (kkContentType.startsWith('video/') || kkRedirectedToVideo)
             ) {
                 const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
                 return {
@@ -1228,13 +1248,24 @@ async function scrapeEmbedHtml(
             isVideo = true;
         }
 
-        // Pattern 2: Video element with class
+        // Pattern 1b: Double-escaped contextJSON video_url (common in embed HTML)
+        if (!mediaUrl) {
+            const escapedVideoMatch = html.match(
+                /\\"video_url\\"\s*:\s*\\"((?:\\\\.|[^"\\\\])*)\\"/,
+            );
+            if (escapedVideoMatch) {
+                mediaUrl = decodeInstagramMediaUrl(escapedVideoMatch[1]);
+                isVideo = true;
+            }
+        }
+
+        // Pattern 2: Video element with class / JSON video_url
         if (!mediaUrl) {
             const videoPatterns = [
                 /class="[^"]*EmbeddedMediaVideo[^"]*"[^>]*src="([^"]+)"/i,
                 /src="([^"]+)"[^>]*class="[^"]*EmbeddedMediaVideo[^"]*"/i,
                 /<video[^>]*src="([^"]+)"/i,
-                /"video_url":"([^"]+)"/,
+                /"video_url"\s*:\s*"((?:\\.|[^"\\])*)"/,
             ];
             for (const pattern of videoPatterns) {
                 const match = html.match(pattern);
@@ -1252,15 +1283,18 @@ async function scrapeEmbedHtml(
         if (isVideo) {
             const previewPatterns = [
                 /<video[^>]*poster="([^"]+)"/i,
-                /"thumbnail_src"\s*:\s*"([^"]+)"/,
-                /"display_url"\s*:\s*"([^"]+)"/,
+                /"thumbnail_src"\s*:\s*"((?:\\.|[^"\\])*)"/,
+                /"display_url"\s*:\s*"((?:\\.|[^"\\])*)"/,
+                /\\"thumbnail_src\\"\s*:\s*\\"((?:\\\\.|[^"\\\\])*)\\"/,
+                /\\"display_url\\"\s*:\s*\\"((?:\\\\.|[^"\\\\])*)\\"/,
                 /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
                 /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
             ];
             for (const pattern of previewPatterns) {
                 const match = html.match(pattern);
                 if (match) {
-                    previewUrl = decodeInstagramMediaUrl(match[1]);
+                    const decodedPreview = decodeInstagramMediaUrl(match[1]);
+                    previewUrl = trustedInstagramMediaUrl(decodedPreview) || decodedPreview;
                     break;
                 }
             }
@@ -1360,13 +1394,19 @@ async function scrapeEmbedHtml(
 
         if (mediaUrl) {
             if (isVideo) {
-                result.data!.video = {
-                    url: mediaUrl,
-                    width: 1080,
-                    height: 1920,
-                    thumbnail: previewUrl || undefined,
-                };
-                result.data!.image = previewUrl || undefined;
+                const trustedVideo = trustedInstagramMediaUrl(mediaUrl);
+                if (trustedVideo) {
+                    result.data!.video = {
+                        url: trustedVideo,
+                        width: 1080,
+                        height: 1920,
+                        thumbnail: previewUrl || undefined,
+                    };
+                    result.data!.image = previewUrl || undefined;
+                } else if (previewUrl) {
+                    // Keep poster metadata when the MP4 host is untrusted.
+                    result.data!.image = previewUrl;
+                }
             } else {
                 result.data!.image = mediaUrl;
                 result.data!.images = imageUrls.length > 1

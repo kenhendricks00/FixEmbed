@@ -215,6 +215,140 @@ function cacheResponse(canonicalUrl: string, response: HandlerResponse): void {
     });
 }
 
+
+function extractMetaContent(html: string, key: string): string {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [
+        new RegExp(
+            `<meta\\b[^>]*(?:property|name)=["']${escaped}["'][^>]*\\bcontent=["']([^"']+)["']`,
+            'i',
+        ),
+        new RegExp(
+            `<meta\\b[^>]*\\bcontent=["']([^"']+)["'][^>]*(?:property|name)=["']${escaped}["']`,
+            'i',
+        ),
+    ];
+    for (const pattern of patterns) {
+        const value = html.match(pattern)?.[1];
+        if (value) {
+            return value
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .trim();
+        }
+    }
+    return '';
+}
+
+function parseDeviantArtDescriptionStats(description: string): {
+    timestamp?: string;
+    stats?: string;
+    cleanDescription: string;
+} {
+    const published = description.match(
+        /Published:\s*(\d{4}-\d{2}-\d{2})/i,
+    )?.[1];
+    const likes = description.match(/Likes:\s*([\d,]+)/i)?.[1];
+    const views = description.match(/Views:\s*([\d,]+)/i)?.[1];
+    const comments = description.match(/Comments:\s*([\d,]+)/i)?.[1];
+    const parts: string[] = [];
+    const viewsCount = finiteCount(views?.replace(/,/g, ''));
+    const likesCount = finiteCount(likes?.replace(/,/g, ''));
+    const commentsCount = finiteCount(comments?.replace(/,/g, ''));
+    if (viewsCount !== undefined) parts.push(`👁️ ${formatNumber(viewsCount)} views`);
+    if (likesCount !== undefined) parts.push(`❤️ ${formatNumber(likesCount)} favorites`);
+    if (commentsCount !== undefined) parts.push(`💬 ${formatNumber(commentsCount)} comments`);
+    const cleanDescription = description
+        .replace(/\s*[—-]\s*artwork by .+ on DeviantArt\.?/i, '')
+        .replace(/\s*Published:\s*\d{4}-\d{2}-\d{2}/i, '')
+        .replace(/\s*[·•]\s*Likes:\s*[\d,]+/i, '')
+        .replace(/\s*[·•]\s*Views:\s*[\d,]+/i, '')
+        .replace(/\s*[·•]\s*Comments:\s*[\d,]+/i, '')
+        .trim();
+    return {
+        timestamp: published ? normalizePostTimestamp(`${published}T12:00:00Z`) : undefined,
+        stats: parts.length ? parts.join('  ') : undefined,
+        cleanDescription,
+    };
+}
+
+async function scrapeDeviantArtPage(
+    parsedUrl: DeviantArtUrl,
+    timeoutMs: number,
+): Promise<HandlerResponse> {
+    try {
+        const response = await fetchWithTimeout(parsedUrl.canonical, {
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml',
+                'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+            },
+        }, timeoutMs);
+        if (!response.ok) {
+            return {
+                success: false,
+                error: `DeviantArt returned ${response.status}`,
+                redirect: parsedUrl.canonical,
+            };
+        }
+
+        const html = await response.text();
+        const ogTitle = extractMetaContent(html, 'og:title')
+            || extractMetaContent(html, 'twitter:title');
+        const ogImage = trustedMediaUrl(
+            extractMetaContent(html, 'og:image')
+            || extractMetaContent(html, 'twitter:image'),
+        );
+        const ogDescription = extractMetaContent(html, 'og:description')
+            || extractMetaContent(html, 'twitter:description');
+        if (!ogTitle && !ogImage) {
+            return {
+                success: false,
+                error: 'DeviantArt metadata unavailable',
+                redirect: parsedUrl.canonical,
+            };
+        }
+
+        const titleMatch = ogTitle.match(/^(.*?)\s+by\s+(.+?)\s+on DeviantArt$/i);
+        const title = truncateText(
+            (titleMatch?.[1] || ogTitle || 'DeviantArt deviation').trim(),
+            300,
+        );
+        const authorFromTitle = titleMatch?.[2]?.trim();
+        const authorName = truncateText(
+            authorFromTitle || parsedUrl.artist || 'DeviantArt artist',
+            100,
+        );
+        const authorUrl = parsedUrl.artist
+            ? trustedAuthorUrl(`https://www.deviantart.com/${parsedUrl.artist}`)
+            : undefined;
+        const parsedDescription = parseDeviantArtDescriptionStats(ogDescription);
+        const data: EmbedData = {
+            title,
+            description: truncateText(parsedDescription.cleanDescription, 4000),
+            url: parsedUrl.canonical,
+            siteName: getBrandedSiteName('deviantart'),
+            authorName,
+            authorHandle: authorHandle(authorUrl || '', parsedUrl.artist),
+            authorUrl,
+            image: ogImage,
+            color: platformColors.deviantart,
+            timestamp: parsedDescription.timestamp,
+            platform: 'deviantart',
+            stats: parsedDescription.stats,
+        };
+        return { success: true, source: 'first-party', data };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
+            redirect: parsedUrl.canonical,
+        };
+    }
+}
+
 export const deviantartHandler: PlatformHandler = {
     name: 'deviantart',
     patterns: [
@@ -249,6 +383,17 @@ export const deviantartHandler: PlatformHandler = {
                     };
                 }
                 if (!response.ok) {
+                    // Cloudflare Worker egress is often blocked by DeviantArt's
+                    // oEmbed edge with 403 while the public page still works.
+                    if (response.status === 403) {
+                        const pageResult = await scrapeDeviantArtPage(parsedUrl, 5_000);
+                        if (pageResult.success) return pageResult;
+                        return {
+                            success: false,
+                            error: pageResult.error || `DeviantArt returned ${response.status}`,
+                            redirect: parsedUrl.canonical,
+                        };
+                    }
                     return {
                         success: false,
                         error: `DeviantArt returned ${response.status}`,

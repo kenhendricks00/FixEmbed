@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "franc-min": "^6.2.0",
-    "hono": "^4.12.29"
+    "hono": "^4.13.12"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260711.1",
