@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v1.6.0 (10/02/2026)
+
 #### **DeviantArt stats labels**
 - Removed literal `views`, `favorites`, `comments`, and `downloads` text from DeviantArt embed stats so cards show icon + number only, matching other platforms.
 
