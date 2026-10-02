@@ -28,7 +28,7 @@ class NewPlatformEmbedTests(unittest.TestCase):
             "authorHandle": "@team",
             "authorUrl": "https://www.deviantart.com/team",
             "image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/fella.png?token=signed",
-            "stats": "👁️ 1.2K views  ❤️ 56 favorites  💬 7 comments  ⬇️ 8 downloads",
+            "stats": "👁️ 1.2K  ❤️ 56  💬 7  ⬇️ 8",
             "context": "© 2023 team",
             "timestamp": "2023-08-08T12:34:56Z",
             "sensitive": True,
@@ -43,9 +43,13 @@ class NewPlatformEmbedTests(unittest.TestCase):
         self.assertIn("@team", header)
         self.assertIn("Fella Celebrates 100k", header)
         self.assertIn("A milestone artwork.", header)
-        self.assertIn("<:views:1526255708683636896> 1.2K views", rendered)
-        self.assertIn("<:like:1526255244483362866> 56 favorites", rendered)
-        self.assertIn("<:comment:1526254715250282506> 7 comments", rendered)
+        self.assertIn("<:views:1526255708683636896> 1.2K", rendered)
+        self.assertIn("<:like:1526255244483362866> 56", rendered)
+        self.assertIn("<:comment:1526254715250282506> 7", rendered)
+        self.assertNotIn("1.2K views", rendered)
+        self.assertNotIn("56 favorites", rendered)
+        self.assertNotIn("7 comments", rendered)
+        self.assertNotIn("8 downloads", rendered)
         self.assertIn("© 2023 team", rendered)
         self.assertIn("<:deviantart:1528150711089500180>", rendered)
         self.assertIn("<t:", rendered)
@@ -275,7 +279,8 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["image"], signed_image)
         self.assertEqual(payload["authorAvatar"], signed_avatar)
         self.assertEqual(payload["authorHandle"], "@team")
-        self.assertIn("632.2K views", payload["stats"])
+        self.assertIn("632.2K", payload["stats"])
+        self.assertNotIn("views", payload["stats"])
         self.assertEqual(payload["timestamp"], "2023-07-14T21:32:03+00:00")
         self.assertTrue(payload["sensitive"])
         self.assertIn(signed_avatar, str(serialized_container(
@@ -320,7 +325,7 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
                 "https://images-wixmp-ed30a86b8c4ca887773594c2."
                 "wixmp.com/lunar.jpg?token=signed"
             ),
-            "stats": "👁️ 510K views  ❤️ 428 favorites  💬 11 comments",
+            "stats": "👁️ 510K  ❤️ 428  💬 11",
             "timestamp": "2023-11-01T05:47:46+00:00",
         }
 
@@ -332,6 +337,7 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
             component["components"][0]["accessory"]["media"]["url"],
             avatar,
         )
-        self.assertIn("510K views", rendered)
+        self.assertIn("510K", rendered)
+        self.assertNotIn("510K views", rendered)
         self.assertIn("<:deviantart:1528150711089500180>", rendered)
         self.assertIn("<t:1698817666:R>", rendered)

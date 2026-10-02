@@ -162,15 +162,15 @@ function finiteCount(value: unknown): number | undefined {
 
 function formatStats(payload: OEmbedPayload): string | undefined {
     const stats = payload.community?.statistics?._attributes || {};
-    const values: Array<[unknown, string, string]> = [
-        [stats.views, '👁️', 'views'],
-        [stats.favorites, '❤️', 'favorites'],
-        [stats.comments, '💬', 'comments'],
-        [stats.downloads, '⬇️', 'downloads'],
+    const values: Array<[unknown, string]> = [
+        [stats.views, '👁️'],
+        [stats.favorites, '❤️'],
+        [stats.comments, '💬'],
+        [stats.downloads, '⬇️'],
     ];
-    const rendered = values.flatMap(([raw, icon, label]) => {
+    const rendered = values.flatMap(([raw, icon]) => {
         const count = finiteCount(raw);
-        return count === undefined ? [] : [`${icon} ${formatNumber(count)} ${label}`];
+        return count === undefined ? [] : [`${icon} ${formatNumber(count)}`];
     });
     return rendered.length ? rendered.join('  ') : undefined;
 }
@@ -264,9 +264,9 @@ function parseDeviantArtDescriptionStats(description: string): {
     const viewsCount = finiteCount(views?.replace(/,/g, ''));
     const likesCount = finiteCount(likes?.replace(/,/g, ''));
     const commentsCount = finiteCount(comments?.replace(/,/g, ''));
-    if (viewsCount !== undefined) parts.push(`👁️ ${formatNumber(viewsCount)} views`);
-    if (likesCount !== undefined) parts.push(`❤️ ${formatNumber(likesCount)} favorites`);
-    if (commentsCount !== undefined) parts.push(`💬 ${formatNumber(commentsCount)} comments`);
+    if (viewsCount !== undefined) parts.push(`👁️ ${formatNumber(viewsCount)}`);
+    if (likesCount !== undefined) parts.push(`❤️ ${formatNumber(likesCount)}`);
+    if (commentsCount !== undefined) parts.push(`💬 ${formatNumber(commentsCount)}`);
     const cleanDescription = description
         .replace(/\s*[—-]\s*artwork by .+ on DeviantArt\.?/i, '')
         .replace(/\s*Published:\s*\d{4}-\d{2}-\d{2}/i, '')

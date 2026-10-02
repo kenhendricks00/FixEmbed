@@ -170,15 +170,15 @@ def _statistics(payload: Mapping[str, Any]) -> Optional[str]:
     if not isinstance(attributes, Mapping):
         return None
     rendered = []
-    for key, icon, label in (
-        ("views", "👁️", "views"),
-        ("favorites", "❤️", "favorites"),
-        ("comments", "💬", "comments"),
-        ("downloads", "⬇️", "downloads"),
+    for key, icon in (
+        ("views", "👁️"),
+        ("favorites", "❤️"),
+        ("comments", "💬"),
+        ("downloads", "⬇️"),
     ):
         count = _compact_number(attributes.get(key))
         if count is not None:
-            rendered.append(f"{icon} {count} {label}")
+            rendered.append(f"{icon} {count}")
     return "  ".join(rendered) or None
 
 
