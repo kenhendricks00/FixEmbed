@@ -5,6 +5,11 @@
 - Update the cached Premium status from entitlement create, update, and delete handlers with a fresh timestamp so True↔False flips apply immediately.
 - Treat deleted entitlements like expired ones when resolving guild Premium, matching Supporters-role `entitlement_is_active` semantics.
 
+#### **Premium perk copy**
+- Aligned `/premium` perk strings in all locales with the real paid feature set: card color, card style, branded footers, bot/webhook auto-fix, member/role exclusions, private 30-day analytics, no "Sent by", and Supporters role.
+- Removed default translation from Premium perk copy so free translation is no longer sold as a paid feature.
+- Updated the website `#premium` section (and Premium features teaser) to match the same paid list and to state that translation stays free.
+
 ## v1.6.0 (10/02/2026)
 
 #### **DeviantArt stats labels**
