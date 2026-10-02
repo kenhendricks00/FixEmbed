@@ -1358,6 +1358,114 @@ const tests: TestCase[] = [
     },
 
     {
+        name: 'deviantartHandler recovers via Cardyb when oEmbed and page are blocked',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let oembedCalls = 0;
+            let pageCalls = 0;
+            let cardybCalls = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed')) {
+                    oembedCalls += 1;
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url === 'https://www.deviantart.com/team/art/Fella-Cardyb-Recovery-971957231') {
+                    pageCalls += 1;
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    cardybCalls += 1;
+                    const requested = new URL(url).searchParams.get('url');
+                    assert.equal(
+                        requested,
+                        'https://www.deviantart.com/team/art/Fella-Cardyb-Recovery-971957231',
+                    );
+                    return Response.json({
+                        error: '',
+                        title: 'Fella Celebrates 100k by Team on DeviantArt',
+                        description:
+                            'Fella Celebrates 100k — artwork by Team on DeviantArt. Published: 2023-07-14 · Likes: 1309 · Views: 636545 · Comments: 354',
+                        image:
+                            'https://cardyb.bsky.app/v1/image?url='
+                            + encodeURIComponent(
+                                'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/art.jpg?token=abc',
+                            ),
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Cardyb-Recovery-971957231',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.authorName, 'Team');
+                assert.equal(response.data?.authorHandle, '@team');
+                assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/art.jpg?token=abc',
+                );
+                assert.match(response.data?.stats || '', /636\.5K/);
+                assert.match(response.data?.stats || '', /1\.3K/);
+                assert.match(response.data?.stats || '', /354/);
+                assert.equal(response.data?.timestamp, '2023-07-14T12:00:00.000Z');
+                assert.equal(oembedCalls, 1);
+                assert.equal(pageCalls, 1);
+                assert.equal(cardybCalls, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler rejects Cardyb payloads with untrusted nested media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed')) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url === 'https://www.deviantart.com/team/art/Fella-Cardyb-Unsafe-971957232') {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    return Response.json({
+                        error: '',
+                        title: 'Unsafe nested image by Team on DeviantArt',
+                        description: 'Published: 2023-07-14 · Likes: 1 · Views: 2 · Comments: 3',
+                        image:
+                            'https://cardyb.bsky.app/v1/image?url='
+                            + encodeURIComponent('https://evil.example/steal.jpg'),
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Cardyb-Unsafe-971957232',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.title, 'Unsafe nested image');
+                assert.equal(response.data?.image, undefined);
+                assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
         name: 'deviantartHandler negatively caches not-found responses',
         run: async () => {
             const originalFetch = globalThis.fetch;

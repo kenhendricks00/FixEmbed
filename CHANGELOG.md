@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **DeviantArt Worker recovery**
+- Fixed production DeviantArt Worker canaries after PR #57: DeviantArt returns HTTP 403 from Cloudflare Worker egress for both oEmbed and the public HTML page, so the page-scrape fallback never recovered.
+- When oEmbed is blocked, try the public page first, then recover title, artist, signed wixmp media, publication time, and engagement stats through Bluesky Cardyb as an emergency fallback.
+- Unwrap Cardyb image proxies back to trusted DeviantArt media hosts and allow the DeviantArt production canary to use fallback provenance.
+
 #### **Threads share links**
 - Restored automatic conversion for current `threads.com/share/...` links by resolving them to canonical Threads posts before rendering.
 - Preserved signed Threads profile-picture URLs so Discord can retrieve creator avatars reliably.

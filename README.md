@@ -176,6 +176,7 @@ FixEmbed uses first-party platform data whenever available. When a platform bloc
 - [Phixiv](https://github.com/thelaao/phixiv) — Pixiv fallback
 - [VxBilibili](https://github.com/niconi21/vxBilibili) — Bilibili fallback
 - [FxTikTok](https://github.com/okdargy/fxtiktok) — emergency TikTok media fallback
+- [Cardyb](https://cardyb.bsky.app) — DeviantArt Worker-egress metadata recovery (Bluesky link preview)
 
 These services are not affiliated with or endorsed by FixEmbed.
 

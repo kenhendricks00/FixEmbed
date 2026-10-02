@@ -185,6 +185,7 @@ class ManifestTests(unittest.TestCase):
         self.assertTrue(by_id["tiktok-video"].allow_fallback)
         self.assertEqual(by_id["deviantart-photo"].media_type, "image")
         self.assertIn("stats", by_id["deviantart-photo"].requires)
+        self.assertTrue(by_id["deviantart-photo"].allow_fallback)
         self.assertEqual(
             by_id["twitter-translation"].options,
             {"lang": "es"},
