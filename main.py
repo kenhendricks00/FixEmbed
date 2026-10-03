@@ -53,6 +53,10 @@ from premium_controls import (
     save_premium_controls,
     should_skip_automatic,
 )
+from premium_activation import (
+    evaluate_activation_checklist,
+    checklist_settings_targets,
+)
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
 from install_links import build_install_controls
@@ -1245,6 +1249,114 @@ class SettingsNoticeView(ui.LayoutView):
         )
 
 
+
+def format_premium_activation_checklist(lang, settings, items):
+    """Render configured-vs-available checklist lines with /settings paths."""
+    lines = []
+    for item in items:
+        mark = get_text(
+            lang,
+            "premium_checklist_done" if item.configured else "premium_checklist_todo",
+        )
+        if item.key == "color":
+            if item.configured:
+                label = get_text(
+                    lang,
+                    "premium_item_color_done",
+                    color=settings.get("embed_color"),
+                )
+            else:
+                label = get_text(lang, "premium_item_color_todo")
+        else:
+            suffix = "done" if item.configured else "todo"
+            label = get_text(lang, f"premium_item_{item.key}_{suffix}")
+        if item.settings_page:
+            path = get_text(lang, "premium_item_path", page=item.settings_page)
+            lines.append(f"{mark} {label} — {path}")
+        else:
+            lines.append(f"{mark} {label}")
+    return "\n".join(lines)
+
+
+async def open_settings_surface(source_interaction, interaction, settings, value):
+    """Open the matching /settings page or modal for a dropdown value."""
+    if value == "Embed Color" and await is_guild_premium(interaction.guild.id):
+        await interaction.response.send_modal(
+            EmbedColorModal(source_interaction, settings)
+        )
+        return
+    if value == "Footer Branding":
+        premium = await is_guild_premium(interaction.guild.id)
+        view = FooterBrandingSettingsView(
+            source_interaction, settings, premium=premium
+        )
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return
+    if value == "Translation":
+        view = TranslationSettingsView(source_interaction, settings)
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return
+    premium_pages = {
+        "Card Style": CardStyleSettingsView,
+        "Exclusions": ExclusionSettingsView,
+    }
+    if value in premium_pages:
+        premium = await is_guild_premium(interaction.guild.id)
+        view = premium_pages[value](
+            source_interaction, settings, premium=premium
+        )
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return
+    if value == "Analytics":
+        premium = await is_guild_premium(interaction.guild.id)
+        summary = []
+        if premium:
+            try:
+                summary = await fetch_analytics_summary(
+                    client.db, interaction.guild.id, days=30
+                )
+            except Exception as error:
+                logging.warning(
+                    "Premium analytics lookup failed for guild %s: %s",
+                    interaction.guild.id,
+                    error,
+                )
+        view = AnalyticsSettingsView(
+            source_interaction,
+            settings,
+            premium=premium,
+            summary=summary,
+        )
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return
+    if value == "Reliability Status":
+        await interaction.response.defer(ephemeral=True)
+        report = await reliability_client.get_report()
+        view = ReliabilitySettingsView(
+            source_interaction,
+            settings,
+            report=report,
+        )
+        await interaction.followup.send(view=view, ephemeral=True)
+        return
+
+    page_types = {
+        "FixEmbed": FixEmbedSettingsView,
+        "Mention Users": MentionUsersSettingsView,
+        "Delivery Method": DeliveryMethodSettingsView,
+        "Service Settings": ServiceSettingsView,
+        "Quality Profile": QualitySettingsView,
+        "Content Visibility": ContentVisibilitySettingsView,
+        "Channel Visibility": ChannelVisibilitySettingsView,
+        "Channel Rules": ChannelRulesSettingsView,
+        "Language": LanguageSettingsView,
+        "Debug": DebugSettingsView,
+        "Embed Color": PremiumSettingsView,
+    }
+    view = page_types[value](source_interaction, settings)
+    await interaction.response.send_message(view=view, ephemeral=True)
+
+
 class SettingsDropdown(ui.Select):
     def __init__(self, interaction, settings):
         self.source_interaction = interaction
@@ -1277,80 +1389,9 @@ class SettingsDropdown(ui.Select):
         super().__init__(placeholder=get_text(lang, "choose_option"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        value = self.values[0]
-        if value == "Embed Color" and await is_guild_premium(interaction.guild.id):
-            await interaction.response.send_modal(EmbedColorModal(self.source_interaction, self.settings))
-            return
-        if value == "Footer Branding":
-            premium = await is_guild_premium(interaction.guild.id)
-            view = FooterBrandingSettingsView(
-                self.source_interaction, self.settings, premium=premium
-            )
-            await interaction.response.send_message(view=view, ephemeral=True)
-            return
-        if value == "Translation":
-            view = TranslationSettingsView(self.source_interaction, self.settings)
-            await interaction.response.send_message(view=view, ephemeral=True)
-            return
-        premium_pages = {
-            "Card Style": CardStyleSettingsView,
-            "Exclusions": ExclusionSettingsView,
-        }
-        if value in premium_pages:
-            premium = await is_guild_premium(interaction.guild.id)
-            view = premium_pages[value](
-                self.source_interaction, self.settings, premium=premium
-            )
-            await interaction.response.send_message(view=view, ephemeral=True)
-            return
-        if value == "Analytics":
-            premium = await is_guild_premium(interaction.guild.id)
-            summary = []
-            if premium:
-                try:
-                    summary = await fetch_analytics_summary(
-                        client.db, interaction.guild.id, days=30
-                    )
-                except Exception as error:
-                    logging.warning(
-                        "Premium analytics lookup failed for guild %s: %s",
-                        interaction.guild.id,
-                        error,
-                    )
-            view = AnalyticsSettingsView(
-                self.source_interaction,
-                self.settings,
-                premium=premium,
-                summary=summary,
-            )
-            await interaction.response.send_message(view=view, ephemeral=True)
-            return
-        if value == "Reliability Status":
-            await interaction.response.defer(ephemeral=True)
-            report = await reliability_client.get_report()
-            view = ReliabilitySettingsView(
-                self.source_interaction,
-                self.settings,
-                report=report,
-            )
-            await interaction.followup.send(view=view, ephemeral=True)
-            return
-
-        page_types = {
-            "FixEmbed": FixEmbedSettingsView,
-            "Mention Users": MentionUsersSettingsView,
-            "Delivery Method": DeliveryMethodSettingsView,
-            "Service Settings": ServiceSettingsView,
-            "Quality Profile": QualitySettingsView,
-            "Content Visibility": ContentVisibilitySettingsView,
-            "Channel Visibility": ChannelVisibilitySettingsView,
-            "Channel Rules": ChannelRulesSettingsView,
-            "Language": LanguageSettingsView,
-            "Debug": DebugSettingsView,
-            "Embed Color": PremiumSettingsView,
-        }
-        view = page_types[value](self.source_interaction, self.settings)
-        await interaction.response.send_message(view=view, ephemeral=True)
+        await open_settings_surface(
+            self.source_interaction, interaction, self.settings, self.values[0]
+        )
 
 
 class SettingsView(SettingsPageView):
@@ -2754,6 +2795,78 @@ async def on_guild_join(guild):
     if await send_onboarding_dm(guild):
         logging.info("Sent onboarding DM for guild %s", guild_id)
 
+
+class PremiumActivationDeepLinkSelect(ui.Select):
+    """Deep-link unfinished (or all) activation rows into matching /settings pages."""
+
+    PAGE_LABELS = {
+        "Embed Color": ("💎", "Card color"),
+        "Footer Branding": ("🏷️", "Footer branding"),
+        "Card Style": ("🎛️", "Card style"),
+        "Exclusions": ("🛡️", "Exclusions"),
+        "Analytics": ("📈", "Analytics"),
+    }
+
+    def __init__(self, interaction, settings, items, lang):
+        self.source_interaction = interaction
+        self.settings = settings
+        self.lang = lang
+        options = []
+        for item in checklist_settings_targets(items):
+            emoji, label = self.PAGE_LABELS.get(
+                item.settings_page, ("⚙️", item.settings_page)
+            )
+            status = "Configured" if item.configured else "Not configured yet"
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    description=status,
+                    value=item.settings_page,
+                    emoji=emoji,
+                )
+            )
+        super().__init__(
+            placeholder=get_text(lang, "premium_configure_placeholder"),
+            options=options or [
+                discord.SelectOption(
+                    label="Settings",
+                    value="Embed Color",
+                    description="Open /settings",
+                )
+            ],
+            min_values=1,
+            max_values=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        perms = getattr(interaction.user, "guild_permissions", None)
+        if perms is None or not perms.manage_guild:
+            view = SettingsNoticeView(
+                title=get_text(self.lang, "premium_title"),
+                description=get_text(self.lang, "premium_need_manage_guild"),
+                accent_color=discord.Color.gold(),
+                footer="Premium",
+            )
+            await interaction.response.send_message(view=view, ephemeral=True)
+            return
+        await open_settings_surface(
+            self.source_interaction,
+            interaction,
+            self.settings,
+            self.values[0],
+        )
+
+
+class PremiumActivationView:
+    """Build control rows for the active-subscriber /premium activation card."""
+
+    def __init__(self, interaction, settings, *, items, lang):
+        select = PremiumActivationDeepLinkSelect(
+            interaction, settings, items, lang
+        )
+        self.controls = ((select,),)
+
+
 # --- Premium Command ---
 @client.tree.command(name='premium', description="View FixEmbed Premium subscription info")
 @app_commands.allowed_installs(guilds=True, users=True)
@@ -2763,7 +2876,57 @@ async def premium_command(interaction: discord.Interaction):
     premium = False
     if interaction.guild:
         premium = await is_guild_premium(interaction.guild.id)
-    
+
+    if premium and interaction.guild:
+        guild_settings = bot_settings.get(
+            interaction.guild.id,
+            {
+                "enabled_services": DEFAULT_ENABLED_SERVICES,
+                "mention_users": True,
+                "delete_original": True,
+                "language": lang,
+            },
+        )
+        summary = []
+        try:
+            summary = await fetch_analytics_summary(
+                client.db, interaction.guild.id, days=30
+            )
+        except Exception as error:
+            logging.warning(
+                "Premium activation analytics lookup failed for guild %s: %s",
+                interaction.guild.id,
+                error,
+            )
+        items = evaluate_activation_checklist(
+            guild_settings, analytics_summary=summary
+        )
+        checklist = format_premium_activation_checklist(
+            lang, guild_settings, items
+        )
+        configured = sum(1 for item in items if item.configured)
+        description = (
+            f"{get_text(lang, 'premium_active')}\n\n"
+            f"**{get_text(lang, 'premium_checklist_title')}** "
+            f"({configured}/{len(items)})\n"
+            f"{get_text(lang, 'premium_checklist_intro')}\n\n"
+            f"{checklist}\n\n"
+            f"**{get_text(lang, 'premium_manage_title')}**\n"
+            f"{get_text(lang, 'premium_manage_body')}"
+        )
+        view = PremiumActivationView(
+            interaction, guild_settings, items=items, lang=lang
+        )
+        view = SettingsNoticeView(
+            title=get_text(lang, "premium_title"),
+            description=description,
+            accent_color=discord.Color.gold(),
+            footer="Premium",
+            controls=view.controls,
+        )
+        await interaction.response.send_message(view=view, ephemeral=True)
+        return
+
     controls = ()
     if PREMIUM_SKU_ID and not premium:
         subscribe_button = discord.ui.Button(
@@ -2778,7 +2941,7 @@ async def premium_command(interaction: discord.Interaction):
         footer="Premium",
         controls=controls,
     )
-    
+
     await interaction.response.send_message(view=view, ephemeral=True)
 
 # --- Embed Color Modal ---
