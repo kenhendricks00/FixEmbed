@@ -75,9 +75,14 @@ export function languageName(language: string): string {
         : 'Unknown';
 }
 
+/**
+ * Two-letter language code, or undefined. Region and script subtags are
+ * dropped so `en`, `EN`, `en-US`, and `en_GB` all compare as `en` (#88).
+ */
 export function normalizeLanguage(value: unknown): string | undefined {
     const language = String(value || '').trim().toLowerCase();
-    return /^[a-z]{2}$/.test(language) ? language : undefined;
+    const match = language.match(/^([a-z]{2})(?:[-_][a-z0-9]{1,8})*$/);
+    return match?.[1];
 }
 
 const HINDI_SIGNALS = new Set([
@@ -213,10 +218,21 @@ function translatableTargets(data: EmbedData): TranslationTarget[] {
     return title ? [title] : [];
 }
 
+/**
+ * Section bodies FixEmbed writes itself. Reddit comment cards carry the parent
+ * post as a quote section whose body is this label; it is not the author's
+ * text, and language detection reads "Parent post" as French (#88).
+ */
+const GENERATED_QUOTE_LABELS: Partial<Record<EmbedData['platform'], ReadonlySet<string>>> = {
+    reddit: new Set(['parent post']),
+};
+
 function translatableQuoteTargets(data: EmbedData): TranslationTarget[] {
+    const generatedLabels = GENERATED_QUOTE_LABELS[data.platform];
     return (data.sections || []).flatMap((section, sectionIndex) => {
         const body = String(section.body || '').trim();
         if (section.kind !== 'quote' || !body) return [];
+        if (generatedLabels?.has(body.toLowerCase())) return [];
         return [{ field: 'section', sectionIndex, text: body }];
     });
 }
@@ -261,19 +277,31 @@ function protectedContextRanges(text: string): Array<{ start: number; end: numbe
     }));
 }
 
+/** Same words, ignoring case, spacing, and punctuation: nothing was translated. */
+function sameText(left: string, right: string): boolean {
+    const comparable = (value: string) => value
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/[\s\p{P}]+/gu, '');
+    return comparable(left) === comparable(right);
+}
+
 async function translatedText(
     env: Env,
     text: string,
     sourceLanguage: string,
     targetLanguage: string,
-): Promise<string> {
+): Promise<string | undefined> {
     const translation = await env.AI!.run(TRANSLATION_MODEL, {
         text,
         source_lang: sourceLanguage,
         target_lang: targetLanguage,
     }) as { translated_text?: string };
     const translated = translation.translated_text?.trim();
-    if (!translated || translated === text) throw new Error('Empty translation');
+    if (!translated) throw new Error('Empty translation');
+    // The model echoed the text back (e.g. "Parent post" -> "Parent Post"):
+    // keep the original and do not claim a translation for it (#88).
+    if (sameText(translated, text)) return undefined;
     return translated;
 }
 
@@ -303,11 +331,14 @@ async function translatePreservingContext(
     const replacements = await Promise.all(matches.map((match) => (
         translatedText(env, match[0], sourceLanguage, targetLanguage)
     )));
+    if (replacements.every((replacement) => replacement === undefined)) {
+        return undefined;
+    }
     let translated = '';
     let cursor = 0;
     matches.forEach((match, index) => {
         translated += text.slice(cursor, match.index);
-        translated += replacements[index];
+        translated += replacements[index] ?? match[0];
         cursor = match.index + match[0].length;
     });
     return translated + text.slice(cursor);
@@ -371,26 +402,31 @@ export async function applyRequestedTranslation(
                 source.code,
                 targetLanguage,
             );
-            return text ? { target, text } : undefined;
+            return text ? { source, target, text } : undefined;
         }))).filter(
-            (translation): translation is { target: TranslationTarget; text: string } => (
+            (translation): translation is TranslationJob & { text: string } => (
                 translation !== undefined
             ),
         );
         if (!translatedTargets.length) return result;
 
+        // Name the language that was actually translated. The primary text's
+        // language only counts when the primary text itself was translated;
+        // otherwise an English post with a translated quote said "from English" (#88).
+        const metadataSource = translatedTargets.find(
+            ({ target }) => primaryTargets.includes(target),
+        )?.source || translatedTargets[0].source;
+        const metadata = data.translation || {
+            sourceLanguage: metadataSource.code,
+            sourceLanguageName: metadataSource.name,
+            targetLanguage,
+            originalUrl: data.url,
+        };
+        if (normalizeLanguage(metadata.sourceLanguage) === targetLanguage) return result;
+
         return {
             ...result,
-            data: translatedData(
-                data,
-                translatedTargets,
-                data.translation || {
-                    sourceLanguage: (primarySource || jobs[0].source).code,
-                    sourceLanguageName: (primarySource || jobs[0].source).name,
-                    targetLanguage,
-                    originalUrl: data.url,
-                },
-            ),
+            data: translatedData(data, translatedTargets, metadata),
         };
     } catch (error) {
         console.error('post_translation_failed', {
