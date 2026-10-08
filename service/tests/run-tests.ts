@@ -7346,6 +7346,68 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler converts FxTwitter Chinese translations for zh-TW (#97)',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    fxRequests.push(url);
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '1234567890',
+                            text: 'I found my hair falling out later.',
+                            translation: {
+                                text: '后来我发现头发掉了。',
+                                source_lang: 'en',
+                                target_lang: 'zh',
+                                provider: 'grok',
+                            },
+                        },
+                    });
+                }
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '1234567890',
+                    text: 'I found my hair falling out later.',
+                    lang: 'en',
+                    user: {
+                        name: 'Example',
+                        screen_name: 'example',
+                        profile_image_url_https: 'https://pbs.twimg.com/profile_images/example.jpg',
+                    },
+                    mediaDetails: [],
+                    created_at: '2026-07-12T00:00:00.000Z',
+                });
+            };
+
+            try {
+                const traditional = await twitterHandler.handle(
+                    'https://x.com/example/status/1234567890',
+                    env,
+                    { language: 'zh-TW' },
+                );
+                assert.equal(traditional.data?.description, '後來我發現頭髮掉了。');
+                assert.equal(traditional.data?.translation?.targetLanguage, 'zh-TW');
+                assert.equal(traditional.data?.translation?.sourceLanguage, 'en');
+                // FxTwitter only takes the base code.
+                assert.deepEqual(fxRequests, ['https://api.fxtwitter.com/example/status/1234567890/zh']);
+
+                const simplified = await twitterHandler.handle(
+                    'https://x.com/example/status/1234567890',
+                    env,
+                    { language: 'zh' },
+                );
+                assert.equal(simplified.data?.description, '后来我发现头发掉了。');
+                assert.equal(simplified.data?.translation?.targetLanguage, 'zh');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler rejects mismatched or unbound FxTwitter translation identities',
         run: async () => {
             const originalFetch = globalThis.fetch;

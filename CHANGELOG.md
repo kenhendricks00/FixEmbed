@@ -4,6 +4,7 @@
 - A server translating into Traditional Chinese (`zh-TW`, `zh-HK` or `zh-Hant`) got Simplified Chinese, because the translator only writes Simplified and the region was dropped.
 - Translations into Traditional Chinese are now converted to Traditional characters, with Taiwan and Hong Kong forms where they differ (`裡` for Taiwan, for example). The conversion uses OpenCC's dictionaries, so phrases like `头发` (hair) become `頭髮`, not a character-by-character guess.
 - A Chinese post written in the other script now counts as a translation too: a Simplified post on a Traditional server is converted, and the footer says "Translated from Chinese (Simplified)". A post already in the server's script is left alone.
+- X/Twitter translations get the same conversion, since FxTwitter's Chinese translations are Simplified too.
 - Simplified Chinese servers and every other language are unchanged. Brazilian Portuguese still gets standard Portuguese, since the translator has no separate Brazilian model.
 - Ships with a Worker deploy. A bot update that adds Traditional Chinese to the translation language picker follows.
 
