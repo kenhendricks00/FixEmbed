@@ -10,6 +10,7 @@ import aiohttp
 import discord
 
 from card_preferences import CardPreferences, apply_caption_preferences
+from markdown_safety import masked_link_label
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from timestamp_utils import parse_post_timestamp
@@ -29,6 +30,8 @@ class PlatformCardSpec:
     content_first: bool = False
     link_author_name_only: bool = False
     merge_context_with_stats: bool = False
+    # Title and author name arrive markdown-escaped once (DeviantArt).
+    text_is_escaped: bool = False
 
 
 def build_platform_layout(
@@ -56,17 +59,17 @@ def build_platform_layout(
     author_url = str(payload.get("authorUrl") or "").strip()
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     if spec.link_author_name_only and author_url:
-        identity = f"**[{author_name}]({author_url})**"
+        identity = f"**[{masked_link_label(author_name, escaped=spec.text_is_escaped)}]({author_url})**"
     elif author_handle and author_url:
-        identity = f"**{author_name}** ([@{author_handle}]({author_url}))"
+        identity = f"**{author_name}** ([{masked_link_label('@' + author_handle)}]({author_url}))"
     elif author_url:
-        identity = f"**[{author_name}]({author_url})**"
+        identity = f"**[{masked_link_label(author_name, escaped=spec.text_is_escaped)}]({author_url})**"
     else:
         identity = f"**{author_name}**"
     if spec.content_first:
         header_text = "\n".join(part for part in (identity, description or title) if part)
     else:
-        title_line = f"### [{title}]({source_url})" if source_url else f"### {title}"
+        title_line = f"### [{masked_link_label(title, escaped=spec.text_is_escaped)}]({source_url})" if source_url else f"### {title}"
         header_text = "\n".join(
             part for part in (identity, title_line, description) if part
         )

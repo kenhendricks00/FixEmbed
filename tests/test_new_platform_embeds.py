@@ -299,7 +299,8 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
 
         rendered = str(serialized_container(build_deviantart_layout(payload)))
 
-        self.assertIn(r"\[unsafe]", rendered)
+        # Both brackets are escaped so the title stays one masked link label.
+        self.assertIn(r"\\[unsafe\\]", rendered)
         self.assertNotIn("**bold**", rendered)
         self.assertNotIn("__Team__", rendered)
         self.assertNotIn("@everyone", rendered)

@@ -209,13 +209,16 @@ class MentionHelperTests(unittest.TestCase):
     def test_unset_per_call_value_falls_back_to_client_default(self):
         self.assertEqual(deliverable_mentions(HOSTILE_TEXT, None), [])
 
-    def test_reddit_fixture_really_renders_the_mentions(self):
+    def test_reddit_fixture_renders_the_mentions_as_plain_text(self):
+        # The Reddit card breaks mentions itself (markdown_safety), so the text
+        # stays readable but nothing in it parses as a mention any more.
         text = "\n".join(
             _component_text(build_reddit_layout(HOSTILE_REDDIT_PAYLOAD).to_components())
         )
-        self.assertIn("@everyone", text)
-        self.assertIn("<@123>", text)
-        self.assertIn("<@&456>", text)
+        self.assertEqual(MENTION_PATTERN.findall(text), [])
+        self.assertIn("@\u200beveryone", text)
+        self.assertIn("<@\u200b123>", text)
+        self.assertIn("<@\u200b&456>", text)
 
 
 def _load_on_message(namespace):
@@ -339,8 +342,13 @@ class OnMessageMentionTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(mode=mode):
                 self.sent.clear()
                 for send, delivered in await self.deliver(mode):
-                    self.assertIn("@everyone", _sent_text(send))
+                    self.assertIn("@\u200beveryone", _sent_text(send))
                     self.assertEqual(delivered, [])
+                    # The send itself still blocks raw mentions if any slip through.
+                    self.assertEqual(
+                        deliverable_mentions(HOSTILE_TEXT, send.get("allowed_mentions")),
+                        [],
+                    )
 
     async def test_delete_mode_only_pings_the_poster_in_sent_by(self):
         results = await self.deliver("delete")

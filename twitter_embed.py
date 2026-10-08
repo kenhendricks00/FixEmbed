@@ -12,6 +12,7 @@ import discord
 from component_emojis import application_emoji, format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
+from markdown_safety import masked_link_label
 from timestamp_utils import parse_post_timestamp
 
 
@@ -53,7 +54,7 @@ def _section_text(section: Mapping[str, Any]) -> str:
     body = str(section.get("body") or "").strip()
     if len(body) > 900:
         body = f"{body[:897].rstrip()}…"
-    heading = f"### [{title}]({url})" if url else f"### {title}"
+    heading = f"### [{masked_link_label(title)}]({url})" if url else f"### {title}"
     return "\n".join(part for part in (heading, body) if part)
 
 
@@ -120,7 +121,7 @@ def _quote_section_items(
     verification = _verification_emoji(section.get("authorVerification"))
 
     if handle and author_url:
-        identity = f"**{name}**{verification} ([@{handle}]({author_url}))"
+        identity = f"**{name}**{verification} ([{masked_link_label('@' + handle)}]({author_url}))"
     elif handle:
         identity = f"**{name}**{verification} (@{handle})"
     else:
@@ -190,7 +191,7 @@ def build_twitter_layout(
     source_url = str(payload.get("url") or "").strip()
 
     if handle and author_url:
-        identity = f"**{name}**{verification} ([@{handle}]({author_url}))"
+        identity = f"**{name}**{verification} ([{masked_link_label('@' + handle)}]({author_url}))"
     elif handle:
         identity = f"**{name}**{verification} (@{handle})"
     else:

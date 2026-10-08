@@ -26,6 +26,7 @@ DEVIANTART_SPEC = PlatformCardSpec(
     "DeviantArt",
     0x05CC47,
     "<:deviantart:1528150711089500180>",
+    text_is_escaped=True,
 )
 
 DEVIANTART_OEMBED_URL = "https://backend.deviantart.com/oembed"

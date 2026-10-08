@@ -1,5 +1,13 @@
 ## Unreleased
 
+#### **Reddit titles with mentions keep their link (#103)**
+- A Reddit post title that contains `@everyone` or `@here` now shows as a clickable title again. Discord refuses a masked link whose text holds a mention, so the card showed the raw `[title](https://www.reddit.com/...)` markdown instead, as on the comment cards for r/discordapp post 1ib8uq6.
+- Mentions in link text now get a zero-width space after the `@` or `#`, so they read the same but Discord no longer sees a mention. `[`, `]`, `)` and backslashes in link text are escaped so a title can't end its own link early.
+- This covers Reddit post titles, parent post titles on comment cards, linked section titles and author names, plus title and author link text on Twitter, Bluesky, Threads, Instagram, YouTube, Pixiv, Pinterest, Bilibili, DeviantArt, TikTok, Tumblr and Twitch cards. Text that was already escaped once (DeviantArt, Pixiv author names) is not escaped again.
+- Mentions in Reddit comment and post text now show as plain text too, so a comment's `<@&1234567>` no longer renders as an @unknown-role pill (part of #96). Code, code blocks and URLs keep their exact text, and no Reddit body markdown is escaped a second time.
+- Ordinary titles without mentions, brackets, closing parentheses or backslashes render byte-for-byte as before.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **Faster premium checks (#99)**
 - Servers without saved FixEmbed settings, which is most free servers, no longer ask Discord for their Premium status on every message. The answer is now cached for 10 minutes for every server, Premium or not, the same as servers with saved settings.
 - Subscribing, renewing, or cancelling still updates the cached status right away, now for every server.
