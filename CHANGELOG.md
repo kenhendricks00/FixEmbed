@@ -5,6 +5,13 @@
 - Comment text and post titles on Reddit comment cards now drop these characters, whichever way Reddit sends them: control characters other than tab and newline, and the bidi embedding, override and isolate marks (U+202A to U+202E, U+2066 to U+2069).
 - Normal right-to-left text, emoji and the left-to-right and right-to-left marks are unchanged.
 - The two copies of the old.reddit entity decoder are now one (part of #96).
+
+#### **Reddit share links stay inside the comment time limit (#108)**
+- A Reddit share link (`/r/.../s/...`) could still wait up to 10 seconds just to find out where it points, before the 8 second comment limit from #98 even started. A share link to a comment could take about 18 seconds in the worst case, past the bot's 15 second wait.
+- Finding where a share link points now has a 3 second limit, and that time counts toward the same 8 seconds as the comment it leads to.
+- If that step times out, the link counts as "Reddit is temporarily unavailable", the same as other Reddit timeouts. It never shows as "Comment unavailable".
+- A share link that fails to resolve now logs its `reddit_fetch` and `reddit_comment_timing` lines with a `share_id` field, so timeouts show up in Workers Logs with `timed_out`. A share link that resolves to a comment logs under that comment, as before.
+- Share links to posts and every other platform keep their current timeouts.
 - Ships with a Worker deploy. No bot restart needed.
 
 #### **Premium shows active right after purchase (#101)**
