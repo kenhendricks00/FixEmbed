@@ -6,6 +6,16 @@
 - Lines that start with `#`, `>`, `-`, `+` or `1.` in the text are escaped so they stay text, and URLs are left untouched so their underscores keep working.
 - The result matches what Reddit's JSON API returns for the same comment, so the bot shows both paths the same way. The bot's quote block, bold subreddit label and links are not escaped a second time.
 
+#### **Reddit deleted accounts and deleted comments (#84)**
+- A comment whose author deleted their Reddit account but whose text is still there now renders the full comment card with the author shown as `[deleted]`, instead of a false "Comment unavailable". This applies to both the JSON path and the old.reddit fallback.
+- `[deleted]` authors no longer get a `u/[deleted]` label or a broken reddit.com/user link, for the comment author and for a deleted parent post author.
+- Only a `[deleted]` or `[removed]` body, an empty JSON body, or old.reddit's own `deleted comment` marker now counts as gone. A missing or `[deleted]` author on its own does not.
+- The old.reddit fallback now finds real deleted comments, which have no `thing_t1_` id and only a `deleted comment` class plus a permalink. It matches the exact comment id from the permalink, so another deleted comment on the same page never turns the target into a tombstone.
+- The fallback reads the comment body only from the comment itself, never from a reply below it.
+- The fallback decodes HTML entities in comment text exactly once, including numeric ones like `&#8217;` and `&#x200B;`. A comment that says `&lt;b&gt;` shows `<b>` as text, and a double-escaped `&amp;gt;` shows the literal `&gt;` instead of `>`.
+- Outages are unchanged: 429, 5xx, 403, timeouts, and parse errors still fall back and then fail as temporary, with no tombstone.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **DeviantArt fallback stats (#77)**
 - When DeviantArt blocks the Worker and the card falls back to Cardyb, a `www.deviantart.com` lookup that comes back as a generic card ("Deviantart.com image by ...", no Published date, likes, or views) is retried once with the bare `deviantart.com` URL, which Cardyb has been answering with the full description.
 - The retry shares the existing 5 second Cardyb timeout, so the slowest case is no slower than before, and it is skipped when Cardyb rate limits (429), when under 1 second is left, or for Sta.sh links.
@@ -22,7 +32,7 @@
 - Checklist meaning is unchanged: same configured-vs-available perks, same deep-links, non-premium `/premium` untouched.
 
 #### **Reddit comment outages vs deletions (#71)**
-- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body or author, or the comment missing from a normal listing.
+- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body, or the comment missing from a normal listing (a `[deleted]` author alone no longer counts, see #84).
 - When Reddit is rate limited, down, blocking the request, timing out, or sending a broken response, the Worker no longer guesses. It returns a temporary failure that redirects to Reddit, so Discord keeps Reddit's own preview instead of a wrong "deleted" card.
 - The old.reddit fallback now tells a live comment, a deleted comment, and an unclear page apart, and only the deleted case turns into the unavailable card.
 - The bot no longer builds its own "Comment unavailable" card when a Reddit comment card fails. Automatic fixes skip the link and leave the original message alone, and the slash command sends the plain link like other services.
