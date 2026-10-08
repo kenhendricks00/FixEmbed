@@ -74,7 +74,8 @@ class PremiumCacheHelperTests(unittest.TestCase):
         self.assertIn("from premium_cache import", main_source)
         # main.py reaches get_cached_premium / set_cached_premium /
         # any_entitlement_grants_premium through these premium_cache helpers (#99).
-        self.assertIn("resolve_guild_premium(", main_source)
+        # The status form also feeds /premium's "couldn't confirm" copy (#101).
+        self.assertIn("resolve_guild_premium_status(", main_source)
         self.assertIn("record_guild_premium(", main_source)
         cache_source = Path(__file__).resolve().parents[1].joinpath("premium_cache.py").read_text(encoding="utf-8")
         resolver = cache_source.split("async def resolve_guild_premium", 1)[1]
