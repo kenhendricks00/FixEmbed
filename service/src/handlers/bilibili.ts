@@ -246,8 +246,9 @@ async function fetchBiliFixOEmbed(bvid: string): Promise<BiliFixOEmbedResponse |
                 BILIFIX_OEMBED_TIMEOUT_MS,
             );
             if (response.ok) {
+                // A 200 is a real answer; an empty body is not worth a retry.
                 const payload = await response.json() as BiliFixOEmbedResponse;
-                if (payload?.author_name || payload?.title) return payload;
+                return payload?.author_name || payload?.title ? payload : undefined;
             } else if (response.status < 500 && response.status !== 429) {
                 return undefined;
             }

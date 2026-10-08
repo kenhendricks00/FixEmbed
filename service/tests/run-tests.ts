@@ -970,6 +970,120 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'tiktokHandler rejects a relay avatar whose redirect ends in HTML',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url === 'https://www.tiktok.com/@creator/video/7421234567890123456'
+                    || url.startsWith('https://www.tiktok.com/oembed?url=')
+                    || url === 'https://www.tiktok.com/@creator') {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (url === 'https://www.tnktok.com/api/v1/statuses/7421234567890123456') {
+                    return Response.json({
+                        id: '7421234567890123456',
+                        url: 'https://tiktok.com/@creator/video/7421234567890123456',
+                        account: {
+                            username: 'creator',
+                            display_name: 'Creator Name',
+                            avatar: 'https://offload.tnktok.com/generate/pfp/creator',
+                        },
+                        media_attachments: [{
+                            type: 'video',
+                            url: 'https://offload.tnktok.com/generate/video/7421234567890123456',
+                            preview_url: 'https://offload.tnktok.com/generate/cover/7421234567890123456',
+                        }],
+                    });
+                }
+                if (url === 'https://offload.tnktok.com/generate/pfp/creator') {
+                    return new Response(null, {
+                        status: 302,
+                        headers: { Location: 'https://p16-sign.tiktokcdn-us.com/avatar.jpeg?x-expires=1' },
+                    });
+                }
+                if (url === 'https://p16-sign.tiktokcdn-us.com/avatar.jpeg?x-expires=1') {
+                    return new Response('<html>error</html>', {
+                        status: 200,
+                        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                    });
+                }
+                assert.fail(`Unexpected TikTok request: ${url}`);
+            };
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorAvatar, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'tiktokHandler bounds the whole relay avatar redirect chain with one budget',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const hopTimeouts: string[] = [];
+            globalThis.fetch = async (input, init) => {
+                const url = String(input);
+                if (url === 'https://www.tiktok.com/@creator/video/7421234567890123456'
+                    || url.startsWith('https://www.tiktok.com/oembed?url=')
+                    || url === 'https://www.tiktok.com/@creator') {
+                    return new Response('blocked', { status: 403 });
+                }
+                if (url === 'https://www.tnktok.com/api/v1/statuses/7421234567890123456') {
+                    return Response.json({
+                        id: '7421234567890123456',
+                        url: 'https://tiktok.com/@creator/video/7421234567890123456',
+                        account: {
+                            username: 'creator',
+                            display_name: 'Creator Name',
+                            avatar: 'https://offload.tnktok.com/generate/pfp/creator',
+                        },
+                        media_attachments: [{
+                            type: 'video',
+                            url: 'https://offload.tnktok.com/generate/video/7421234567890123456',
+                            preview_url: 'https://offload.tnktok.com/generate/cover/7421234567890123456',
+                        }],
+                    });
+                }
+                if (url === 'https://offload.tnktok.com/generate/pfp/creator') {
+                    hopTimeouts.push(url);
+                    await new Promise((resolve) => setTimeout(resolve, 1_500));
+                    return new Response(null, {
+                        status: 302,
+                        headers: { Location: 'https://p16-sign.tiktokcdn-us.com/avatar.jpeg?x-expires=1' },
+                    });
+                }
+                if (url === 'https://p16-sign.tiktokcdn-us.com/avatar.jpeg?x-expires=1') {
+                    hopTimeouts.push(url);
+                    return new Promise<Response>((_, reject) => {
+                        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+                    });
+                }
+                assert.fail(`Unexpected TikTok request: ${url}`);
+            };
+            const started = Date.now();
+            try {
+                const response = await tiktokHandler.handle(
+                    'https://www.tiktok.com/@creator/video/7421234567890123456',
+                    env,
+                );
+                const elapsed = Date.now() - started;
+                assert.equal(response.success, true);
+                assert.equal(response.data?.authorAvatar, undefined);
+                assert.equal(hopTimeouts.length, 2);
+                // Per-hop timeouts would take 1.5s + 2.5s; the shared budget stops at ~2.5s.
+                assert.ok(elapsed < 3_300, `avatar check took ${elapsed}ms`);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'tiktokHandler recovers a missing post avatar from the first-party profile page',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4124,6 +4238,92 @@ const tests: TestCase[] = [
                 assert.equal(oembedRequests, 2);
                 assert.equal(response.data?.authorName, 'Fallback creator');
                 assert.equal(response.data?.authorUrl, 'https://space.bilibili.com/37093763');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'bilibiliHandler does not retry a BiliFix oEmbed 404',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const statuses = [404];
+            let oembedRequests = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('api.bilibili.com/x/web-interface/view')) {
+                    return new Response('Precondition Failed', { status: 412 });
+                }
+                if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
+                    return new Response('blocked', { status: 412 });
+                }
+                if (url.includes('vxbilibili.com/video/')) {
+                    return new Response(
+                        '<meta content="Fallback video" property=og:title>'
+                        + '<meta content=https://i1.hdslb.com/video.jpg property=og:image>',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('vxbilibili.com/oembed/video')) {
+                    const status = statuses[oembedRequests] ?? 500;
+                    oembedRequests += 1;
+                    return new Response('unavailable', { status });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await bilibiliHandler.handle(
+                    'https://www.bilibili.com/video/BV1p3Nc6pEoP/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(oembedRequests, 1);
+                assert.equal(response.data?.image, 'https://i1.hdslb.com/video.jpg');
+                assert.equal(response.data?.authorName, undefined);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'bilibiliHandler stops after two BiliFix oEmbed 503s and still renders the card',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const statuses = [503, 503];
+            let oembedRequests = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('api.bilibili.com/x/web-interface/view')) {
+                    return new Response('Precondition Failed', { status: 412 });
+                }
+                if (url === 'https://m.bilibili.com/video/BV1p3Nc6pEoP') {
+                    return new Response('blocked', { status: 412 });
+                }
+                if (url.includes('vxbilibili.com/video/')) {
+                    return new Response(
+                        '<meta content="Fallback video" property=og:title>'
+                        + '<meta content=https://i1.hdslb.com/video.jpg property=og:image>',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('vxbilibili.com/oembed/video')) {
+                    const status = statuses[oembedRequests] ?? 500;
+                    oembedRequests += 1;
+                    return new Response('unavailable', { status });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await bilibiliHandler.handle(
+                    'https://www.bilibili.com/video/BV1p3Nc6pEoP/',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(oembedRequests, 2);
+                assert.equal(response.data?.image, 'https://i1.hdslb.com/video.jpg');
+                assert.equal(response.data?.authorName, undefined);
             } finally {
                 globalThis.fetch = originalFetch;
             }

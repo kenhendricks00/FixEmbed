@@ -4,7 +4,7 @@
  */
 
 import type { EmbedData, Env, HandlerResponse, PlatformHandler, VideoEmbed } from '../types.ts';
-import { decodeHtmlEntities, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import { createTimeoutBudget, decodeHtmlEntities, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { getBrandedSiteName, platformColors } from '../utils/embed.ts';
 
 type TikTokOEmbed = {
@@ -276,6 +276,8 @@ async function fetchTikTokProfileAvatar(handle: string): Promise<string | undefi
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_AVATAR_REDIRECTS = 3;
+// One wall-clock budget for the whole redirect chain, not per hop.
+const RELAY_AVATAR_BUDGET_MS = 2_500;
 
 function isRelayAvatar(value: string | undefined): value is string {
     if (!value) return false;
@@ -295,8 +297,11 @@ function isRelayAvatar(value: string | undefined): value is string {
  */
 async function relayAvatarReachable(url: string): Promise<boolean> {
     let current = url;
+    const deadline = Date.now() + RELAY_AVATAR_BUDGET_MS;
+    const remaining = createTimeoutBudget(RELAY_AVATAR_BUDGET_MS);
     for (let hop = 0; hop <= MAX_AVATAR_REDIRECTS; hop += 1) {
         if (!trustedTikTokMedia(current)) return false;
+        if (Date.now() >= deadline) return false;
         let response: Response;
         try {
             response = await fetchWithTimeout(current, {
@@ -306,7 +311,7 @@ async function relayAvatarReachable(url: string): Promise<boolean> {
                     'Range': 'bytes=0-0',
                     'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
                 },
-            }, 2_500);
+            }, remaining());
         } catch {
             return false;
         }
