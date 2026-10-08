@@ -59,7 +59,10 @@ class RedditCommentOutageSourceTests(unittest.TestCase):
     def test_command_path_falls_back_to_the_plain_link(self):
         command_handler = min(self.handlers, key=lambda handler: handler.lineno)
         source = ast.get_source_segment(MAIN_SOURCE, command_handler) or ""
-        self.assertIn("await interaction.followup.send(fallback_url)", source)
+        self.assertIn(
+            "await interaction.followup.send(fallback_url, allowed_mentions=no_mentions())",
+            source,
+        )
 
     def test_automatic_path_skips_reddit_comment_outages(self):
         automatic_handler = max(self.handlers, key=lambda handler: handler.lineno)
