@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **More mentions in link text show as plain text (#103)**
+- A mention inside backticks in a title or author name, like ``Why `@everyone` fails``, is now broken too. Code formatting in link text does not stop Discord from refusing the link, so the card could still show raw markdown. Code in comment and post text keeps its exact text as before.
+- `@everyone` and `@here` are now broken wherever they appear, including `@everyones`, `@everyone_x`, `@hereby` and `foo@here`, because Discord still reads those as mentions. Other `@` text such as email addresses or `@heroes` is unchanged.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **Reddit titles with mentions keep their link (#103)**
 - A Reddit post title that contains `@everyone` or `@here` now shows as a clickable title again. Discord refuses a masked link whose text holds a mention, so the card showed the raw `[title](https://www.reddit.com/...)` markdown instead, as on the comment cards for r/discordapp post 1ib8uq6.
 - Mentions in link text now get a zero-width space after the `@` or `#`, so they read the same but Discord no longer sees a mention. `[`, `]`, `)` and backslashes in link text are escaped so a title can't end its own link early.
