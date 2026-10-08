@@ -42,7 +42,8 @@ def normalize_premium_controls(settings: Mapping[str, Any]) -> dict[str, Any]:
     )
     if isinstance(language, str):
         language = language.strip().lower()
-    if not isinstance(language, str) or not re.fullmatch(r"[a-z]{2}", language):
+    # Two-letter codes, plus zh-tw: the Worker gives it Traditional Chinese (#97).
+    if not isinstance(language, str) or not re.fullmatch(r"[a-z]{2}|zh-tw", language):
         language = None
     return {
         "card_show_stats": bool(settings.get("card_show_stats", True)),

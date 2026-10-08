@@ -13,7 +13,9 @@
 - A Chinese post written in the other script now counts as a translation too: a Simplified post on a Traditional server is converted, and the footer says "Translated from Chinese (Simplified)". A post already in the server's script is left alone.
 - X/Twitter translations get the same conversion, since FxTwitter's Chinese translations are Simplified too.
 - Simplified Chinese servers and every other language are unchanged. Brazilian Portuguese still gets standard Portuguese, since the translator has no separate Brazilian model.
-- Ships with a Worker deploy. A bot update that adds Traditional Chinese to the translation language picker follows.
+- Ships with a Worker deploy.
+- **Bot:** `/settings` → Default Translation now offers **中文 (繁體)** (Traditional Chinese) next to **中文 (简体)** (Simplified). Before, only base languages could be picked, so a server could not ask for Traditional Chinese at all.
+- **Bot:** the "Translated from" footer now shows for a Simplified post converted for a Traditional server, instead of being hidden as "same language". Ships with a bot restart.
 
 #### **Reddit comment cards from the old.reddit fallback show when the comment was posted (#91)**
 - When Reddit's API blocks the Worker, comment cards are built from old.reddit's page, and those cards had no timestamp. old.reddit's comment markup has no timestamp attribute, unlike posts.

@@ -85,6 +85,24 @@ class PremiumControlsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resolve_translation_language("fr", settings), "fr")
         self.assertEqual(resolve_translation_language(None, settings), "es")
 
+    def test_traditional_chinese_default_is_kept(self):
+        # #97: zh-tw is the only regional default; other tags still fall back.
+        from premium_controls import normalize_premium_controls
+        from translations import LANGUAGE_NAMES, TRANSLATION_LANGUAGE_NAMES
+
+        for value, expected in (("zh-TW", "zh-tw"), ("zh", "zh"), ("zh-HK", None), ("en-US", None), ("zh-tw ", "zh-tw")):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    normalize_premium_controls({"translation_language": value})["translation_language"],
+                    expected,
+                )
+        self.assertEqual(resolve_translation_language(None, {"translation_language": "zh-tw"}), "zh-tw")
+        # The picker offers Traditional Chinese; the bot's UI languages are unchanged.
+        self.assertEqual(TRANSLATION_LANGUAGE_NAMES["zh-tw"], "中文 (繁體)")
+        self.assertNotIn("zh-tw", LANGUAGE_NAMES)
+        for code in TRANSLATION_LANGUAGE_NAMES:
+            self.assertIsNotNone(normalize_premium_controls({"translation_language": code})["translation_language"])
+
     async def test_legacy_twitter_language_is_migrated(self):
         legacy_db = _AsyncSQLite()
         await legacy_db.execute(

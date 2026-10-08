@@ -27,11 +27,28 @@ def normalize_language_code(value: Any) -> str:
     return str(value or "").strip().replace("_", "-").split("-", 1)[0].casefold()
 
 
+_TRADITIONAL_CHINESE_SUBTAGS = {"hant", "tw", "hk", "mo"}
+
+
+def _chinese_script(value: Any) -> str:
+    """``hant`` for zh-TW/zh-HK/zh-MO/zh-Hant tags, ``hans`` for other zh tags."""
+    subtags = str(value or "").strip().replace("_", "-").casefold().split("-")[1:]
+    return "hant" if _TRADITIONAL_CHINESE_SUBTAGS.intersection(subtags) else "hans"
+
+
 def is_same_language_translation(translation: Mapping[str, Any]) -> bool:
-    """True when the source and target languages match, so nothing was translated."""
-    source = normalize_language_code(translation.get("sourceLanguage"))
-    target = normalize_language_code(translation.get("targetLanguage"))
-    return bool(source) and source == target
+    """True when the source and target languages match, so nothing was translated.
+
+    Chinese also compares the script: the Worker converts Simplified posts for a
+    Traditional (``zh-TW``) target and reports ``zh-Hans`` -> ``zh-TW`` (#97).
+    """
+    source_tag = translation.get("sourceLanguage")
+    target_tag = translation.get("targetLanguage")
+    source = normalize_language_code(source_tag)
+    target = normalize_language_code(target_tag)
+    if not source or source != target:
+        return False
+    return source != "zh" or _chinese_script(source_tag) == _chinese_script(target_tag)
 
 
 def translated_source_name(payload: Mapping[str, Any]) -> Optional[str]:

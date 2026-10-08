@@ -119,6 +119,22 @@ class EmbedFooterTests(unittest.TestCase):
         )
         self.assertIsNone(translated_source_name({}))
 
+    def test_chinese_script_conversion_keeps_its_translated_label(self):
+        """#97: Simplified -> Traditional is a translation; same script is not."""
+        from embed_footer import translated_source_name
+
+        def label(source, target, name="Chinese (Simplified)"):
+            return translated_source_name(
+                {"translation": {"sourceLanguage": source, "sourceLanguageName": name, "targetLanguage": target}}
+            )
+
+        self.assertEqual(label("zh-Hans", "zh-TW"), "Chinese (Simplified)")
+        self.assertEqual(label("zh-Hant", "zh", "Chinese (Traditional)"), "Chinese (Traditional)")
+        self.assertEqual(label("zh", "zh-HK"), "Chinese (Simplified)")
+        for source, target in (("zh-Hant", "zh-TW"), ("zh_hk", "zh-Hant"), ("zh", "zh-CN"), ("zh-Hans", "zh")):
+            with self.subTest(source=source, target=target):
+                self.assertIsNone(label(source, target))
+
 
 if __name__ == "__main__":
     unittest.main()
