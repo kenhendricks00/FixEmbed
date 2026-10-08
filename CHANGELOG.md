@@ -1,7 +1,16 @@
 ## Unreleased
 
+#### **Reddit deleted accounts and deleted comments (#84)**
+- A comment whose author deleted their Reddit account but whose text is still there now renders the full comment card with the author shown as `[deleted]`, instead of a false "Comment unavailable". This applies to both the JSON path and the old.reddit fallback.
+- `[deleted]` authors no longer get a `u/[deleted]` label or a broken reddit.com/user link, for the comment author and for a deleted parent post author.
+- Only a `[deleted]` or `[removed]` body, an empty JSON body, or old.reddit's own `deleted comment` marker now counts as gone. A missing or `[deleted]` author on its own does not.
+- The old.reddit fallback now finds real deleted comments, which have no `thing_t1_` id and only a `deleted comment` class plus a permalink. It matches the exact comment id from the permalink, so another deleted comment on the same page never turns the target into a tombstone.
+- The fallback reads the comment body only from the comment itself, never from a reply below it.
+- Outages are unchanged: 429, 5xx, 403, timeouts, and parse errors still fall back and then fail as temporary, with no tombstone.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Reddit comment outages vs deletions (#71)**
-- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body or author, or the comment missing from a normal listing.
+- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body, or the comment missing from a normal listing (a `[deleted]` author alone no longer counts, see #84).
 - When Reddit is rate limited, down, blocking the request, timing out, or sending a broken response, the Worker no longer guesses. It returns a temporary failure that redirects to Reddit, so Discord keeps Reddit's own preview instead of a wrong "deleted" card.
 - The old.reddit fallback now tells a live comment, a deleted comment, and an unclear page apart, and only the deleted case turns into the unavailable card.
 - The bot no longer builds its own "Comment unavailable" card when a Reddit comment card fails. Automatic fixes skip the link and leave the original message alone, and the slash command sends the plain link like other services.
