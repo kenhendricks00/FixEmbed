@@ -125,6 +125,8 @@ export interface HandlerResponse {
 export interface HandlerOptions {
     language?: string;
     mode?: 'gallery' | 'mosaic';
+    /** Embed cache state for timing logs only (#98); never part of the cache key. */
+    embedCache?: 'miss' | 'off';
 }
 
 // Platform handler interface

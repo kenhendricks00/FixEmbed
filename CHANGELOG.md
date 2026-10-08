@@ -8,6 +8,23 @@
 - Ordinary titles without mentions, brackets, closing parentheses or backslashes render byte-for-byte as before.
 - Ships with a bot restart. No Worker deploy needed.
 
+#### **Faster premium checks (#99)**
+- Servers without saved FixEmbed settings, which is most free servers, no longer ask Discord for their Premium status on every message. The answer is now cached for 10 minutes for every server, Premium or not, the same as servers with saved settings.
+- Subscribing, renewing, or cancelling still updates the cached status right away, now for every server.
+- The Premium check now gives up after 2.5 seconds, so a slow or rate limited Discord response can no longer hold up a card. If the check fails, FixEmbed uses the last known status for up to an hour after it expires. With no recent status, that one message is handled as free and the next message checks again, so a paying server is never stuck on free.
+- A failed check never changes saved settings. Premium settings like card colors, footer branding and exclusions stay as they are and come back on the next successful check.
+- The status cache holds up to 10,000 servers and drops the least recently used first.
+- Ships with a bot restart. No Worker deploy needed.
+
+#### **Reddit timing logs (#98)**
+- The Worker now turns on Workers Logs, so its console output is kept for 7 days and can be searched in the Cloudflare dashboard.
+- Each Reddit comment request now logs one `reddit_fetch` line per Reddit call: the subreddit check, the JSON API, the old.reddit page, the old.reddit body read, and the subreddit icon lookups. Each line has the stage, the HTTP status, the time in milliseconds, and whether it timed out.
+- One `reddit_comment_timing` summary line follows with the total time, the slowest stage, the outcome (card, gone, or temporary), and whether the answer came from the embed cache. Cache hits log only the summary.
+- The new lines carry only the subreddit, post id, and comment id. No URLs, cookies, or comment text.
+- Logging only. Timeouts, fallbacks, and the deleted versus temporarily unavailable results are unchanged, and a logging failure cannot change a card.
+- This explains slow cards but does not speed them up. Discord timestamps from a test showed one slow comment card took 9.6s end to end, and the Worker spent 9.3s of that, so the next step is to find which Reddit call was slow.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Reddit text keeps underscores and inline code (#87)**
 - When Reddit's API is blocked and a comment or post body comes from Reddit's HTML page instead, the Worker now turns that HTML back into Discord markdown instead of stripping the tags. Literal `_`, `*`, `~`, `|` and backslashes in the text are escaped once, so `how_are_reddit_urls_constructed` keeps its underscores and the rest of the paragraph no longer turns italic.
 - Inline code keeps its content ("you'll often see `_` used" no longer renders as "see  used"), code blocks keep their indentation, and Reddit's own bold, italics, strikethrough, spoilers and links carry over as Discord formatting.
