@@ -81,5 +81,44 @@ class EmbedFooterTests(unittest.TestCase):
         )
 
 
+    def test_translated_source_name_skips_same_language_metadata(self):
+        """#88: an English card requested in English must not say "Translated from English"."""
+        from embed_footer import translated_source_name
+
+        for source, target in (
+            ("en", "en"),
+            ("en", "EN"),
+            ("EN", "en-US"),
+            ("en_GB", "en"),
+            (" en-us ", "En"),
+        ):
+            with self.subTest(source=source, target=target):
+                payload = {
+                    "translation": {
+                        "sourceLanguage": source,
+                        "sourceLanguageName": "English",
+                        "targetLanguage": target,
+                    }
+                }
+                self.assertIsNone(translated_source_name(payload))
+
+        real = {
+            "translation": {
+                "sourceLanguage": "ja",
+                "sourceLanguageName": "Japanese",
+                "targetLanguage": "en-US",
+            }
+        }
+        self.assertEqual(translated_source_name(real), "Japanese")
+        # Older payloads without a target language keep their label.
+        self.assertEqual(
+            translated_source_name(
+                {"translation": {"sourceLanguage": "ja", "sourceLanguageName": "Japanese"}}
+            ),
+            "Japanese",
+        )
+        self.assertIsNone(translated_source_name({}))
+
+
 if __name__ == "__main__":
     unittest.main()
