@@ -9835,6 +9835,50 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler does not fire a third old.reddit request after a timeout then a 5xx (#98)',
+        run: async () => {
+            let calls = 0;
+            const result = await runRedditBudgetScenario({
+                crawler: (init, clock) => {
+                    calls += 1;
+                    if (calls === 1) return clock.hang(init);
+                    return new Response('busy', { status: 503 });
+                },
+            });
+            assertRedditCommentTransient(result.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+            assert.equal(oldRedditRequests(result.requested).length, 2, 'timeout then 5xx must not fire a third request');
+            assert.deepEqual(
+                redditFetchLines(result.logged)
+                    .filter((line) => line.stage === 'old_reddit')
+                    .map((line) => [line.attempt, line.status, line.timed_out]),
+                [[1, null, true], [2, 503, false]],
+            );
+            assert.equal(redditTimingSummary(result.logged).outcome, 'temporary');
+        },
+    },
+    {
+        name: 'redditHandler does not fire a third old.reddit request after a 5xx then a timeout (#98)',
+        run: async () => {
+            let calls = 0;
+            const result = await runRedditBudgetScenario({
+                crawler: (init, clock) => {
+                    calls += 1;
+                    if (calls === 1) return new Response('busy', { status: 503 });
+                    return clock.hang(init);
+                },
+            });
+            assertRedditCommentTransient(result.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+            assert.equal(oldRedditRequests(result.requested).length, 2, '5xx then timeout must stay at two requests');
+            assert.deepEqual(
+                redditFetchLines(result.logged)
+                    .filter((line) => line.stage === 'old_reddit')
+                    .map((line) => [line.attempt, line.status, line.timed_out]),
+                [[1, 503, false], [2, null, true]],
+            );
+            assert.equal(redditTimingSummary(result.logged).outcome, 'temporary');
+        },
+    },
+    {
         name: 'redditHandler never retries an old.reddit 404 and keeps its tombstone (#98)',
         run: async () => {
             const result = await runRedditBudgetScenario({
