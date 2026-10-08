@@ -1018,6 +1018,14 @@ LANGUAGE_NAMES = {
     "zh": "中文",
 }
 
+# Default translation targets. zh-tw is a translation target only, not a bot UI
+# language: the Worker converts Chinese translations to Traditional for it (#97).
+TRANSLATION_LANGUAGE_NAMES = {
+    **LANGUAGE_NAMES,
+    "zh": "中文 (简体)",
+    "zh-tw": "中文 (繁體)",
+}
+
 def get_text(lang: str, key: str, **kwargs) -> str:
     """Get translated text for a given language and key."""
     lang = lang or "en"

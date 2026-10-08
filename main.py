@@ -14,7 +14,7 @@ import time
 import ast
 from collections import deque
 from dataclasses import dataclass, replace
-from translations import get_text, LANGUAGE_NAMES, TRANSLATIONS
+from translations import get_text, LANGUAGE_NAMES, TRANSLATION_LANGUAGE_NAMES, TRANSLATIONS
 from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links
 from instagram_embed import fetch_instagram_delivery
 from twitter_embed import build_twitter_layout, fetch_twitter_payload
@@ -2168,7 +2168,7 @@ class TranslationLanguageSelect(ui.Select):
                 emoji=LANGUAGE_FLAG_EMOJIS.get(code, "🌐"),
                 default=code == current,
             )
-            for code, name in LANGUAGE_NAMES.items()
+            for code, name in TRANSLATION_LANGUAGE_NAMES.items()
         )
         super().__init__(placeholder="Choose the default translation language...", options=options)
         self.page = page
@@ -2194,7 +2194,7 @@ class TranslationSettingsView(SettingsPageView):
 
     def render(self):
         current = self.settings.get("translation_language")
-        label = LANGUAGE_NAMES.get(current, "Original language")
+        label = TRANSLATION_LANGUAGE_NAMES.get(current, "Original language")
         self.render_page(
             title="Default Translation",
             description="Translate posts from every supported platform. Explicit link options take priority.",
