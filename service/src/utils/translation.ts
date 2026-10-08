@@ -1,5 +1,13 @@
 import { franc } from 'franc-min';
 
+import {
+    chineseScriptName,
+    chineseScriptOf,
+    chineseTarget,
+    convertChineseScript,
+    type ChineseTarget,
+} from './chinese_script.ts';
+
 import type {
     EmbedData,
     Env,
@@ -344,12 +352,59 @@ async function translatePreservingContext(
     return translated + text.slice(cursor);
 }
 
+/**
+ * Chinese in the other script still needs work for a Chinese target: m2m100
+ * only knows `zh`, so `zh-TW` would otherwise get a Simplified post untouched
+ * (#97). Converting between scripts counts as a translation.
+ */
+function needsTranslation(
+    source: { code: string },
+    text: string,
+    targetLanguage: string,
+    chinese: ChineseTarget | undefined,
+): boolean {
+    if (source.code !== targetLanguage) return true;
+    if (!chinese || source.code !== 'zh') return false;
+    const script = chineseScriptOf(text);
+    return script !== undefined && script !== chinese.script;
+}
+
+async function translateForTarget(
+    env: Env,
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
+    chinese: ChineseTarget | undefined,
+): Promise<string | undefined> {
+    if (chinese && sourceLanguage === 'zh') {
+        const converted = convertChineseScript(text, chinese);
+        return converted === text ? undefined : converted;
+    }
+    const translated = await translatePreservingContext(env, text, sourceLanguage, targetLanguage);
+    // m2m100 writes Simplified; a Traditional target gets converted output.
+    return translated && chinese ? convertChineseScript(translated, chinese) : translated;
+}
+
+/** `zh-TW`, `zh-HK` or `zh-Hant` for a Traditional target; the base code otherwise. */
+function targetLanguageTag(targetLanguage: string, chinese: ChineseTarget | undefined): string {
+    if (!chinese || chinese.script === 'Hans') return targetLanguage;
+    return chinese.region ? `zh-${chinese.region}` : 'zh-Hant';
+}
+
+/** Same language, and for Chinese the same script too. */
+function isSameLanguage(source: string, target: string): boolean {
+    const sourceCode = normalizeLanguage(source);
+    if (!sourceCode || sourceCode !== normalizeLanguage(target)) return false;
+    return sourceCode !== 'zh' || chineseTarget(source)?.script === chineseTarget(target)?.script;
+}
+
 export async function applyRequestedTranslation(
     result: HandlerResponse,
     env: Env,
     options: HandlerOptions,
 ): Promise<HandlerResponse> {
     const targetLanguage = normalizeLanguage(options.language);
+    const chinese = targetLanguage === 'zh' ? chineseTarget(options.language) : undefined;
     const data = result.data;
     if (!targetLanguage || !result.success || !data || !env.AI) {
         return result;
@@ -381,14 +436,14 @@ export async function applyRequestedTranslation(
         }
         : undefined;
     const jobs: TranslationJob[] = [];
-    if (primarySource?.code !== targetLanguage) {
-        for (const target of primaryTargets) {
-            if (primarySource) jobs.push({ source: primarySource, target });
+    for (const target of primaryTargets) {
+        if (primarySource && needsTranslation(primarySource, target.text, targetLanguage, chinese)) {
+            jobs.push({ source: primarySource, target });
         }
     }
     for (const target of quoteTargets) {
         const source = detectedLanguage(target.text) || primarySource || existingSource;
-        if (source && source.code !== targetLanguage) {
+        if (source && needsTranslation(source, target.text, targetLanguage, chinese)) {
             jobs.push({ source, target });
         }
     }
@@ -396,13 +451,19 @@ export async function applyRequestedTranslation(
 
     try {
         const translatedTargets = (await Promise.all(jobs.map(async ({ source, target }) => {
-            const text = await translatePreservingContext(
+            const text = await translateForTarget(
                 env,
                 target.text,
                 source.code,
                 targetLanguage,
+                chinese,
             );
-            return text ? { source, target, text } : undefined;
+            // A script conversion names the script it came from (#97).
+            const script = chinese && source.code === 'zh' ? chineseScriptOf(target.text) : undefined;
+            const named = script
+                ? { code: `zh-${script}`, name: chineseScriptName(script) }
+                : source;
+            return text ? { source: named, target, text } : undefined;
         }))).filter(
             (translation): translation is TranslationJob & { text: string } => (
                 translation !== undefined
@@ -419,10 +480,10 @@ export async function applyRequestedTranslation(
         const metadata = data.translation || {
             sourceLanguage: metadataSource.code,
             sourceLanguageName: metadataSource.name,
-            targetLanguage,
+            targetLanguage: targetLanguageTag(targetLanguage, chinese),
             originalUrl: data.url,
         };
-        if (normalizeLanguage(metadata.sourceLanguage) === targetLanguage) return result;
+        if (isSameLanguage(metadata.sourceLanguage, metadata.targetLanguage)) return result;
 
         return {
             ...result,

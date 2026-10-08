@@ -47,6 +47,7 @@ import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import { applyRequestedTranslation } from '../src/utils/translation.ts';
+import { chineseScriptOf, chineseTarget, convertChineseScript } from '../src/utils/chinese_script.ts';
 import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown, stripUnsafeText } from '../src/utils/markdown.ts';
 import {
     cleanUrl,
@@ -8281,6 +8282,147 @@ const tests: TestCase[] = [
             assert.equal(result.data?.caption, caption);
             assert.equal(result.data?.description, caption);
             assert.equal(result.data?.translation, undefined);
+        },
+    },
+    {
+        name: 'Chinese script conversion follows OpenCC phrases and regional variants (#97)',
+        run: () => {
+            // Phrases that a character-by-character table gets wrong.
+            for (const [simplified, traditional] of [
+                ['头发', '頭髮'],
+                ['干杯', '乾杯'],
+                ['皇后', '皇后'],
+                ['公里', '公里'],
+                ['后来', '後來'],
+            ]) {
+                assert.equal(convertChineseScript(simplified, { script: 'Hant' }), traditional, simplified);
+            }
+            // Taiwan's variant forms: 裏 -> 裡.
+            assert.equal(convertChineseScript('里面', { script: 'Hant' }), '裏面');
+            assert.equal(convertChineseScript('里面', chineseTarget('zh-TW')!), '裡面');
+            assert.equal(
+                convertChineseScript('這個軟體很好用，後來我發現頭髮掉了。', { script: 'Hans' }),
+                '这个软体很好用，后来我发现头发掉了。',
+            );
+            // Latin text, URLs and keys that look like object properties pass through.
+            assert.equal(
+                convertChineseScript('see https://example.com/后 constructor toString', { script: 'Hant' }),
+                'see https://example.com/後 constructor toString',
+            );
+            assert.equal(chineseScriptOf('我喜欢这个'), 'Hans');
+            assert.equal(chineseScriptOf('我喜歡這個'), 'Hant');
+            assert.equal(chineseScriptOf('中文'), undefined);
+            assert.deepEqual(
+                ['zh', 'zh-CN', 'zh-TW', 'zh_hk', 'zh-Hant', 'zh-Hant-TW', 'zh-MO', 'en'].map((tag) => chineseTarget(tag)),
+                [
+                    { script: 'Hans' },
+                    { script: 'Hans' },
+                    { script: 'Hant', region: 'TW' },
+                    { script: 'Hant', region: 'HK' },
+                    { script: 'Hant' },
+                    { script: 'Hant', region: 'TW' },
+                    { script: 'Hant', region: 'HK' },
+                    undefined,
+                ],
+            );
+        },
+    },
+    {
+        name: 'shared translation gives zh-TW servers Traditional Chinese (#97)',
+        run: async () => {
+            const calls: Array<{ source_lang?: string; target_lang?: string }> = [];
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { source_lang?: string; target_lang?: string }) => {
+                        calls.push(input);
+                        // m2m100 only writes Simplified Chinese.
+                        return { translated_text: '我喜欢这个软件，后来发现头发掉了。' };
+                    },
+                } as unknown as Ai,
+            };
+            const post = (description: string, sourceLanguage?: string): HandlerResponse => ({
+                success: true,
+                data: {
+                    title: 'Bluesky post',
+                    description,
+                    url: 'https://bsky.app/profile/example.com/post/97',
+                    siteName: 'FixEmbed • Bluesky',
+                    platform: 'bluesky',
+                    ...(sourceLanguage ? { sourceLanguage } : {}),
+                },
+            });
+
+            // English -> zh-TW: the model is asked for zh, and its output is converted.
+            const english = await applyRequestedTranslation(
+                post('I like this software, later I found my hair falling out.', 'en'),
+                translationEnv,
+                { language: 'zh-TW' },
+            );
+            assert.deepEqual(calls.map((call) => [call.source_lang, call.target_lang]), [['en', 'zh']]);
+            assert.equal(english.data?.description, '我喜歡這個軟件，後來發現頭髮掉了。');
+            assert.deepEqual(
+                [english.data?.translation?.sourceLanguage, english.data?.translation?.targetLanguage],
+                ['en', 'zh-TW'],
+            );
+
+            // Simplified (zh-CN) -> zh-TW still translates: converting scripts counts,
+            // and no model call is needed.
+            calls.length = 0;
+            const simplified = await applyRequestedTranslation(
+                post('后来我发现头发掉了', 'zh-CN'),
+                translationEnv,
+                { language: 'zh-tw' },
+            );
+            assert.equal(calls.length, 0);
+            assert.equal(simplified.data?.description, '後來我發現頭髮掉了');
+            assert.deepEqual(simplified.data?.translation && {
+                source: simplified.data.translation.sourceLanguage,
+                name: simplified.data.translation.sourceLanguageName,
+                target: simplified.data.translation.targetLanguage,
+            }, { source: 'zh-Hans', name: 'Chinese (Simplified)', target: 'zh-TW' });
+
+            // Already Traditional for a zh-HK server: nothing to do.
+            const traditional = await applyRequestedTranslation(
+                post('後來我發現頭髮掉了', 'zh'),
+                translationEnv,
+                { language: 'zh-HK' },
+            );
+            assert.equal(calls.length, 0);
+            assert.equal(traditional.data?.description, '後來我發現頭髮掉了');
+            assert.equal(traditional.data?.translation, undefined);
+
+            // Traditional -> a Simplified server goes the other way.
+            const toSimplified = await applyRequestedTranslation(
+                post('後來我發現頭髮掉了', 'zh'),
+                translationEnv,
+                { language: 'zh' },
+            );
+            assert.equal(calls.length, 0);
+            assert.equal(toSimplified.data?.description, '后来我发现头发掉了');
+            assert.equal(toSimplified.data?.translation?.sourceLanguageName, 'Chinese (Traditional)');
+            assert.equal(toSimplified.data?.translation?.targetLanguage, 'zh');
+
+            // Simplified for a Simplified server stays untouched (#88).
+            const same = await applyRequestedTranslation(
+                post('后来我发现头发掉了', 'zh'),
+                translationEnv,
+                { language: 'zh-CN' },
+            );
+            assert.equal(calls.length, 0);
+            assert.equal(same.data?.translation, undefined);
+
+            // pt-BR keeps the base code: m2m100 has no Brazilian Portuguese.
+            const portuguese = await applyRequestedTranslation(
+                post('I like this software.', 'en'),
+                { ...env, AI: { run: async (_m: string, input: { target_lang?: string }) => {
+                    calls.push(input);
+                    return { translated_text: 'Eu gosto deste software.' };
+                } } as unknown as Ai },
+                { language: 'pt-BR' },
+            );
+            assert.equal(calls.at(-1)?.target_lang, 'pt');
+            assert.equal(portuguese.data?.translation?.targetLanguage, 'pt');
         },
     },
     {
