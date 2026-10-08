@@ -1,6 +1,6 @@
 ## Unreleased
 
-#### **Keep Reddit links in multi-link messages during outages (#80 follow-up)**
+#### **Keep Reddit links in multi-link messages during outages (#85)**
 - When a Reddit comment link is skipped because Reddit is temporarily unavailable, and another link in the same message still gets a card, FixEmbed now keeps the original message and replies with that card. It no longer deletes the message (which dropped the Reddit link) or suppresses its embeds (which hid Discord's own Reddit preview).
 - This applies to both delete and suppress modes for that one message only. Messages without a skipped Reddit link behave as before.
 - A Reddit comment link that hit a temporary failure is no longer marked as handled, so posting it again within the 10 second duplicate window retries the card.
