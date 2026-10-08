@@ -1006,14 +1006,18 @@ async function recoverRedditCommentFromCrawlerPage(
 
     // One retry (#98), only for a timeout or a 5xx, and only with budget left.
     // 403/404/429 and other errors are Reddit's answer and are never retried.
+    // A timeout retry and a 5xx retry share one `retried` flag so old.reddit
+    // never gets a third request when a timeout is followed by a 503.
     let response: Response;
+    let retried = false;
     try {
         response = await fetchPage(1);
     } catch (error) {
         if (!isRedditTimeoutError(error) || !canRetry()) throw error;
+        retried = true;
         response = await fetchPage(2);
     }
-    if (response.status >= 500 && response.status <= 599 && canRetry()) {
+    if (!retried && response.status >= 500 && response.status <= 599 && canRetry()) {
         response.body?.cancel().catch(() => {});
         response = await fetchPage(2);
     }
