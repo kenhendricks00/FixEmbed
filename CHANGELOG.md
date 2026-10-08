@@ -1,5 +1,15 @@
 ## Unreleased
 
+#### **Titles with @everyone are clickable links again (#103)**
+- A Reddit title such as "How do i stop regular members from using @everyone? ... (see image) ..." still showed as raw `[title](https://...)` markdown on two of three comment cards after #104 and #105.
+- Posting each version in #embedded-testing showed why: Discord ignores a zero-width space inside `@everyone` and still refuses the link, and it shows every backslash in link text instead of reading it as an escape, so `(see image\)` leaked a `\`.
+- Mentions in link text now use a fullwidth `＠` (and `＃` for channels), which Discord keeps as a link: `＠everyone`, `<＠&123>`, `<＃123>`. Mentions in comment and post text still show as plain text, the same as before.
+- Link text is no longer backslash-escaped. `[OC]`-style brackets and parentheses show exactly as written. Only a bracket that would end the link early, or a backslash right before one, turns into its fullwidth form.
+- A title that contains a URL can't be link text at all (Discord refuses it, even as `https：//`), so it now shows as plain text followed by the link instead of raw markdown.
+- DeviantArt and Pixiv names no longer show `\_` inside links.
+- Covers every card that links a title or name: Reddit, Twitter, Bluesky, Threads, Instagram, YouTube, Pixiv, Pinterest, Bilibili, DeviantArt, TikTok, Tumblr and Twitch.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Premium shows active right after purchase (#101)**
 - A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
 - Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
