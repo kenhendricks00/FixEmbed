@@ -11,7 +11,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
-from markdown_safety import masked_link_label
+from markdown_safety import masked_link
 from timestamp_utils import parse_post_timestamp
 
 
@@ -41,7 +41,7 @@ def build_threads_layout(
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
     identity = f"@{handle}" if handle else raw_name.lstrip("@")
-    author_line = f"**[{masked_link_label(identity)}]({author_url})**" if author_url else f"**{identity}**"
+    author_line = f"**{masked_link(identity, author_url)}**" if author_url else f"**{identity}**"
 
     preferences = card_preferences or CardPreferences()
     post_text = str(

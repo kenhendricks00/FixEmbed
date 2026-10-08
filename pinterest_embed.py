@@ -10,7 +10,7 @@ import discord
 
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
-from markdown_safety import masked_link_label
+from markdown_safety import masked_link
 from timestamp_utils import parse_post_timestamp
 
 
@@ -39,11 +39,11 @@ def build_pinterest_layout(
     author_url = str(payload.get("authorUrl") or "").strip()
     author_avatar = str(payload.get("authorAvatar") or "").strip()
 
-    title_line = f"**[{masked_link_label(title)}]({source_url})**" if source_url else f"**{title}**"
+    title_line = f"**{masked_link(title, source_url)}**" if source_url else f"**{title}**"
     if author_name and author_handle and author_url:
-        author_line = f"**{author_name}** ([{masked_link_label('@' + author_handle)}]({author_url}))"
+        author_line = f"**{author_name}** ({masked_link('@' + author_handle, author_url)})"
     elif author_name and author_url:
-        author_line = f"**[{masked_link_label(author_name)}]({author_url})**"
+        author_line = f"**{masked_link(author_name, author_url)}**"
     else:
         author_line = f"**{author_name}**" if author_name else ""
     header_text = "\n".join(part for part in (author_line, title_line, description) if part)

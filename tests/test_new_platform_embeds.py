@@ -299,8 +299,10 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
 
         rendered = str(serialized_container(build_deviantart_layout(payload)))
 
-        # Both brackets are escaped so the title stays one masked link label.
-        self.assertIn(r"\\[unsafe\\]", rendered)
+        # A title holding a URL can't be a masked-link label (Discord refuses it,
+        # #103), so it stays escaped plain text followed by the link.
+        self.assertIn(r"### \\[unsafe](https://example.com)", rendered)
+        self.assertIn("(<https://www.deviantart.com/team/art/example-123>)", rendered)
         self.assertNotIn("**bold**", rendered)
         self.assertNotIn("__Team__", rendered)
         self.assertNotIn("@everyone", rendered)

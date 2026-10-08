@@ -16,7 +16,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
-from markdown_safety import masked_link_label
+from markdown_safety import masked_link
 from timestamp_utils import parse_post_datetime, parse_post_timestamp
 
 
@@ -242,7 +242,7 @@ def build_instagram_layout(
 
     author_label = handle or name
     if author_url:
-        author_line = f"**[{masked_link_label(author_label)}]({author_url})**"
+        author_line = f"**{masked_link(author_label, author_url)}**"
     else:
         author_line = f"**{author_label}**"
     header_text = "\n".join(part for part in (author_line, caption) if part)
