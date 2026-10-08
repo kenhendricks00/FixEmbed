@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit comment outages vs deletions (#71)**
+- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body or author, or the comment missing from a normal listing.
+- When Reddit is rate limited, down, blocking the request, timing out, or sending a broken response, the Worker no longer guesses. It returns a temporary failure that redirects to Reddit, so Discord keeps Reddit's own preview instead of a wrong "deleted" card.
+- The old.reddit fallback now tells a live comment, a deleted comment, and an unclear page apart, and only the deleted case turns into the unavailable card.
+- The bot no longer builds its own "Comment unavailable" card when a Reddit comment card fails. Automatic fixes skip the link and leave the original message alone, and the slash command sends the plain link like other services.
+
 #### **Twitter canary contract update (#72)**
 - The production canary's translation check now reads the Worker's `translation` metadata (target language matches the requested `lang`, translated description present) and looks for the bot's "Translated from …" footer, instead of the retired `Translation (XX):` description text.
 - The `twitter-tombstone` canary now uses a post whose quoted post really is unavailable. The old fixture's quoted post is live again, so the Worker correctly rendered a normal quote there; the parser was not at fault.
