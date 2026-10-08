@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Reddit comment cards from the old.reddit fallback show when the comment was posted (#91)**
+- When Reddit's API blocks the Worker, comment cards are built from old.reddit's page, and those cards had no timestamp. old.reddit's comment markup has no timestamp attribute, unlike posts.
+- The time now comes from the comment's own header on old.reddit, the same time old.reddit shows as "8 months ago". If the comment was edited, the original posting time is used, not the edit time.
+- Cards built from Reddit's API are unchanged.
+
 #### **Reddit text can't flip or hide parts of a card (#90)**
 - A Reddit comment could contain invisible control characters, either typed in or written as codes like `&#x202E;` that the old.reddit fallback decodes. A right-to-left override such as U+202E reversed the rest of the comment on the card, so `gnp.exe` could read as `exe.png`.
 - Comment text and post titles on Reddit comment cards now drop these characters, whichever way Reddit sends them: control characters other than tab and newline, and the bidi embedding, override and isolate marks (U+202A to U+202E, U+2066 to U+2069).

@@ -972,6 +972,18 @@ function redditCrawlerCommentOwnHtml(html: string, index: number, commentTag: st
 }
 
 /**
+ * When the comment was posted, from its tagline (#91). old.reddit's comment tags
+ * carry no `data-timestamp`, but the tagline has
+ * `<time datetime="2026-01-30T20:37:40+00:00" class="live-timestamp">`. An
+ * edited comment adds a second `edited-timestamp` element, which is skipped.
+ */
+function redditCrawlerCommentTimestamp(commentHtml: string): string | undefined {
+    const tag = commentHtml.match(/<time\b(?=[^>]*\bclass=["'][^"']*\blive-timestamp\b)[^>]*>/i)?.[0];
+    const ms = tag ? Date.parse(htmlAttribute(tag, 'datetime')) : NaN;
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : undefined;
+}
+
+/**
  * old.reddit's page for a deleted or removed comment that has no replies (#106):
  * HTTP 200, Reddit resolves the comment id (the page's `event_target` is
  * `t1_<id>`; an id that is not under this post is a 404 instead), but the
@@ -1157,7 +1169,7 @@ async function recoverRedditCommentFromCrawlerPage(
                 commentScore: score,
                 commentTimestamp: Number.isFinite(timestampMs) && timestampMs > 0
                     ? new Date(timestampMs).toISOString()
-                    : undefined,
+                    : redditCrawlerCommentTimestamp(commentHtml),
                 parentTitle: displayTitle,
                 parentUrl,
                 parentAuthor: parentAuthor || undefined,

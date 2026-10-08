@@ -4466,6 +4466,45 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler fills the comment timestamp on old.reddit fallback cards from the tagline (#91)',
+        run: async () => {
+            // Real markup: comment tags have no data-timestamp, only the tagline's
+            // <time class="live-timestamp" datetime=...>.
+            for (const [commentId, page, expected] of [
+                ['o2o5rsi', redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML), '2026-01-30T20:37:40.000Z'],
+                // A live reply under a deleted, edited parent reads its own tagline.
+                ['o2m92yc', redditRealCrawlerPage(REDDIT_REAL_DELETED_COMMENT_HTML), '2026-01-30T15:29:04.000Z'],
+                ['o2mv18r', redditRealCrawlerPage(REDDIT_REAL_ENTITY_LT_GT_COMMENT_HTML), '2026-01-30T17:07:15.000Z'],
+            ] as const) {
+                const result = await runRedditBudgetScenario({
+                    url: `${REDDIT_REAL_THREAD_URL}${commentId}/`,
+                    crawler: () => redditRealHtmlResponse(page),
+                });
+                assert.equal(result.response.success, true, commentId);
+                assert.equal(result.response.data?.timestamp, expected, commentId);
+            }
+
+            // An edited comment's edited-timestamp is skipped, wherever it sits.
+            const edited = REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML.replace(
+                /<time title="[^"]*" datetime="2026-01-30T20:37:40\+00:00" class="live-timestamp">/,
+                '<time class="edited-timestamp" title="last edited" datetime="2026-02-02T09:00:00+00:00">edited</time>$&',
+            );
+            assert.notEqual(edited, REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML);
+            const editedResult = await runRedditBudgetScenario({
+                crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(edited)),
+            });
+            assert.equal(editedResult.response.data?.timestamp, '2026-01-30T20:37:40.000Z');
+
+            // No tagline time and no data-timestamp: still no timestamp, as before.
+            const untimed = REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML.replace(/<time\b[^>]*>[^<]*<\/time>/g, '');
+            const untimedResult = await runRedditBudgetScenario({
+                crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(untimed)),
+            });
+            assert.equal(untimedResult.response.success, true);
+            assert.equal(untimedResult.response.data?.timestamp, undefined);
+        },
+    },
+    {
         name: 'decodeHtmlEntitiesOnce drops control and bidi characters, literal or from entities (#90)',
         run: () => {
             // C0 (not tab/newline), DEL, C1, bidi embeddings/overrides, isolates.
