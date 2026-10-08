@@ -12,6 +12,7 @@ export type RedditFetchStage =
     | 'json'
     | 'old_reddit'
     | 'old_reddit_body'
+    | 'old_reddit_info'
     | 'icon'
     | 'icon_fallback'
     | 'icon_bootstrap'

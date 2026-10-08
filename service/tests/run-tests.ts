@@ -139,6 +139,8 @@ type RedditCommentScenarioReply = Response | (() => Response | Promise<Response>
 async function runRedditCommentScenario(options: {
     json: RedditCommentScenarioReply;
     crawler?: RedditCommentScenarioReply;
+    /** old.reddit `api/info.json` reply (#106). Unset means the lookup must not happen. */
+    info?: RedditCommentScenarioReply;
     url?: string;
 }): Promise<{ response: HandlerResponse; requested: string[] }> {
     const commentUrl = options.url ?? REDDIT_OUTAGE_COMMENT_URL;
@@ -157,6 +159,10 @@ async function runRedditCommentScenario(options: {
             }
             if (url.includes('/comments/') && url.includes('.json')) {
                 return reply(options.json);
+            }
+            if (url.startsWith('https://old.reddit.com/api/info.json')) {
+                if (!options.info) throw new Error(`Info lookup should not be called: ${url}`);
+                return reply(options.info);
             }
             if (url.startsWith('https://old.reddit.com/')) {
                 if (!options.crawler) throw new Error(`Crawler should not be called: ${url}`);
@@ -301,6 +307,8 @@ async function runRedditBudgetScenario(options: {
     probe?: RedditBudgetReply;
     json?: RedditBudgetReply;
     crawler?: RedditBudgetReply;
+    /** old.reddit `api/info.json` (#106). Unset means the lookup must not happen. */
+    info?: RedditBudgetReply;
     icon?: RedditBudgetReply;
 }): Promise<{
     response: HandlerResponse;
@@ -329,6 +337,10 @@ async function runRedditBudgetScenario(options: {
                 requested.push(url);
                 if (url === commentUrl) return probe(init, clock);
                 if (url.includes('/comments/') && url.includes('.json')) return json(init, clock);
+                if (url.startsWith('https://old.reddit.com/api/info.json')) {
+                    if (!options.info) throw new Error(`Info lookup should not be called: ${url}`);
+                    return options.info(init, clock);
+                }
                 if (url.startsWith('https://old.reddit.com/')) {
                     if (!options.crawler) throw new Error(`Crawler should not be called: ${url}`);
                     return options.crawler(init, clock);
@@ -460,6 +472,123 @@ const redditRealCommentJson = (comment: Record<string, unknown>, postAuthor = 'r
     ]),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
 );
+
+// #106: two comments that were deleted or removed with no replies, captured
+// 2026-10-08 with the Worker's Discordbot UA. old.reddit answers 200 with the post
+// and an empty single-comment thread (`noresults`), and its `event_target` is the
+// comment. Trimmed to the post header, that config field, and the comment area;
+// attributes and text are verbatim.
+type RedditDeletedThreadFixture = {
+    url: string;
+    subreddit: string;
+    postId: string;
+    commentId: string;
+    page: string;
+    /** Comment fields from arctic-shift (api/comments/ids), same as old.reddit api/info.json. */
+    comment: Record<string, unknown>;
+    post: Record<string, unknown>;
+};
+const redditDeletedThreadPage = (postTag: string, title: string, eventTarget: string, commentArea: string) => `<!doctype html><html><head><script type="text/javascript" id="config">r.setup({${eventTarget}, "use_onetrust": false});</script></head><body>
+${postTag}
+${title}
+</div>
+<div class='commentarea'>${commentArea}</div>
+</body></html>`;
+const REDDIT_DELETED_THREAD_PAUT4LY: RedditDeletedThreadFixture = {
+    url: 'https://www.reddit.com/r/discordapp/comments/1wkt8q9/were_gonna_be_seeing_a_lot_more_of_these_now/paut4ly/',
+    subreddit: 'discordapp',
+    postId: '1wkt8q9',
+    commentId: 'paut4ly',
+    page: redditDeletedThreadPage(
+        `<div class=" thing id-t3_1wkt8q9 linkflair odd&#32; link " id="thing_t3_1wkt8q9" onclick="click_thing(this)" data-fullname="t3_1wkt8q9" data-type="link" data-gildings="0" data-whitelist-status="all_ads" data-is-gallery="true" data-author="SmartyPantsDJ" data-author-fullname="t2_60rc3hsw" data-subreddit="discordapp" data-subreddit-prefixed="r/discordapp" data-subreddit-fullname="t5_388p4" data-subreddit-type="public" data-timestamp="1789841544000" data-url="https://www.reddit.com/gallery/1wkt8q9" data-permalink="/r/discordapp/comments/1wkt8q9/were_gonna_be_seeing_a_lot_more_of_these_now/" data-domain="old.reddit.com" data-rank="" data-comments-count="20" data-score="120" data-promoted="false" data-nsfw="false" data-spoiler="false" data-oc="false" data-num-crossposts="0" data-context="comments" >`,
+        `<a class="title may-blank outbound" data-event-action="title" href="https://www.reddit.com/gallery/1wkt8q9" tabindex="1" data-href-url="https://www.reddit.com/gallery/1wkt8q9" data-outbound-url="https://www.reddit.com/gallery/1wkt8q9" data-outbound-expiration="0" rel="nofollow ugc" >We\u2019re gonna be seeing a lot more of these now\u2026</a>`,
+        `"event_target": {"target_id": 55075967638, "target_type": "comment", "target_fullname": "t1_paut4ly"}`,
+        `<div class="infobar">you are viewing a single comment's thread.<p><a href="/r/discordapp/comments/1wkt8q9/were_gonna_be_seeing_a_lot_more_of_these_now/">view the rest of the comments</a>&nbsp;&#8594;</p></div><div id="siteTable_t3_1wkt8q9" class="sitetable nestedlisting"><p id="noresults" class="error">there doesn't seem to be anything here</p></div>`,
+    ),
+    comment: {
+        id: 'paut4ly',
+        name: 't1_paut4ly',
+        author: '[deleted]',
+        body: '[deleted]',
+        link_id: 't3_1wkt8q9',
+        parent_id: 't3_1wkt8q9',
+        permalink: '/r/discordapp/comments/1wkt8q9/were_gonna_be_seeing_a_lot_more_of_these_now/paut4ly/',
+        subreddit: 'discordapp',
+        score: 1,
+        ups: 1,
+        collapsed: false,
+        collapsed_reason_code: null,
+        replies: '',
+        created_utc: 1789858293,
+    },
+    post: {
+        id: '1wkt8q9',
+        title: 'We\u2019re gonna be seeing a lot more of these now\u2026',
+        author: 'SmartyPantsDJ',
+        subreddit: 'discordapp',
+        permalink: '/r/discordapp/comments/1wkt8q9/were_gonna_be_seeing_a_lot_more_of_these_now/',
+        num_comments: 20,
+        score: 120,
+        created_utc: 1789841544,
+    },
+};
+const REDDIT_DELETED_THREAD_PAULDSO: RedditDeletedThreadFixture = {
+    url: 'https://www.reddit.com/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/pauldso/',
+    subreddit: 'learnpython',
+    postId: '1wky75x',
+    commentId: 'pauldso',
+    page: redditDeletedThreadPage(
+        `<div class=" thing id-t3_1wky75x odd&#32; link self" id="thing_t3_1wky75x" onclick="click_thing(this)" data-fullname="t3_1wky75x" data-type="link" data-gildings="0" data-whitelist-status="all_ads" data-is-gallery="false" data-author="moomo7482819" data-author-fullname="t2_jtnngci4" data-subreddit="learnpython" data-subreddit-prefixed="r/learnpython" data-subreddit-fullname="t5_2r8ot" data-subreddit-type="public" data-timestamp="1789853389000" data-url="/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/" data-permalink="/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/" data-domain="self.learnpython" data-rank="" data-comments-count="31" data-score="3" data-promoted="false" data-nsfw="false" data-spoiler="false" data-oc="false" data-num-crossposts="0" data-context="comments" >`,
+        `<a class="title may-blank " data-event-action="title" href="/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/" tabindex="1" >How do I best train my &quot;programmatic thinking&quot; and convert basic logic to code?</a>`,
+        `"event_target": {"target_id": 55075606296, "target_type": "comment", "target_fullname": "t1_pauldso"}`,
+        `<div class="infobar">you are viewing a single comment's thread.<p><a href="/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/">view the rest of the comments</a>&nbsp;&#8594;</p></div><div id="siteTable_t3_1wky75x" class="sitetable nestedlisting"><p id="noresults" class="error">there doesn't seem to be anything here</p></div>`,
+    ),
+    comment: {
+        id: 'pauldso',
+        name: 't1_pauldso',
+        author: '[deleted]',
+        body: '[removed]',
+        link_id: 't3_1wky75x',
+        parent_id: 't3_1wky75x',
+        permalink: '/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/pauldso/',
+        subreddit: 'learnpython',
+        score: 0,
+        ups: 0,
+        collapsed: true,
+        collapsed_reason_code: 'DELETED',
+        replies: '',
+        created_utc: 1789855829,
+    },
+    post: {
+        id: '1wky75x',
+        title: 'How do I best train my "programmatic thinking" and convert basic logic to code?',
+        author: 'moomo7482819',
+        subreddit: 'learnpython',
+        permalink: '/r/learnpython/comments/1wky75x/how_do_i_best_train_my_programmatic_thinking_and/',
+        num_comments: 31,
+        score: 3,
+        created_utc: 1789853389,
+    },
+};
+const REDDIT_DELETED_THREADS = [REDDIT_DELETED_THREAD_PAUT4LY, REDDIT_DELETED_THREAD_PAULDSO] as const;
+/** old.reddit `api/info.json?id=t1_<id>` for one comment (#106). */
+const redditInfoResponse = (comment: Record<string, unknown>) => Response.json({
+    kind: 'Listing',
+    data: { after: null, dist: 1, modhash: '', geo_filter: '', children: [{ kind: 't1', data: comment }], before: null },
+});
+/** Reddit JSON for one comment permalink on a #106 fixture's post. */
+const redditDeletedThreadJson = (fixture: RedditDeletedThreadFixture, comment: Record<string, unknown>) => Response.json([
+    {
+        kind: 'Listing',
+        data: {
+            children: [{
+                kind: 't3',
+                data: { selftext: '', url: '', thumbnail: 'self', is_video: false, ...fixture.post },
+            }],
+        },
+    },
+    { kind: 'Listing', data: { children: [{ kind: 't1', data: comment }] } },
+]);
 
 const tests: TestCase[] = [
     {
@@ -4070,10 +4199,11 @@ const tests: TestCase[] = [
         name: 'redditHandler still tombstones JSON comments whose body is [deleted], [removed], or empty (#84)',
         run: async () => {
             const commentUrl = `${REDDIT_REAL_THREAD_URL}o2m8ovr/`;
+            // #106: ['someone', '[removed]'] is now a live author's literal text and a
+            // normal card. See "keeps a live author's literal [deleted] or [removed]".
             for (const [author, body] of [
                 ['[deleted]', '[removed]'],
                 ['[deleted]', '[deleted]'],
-                ['someone', '[removed]'],
                 ['someone', '  '],
             ]) {
                 const { response } = await runRedditCommentScenario({
@@ -4109,6 +4239,215 @@ const tests: TestCase[] = [
                 assertRedditCommentTombstone(response);
                 assert.equal(response.data?.url, commentUrl);
             }
+        },
+    },
+    {
+        name: 'redditHandler tombstones the real paut4ly/pauldso empty old.reddit threads once info confirms they are gone (#106)',
+        run: async () => {
+            for (const fixture of REDDIT_DELETED_THREADS) {
+                const infoUrls: string[] = [];
+                const result = await runRedditBudgetScenario({
+                    url: fixture.url,
+                    crawler: (_init, clock) => {
+                        clock.advance(450);
+                        return redditRealHtmlResponse(fixture.page);
+                    },
+                    info: (_init, clock) => {
+                        clock.advance(120);
+                        return redditInfoResponse(fixture.comment);
+                    },
+                });
+                infoUrls.push(...result.requested.filter((url) => url.startsWith('https://old.reddit.com/api/info.json')));
+                assertRedditCommentTombstone(result.response);
+                assert.equal(result.response.data?.title, `r/${fixture.subreddit} \u2022 Comment unavailable`);
+                assert.equal(result.response.data?.url, fixture.url);
+                assert.deepEqual(infoUrls, [
+                    `https://old.reddit.com/api/info.json?id=t1_${fixture.commentId}&raw_json=1`,
+                ]);
+                assert.deepEqual(
+                    redditFetchLines(result.logged)
+                        .filter((line) => line.stage === 'old_reddit' || line.stage === 'old_reddit_info')
+                        .map((line) => [line.stage, line.status, line.timed_out]),
+                    [['old_reddit', 200, false], ['old_reddit_info', null, false]],
+                );
+                // desk saw these as `temporary` (no card) before #106.
+                assert.equal(redditTimingSummary(result.logged).outcome, 'gone');
+                assert.ok(result.elapsed <= REDDIT_COMMENT_TIMEOUTS.budgetMs);
+            }
+        },
+    },
+    {
+        name: 'redditHandler tombstones the arctic-shift paut4ly/pauldso payloads from the JSON API (#106)',
+        run: async () => {
+            for (const fixture of REDDIT_DELETED_THREADS) {
+                const { response, requested } = await runRedditCommentScenario({
+                    url: fixture.url,
+                    json: redditDeletedThreadJson(fixture, fixture.comment),
+                });
+                assertRedditCommentTombstone(response);
+                assert.equal(response.data?.title, `r/${fixture.subreddit} \u2022 Comment unavailable`);
+                assert.equal(response.data?.url, fixture.url);
+                assert.equal(requested.some((url) => url.startsWith('https://old.reddit.com/')), false);
+            }
+        },
+    },
+    {
+        name: "redditHandler keeps a live author's literal [deleted] or [removed] as a normal card (#106)",
+        run: async () => {
+            for (const marker of ['[deleted]', '[removed]']) {
+                // JSON API: same paut4ly shape, but a live author typed the text.
+                const fixture = REDDIT_DELETED_THREAD_PAUT4LY;
+                const { response: fromJson } = await runRedditCommentScenario({
+                    url: fixture.url,
+                    json: redditDeletedThreadJson(fixture, {
+                        ...fixture.comment,
+                        author: 'SmartyPantsDJ',
+                        body: marker,
+                        collapsed: false,
+                        collapsed_reason_code: null,
+                    }),
+                });
+                assert.equal(fromJson.success, true, `JSON ${marker}`);
+                assert.equal(fromJson.data?.sections?.some((section) => section.kind === 'tombstone'), false);
+                assert.equal(fromJson.data?.title, `r/discordapp \u2022 ${fixture.post.title}`);
+                assert.equal(fromJson.data?.sections?.[0]?.title, 'Comment by u/SmartyPantsDJ');
+                assert.equal(fromJson.data?.sections?.[0]?.body, marker);
+
+                // old.reddit: the real id-tagged o2o5rsi markup with a live data-author.
+                const commentUrl = `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+                const markup = REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML
+                    .replace('data-type="comment"', 'data-type="comment" data-author="Lord0fHats"')
+                    .replace(/<div class="md">[\s\S]*?<\/div>/, `<div class="md"><p>${marker}</p>\n</div>`);
+                assert.notEqual(markup, REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML);
+                const { response: fromCrawler } = await runRedditCommentScenario({
+                    url: commentUrl,
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler: redditRealHtmlResponse(redditRealCrawlerPage(markup)),
+                });
+                assert.equal(fromCrawler.success, true, `crawler ${marker}`);
+                assert.equal(fromCrawler.data?.sections?.some((section) => section.kind === 'tombstone'), false);
+                assert.equal(fromCrawler.data?.sections?.[0]?.title, 'Comment by u/Lord0fHats');
+                assert.equal(fromCrawler.data?.sections?.[0]?.body, marker);
+            }
+        },
+    },
+    {
+        name: 'redditHandler keeps an empty old.reddit thread temporary unless info proves the comment is gone (#106)',
+        run: async () => {
+            const fixture = REDDIT_DELETED_THREAD_PAUT4LY;
+            const timeout = () => {
+                throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+            };
+            const infoReplies: Array<[string, RedditCommentScenarioReply]> = [
+                ['403', () => new Response('blocked', { status: 403, statusText: 'Forbidden' })],
+                ['429', () => new Response('slow down', { status: 429, statusText: 'Too Many Requests' })],
+                ['503', () => new Response('busy', { status: 503, statusText: 'Service Unavailable' })],
+                ['404', () => new Response('not found', { status: 404, statusText: 'Not Found' })],
+                ['network', () => {
+                    throw new TypeError('fetch failed');
+                }],
+                ['timeout', timeout],
+                ['not json', () => new Response('<html>whoa there, pardner!</html>', { status: 200 })],
+                ['empty listing', () => Response.json({ kind: 'Listing', data: { children: [] } })],
+                ['other comment', () => redditInfoResponse({ ...fixture.comment, id: 'paut4lz', name: 't1_paut4lz' })],
+                ['other post', () => redditInfoResponse({ ...fixture.comment, link_id: 't3_1wky75x' })],
+                ['live author, literal [deleted]', () => redditInfoResponse({ ...fixture.comment, author: 'SmartyPantsDJ' })],
+                ['deleted account, live body', () => redditInfoResponse({ ...fixture.comment, body: 'still here' })],
+                ['no body', () => redditInfoResponse({ ...fixture.comment, body: undefined })],
+            ];
+            for (const [label, info] of infoReplies) {
+                const { response, requested } = await runRedditCommentScenario({
+                    url: fixture.url,
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler: () => redditRealHtmlResponse(fixture.page),
+                    info,
+                });
+                assertRedditCommentTransient(response, fixture.url);
+                assert.ok(
+                    requested.some((url) => url.startsWith('https://old.reddit.com/api/info.json')),
+                    label,
+                );
+            }
+
+            // Without Reddit naming this comment as the page target, an empty thread
+            // is not looked up at all.
+            for (const page of [
+                fixture.page.replace('"target_fullname": "t1_paut4ly"', '"target_fullname": "t3_1wkt8q9"'),
+                fixture.page.replace('"target_fullname": "t1_paut4ly"', '"target_fullname": "t1_paut4lz"'),
+                fixture.page.replace('<p id="noresults" class="error">there doesn\'t seem to be anything here</p>', ''),
+                fixture.page.replace('siteTable_t3_1wkt8q9', 'siteTable_t3_1wky75x'),
+            ]) {
+                assert.notEqual(page, fixture.page);
+                const { response, requested } = await runRedditCommentScenario({
+                    url: fixture.url,
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler: () => redditRealHtmlResponse(page),
+                });
+                assertRedditCommentTransient(response, fixture.url);
+                assert.equal(requested.some((url) => url.includes('/api/info.json')), false);
+            }
+
+            // Outages on the old.reddit page itself stay temporary and never reach info.
+            for (const crawler of [
+                () => new Response('busy', { status: 503 }),
+                () => new Response('blocked', { status: 403 }),
+                () => new Response('slow down', { status: 429 }),
+                timeout,
+            ]) {
+                const { response, requested } = await runRedditCommentScenario({
+                    url: fixture.url,
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler,
+                });
+                assertRedditCommentTransient(response, fixture.url);
+                assert.equal(requested.some((url) => url.includes('/api/info.json')), false);
+            }
+        },
+    },
+    {
+        name: 'redditHandler caps the #106 info lookup at what is left of the comment budget (#106)',
+        run: async () => {
+            const fixture = REDDIT_DELETED_THREAD_PAULDSO;
+            const result = await runRedditBudgetScenario({
+                url: fixture.url,
+                crawler: (_init, clock) => {
+                    clock.advance(3_900);
+                    return redditRealHtmlResponse(fixture.page);
+                },
+                info: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(result.response, fixture.url);
+            // probe 3s, JSON 3s, old.reddit 4s, body read 4s cap, then info gets the 4.05s left capped at 3s.
+            assert.deepEqual(result.delays.slice(-1), [3_000]);
+            const infoLines = redditFetchLines(result.logged).filter((line) => line.stage === 'old_reddit_info');
+            assert.deepEqual(
+                infoLines.map((line) => [line.status, line.ok, line.timed_out, line.error]),
+                [[null, false, true, 'AbortError']],
+            );
+            assert.equal(redditTimingSummary(result.logged).outcome, 'temporary');
+            assert.ok(result.elapsed <= REDDIT_COMMENT_TIMEOUTS.budgetMs);
+
+            // Slow earlier stages leave info only the rest of the 8s budget.
+            const late = await runRedditBudgetScenario({
+                url: fixture.url,
+                probe: (_init, clock) => {
+                    clock.advance(2_900);
+                    return new Response(null, { status: 200 });
+                },
+                json: (_init, clock) => {
+                    clock.advance(2_900);
+                    return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                },
+                crawler: (_init, clock) => {
+                    clock.advance(2_000);
+                    return redditRealHtmlResponse(fixture.page);
+                },
+                info: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(late.response, fixture.url);
+            assert.deepEqual(late.delays.slice(-1), [200]);
+            assert.equal(late.elapsed, REDDIT_COMMENT_TIMEOUTS.budgetMs);
+            assert.equal(redditTimingSummary(late.logged).outcome, 'temporary');
         },
     },
     {

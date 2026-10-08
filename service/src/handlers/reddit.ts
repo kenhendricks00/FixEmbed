@@ -717,19 +717,28 @@ function findRedditComment(
     return undefined;
 }
 
+/** Reddit's author placeholder for a deleted account, or no author at all. */
+function isRedditDeletedAuthor(author: string | undefined): boolean {
+    const normalized = String(author || '').trim().replace(/^u\//i, '');
+    return !normalized || /^\[(?:deleted|removed)\]$/i.test(normalized);
+}
+
 /**
- * Only the body says whether a comment is gone. A deleted account keeps its
- * comment body and only loses the author (`[deleted]`), so the author is not a
- * deletion signal.
+ * Whether Reddit says a comment is gone (#106). A body of exactly `[deleted]` or
+ * `[removed]` counts only when the author is gone too, because a live user can
+ * type that text. A deleted account alone keeps its body, so the author by itself
+ * is not a deletion signal either. Reddit never serves an empty body for a live
+ * comment, so an empty body stays gone as before.
  */
-function isRedditGoneCommentBody(body: string | undefined): boolean {
-    const normalized = String(body || '').trim().toLowerCase();
-    return !normalized || normalized === '[deleted]' || normalized === '[removed]';
+function isRedditGoneComment(author: string | undefined, body: string | undefined): boolean {
+    const normalized = String(body || '').trim();
+    if (!normalized) return true;
+    return (normalized === '[deleted]' || normalized === '[removed]') && isRedditDeletedAuthor(author);
 }
 
 function isUnavailableRedditComment(comment: RedditComment | undefined): boolean {
     if (!comment) return true;
-    return isRedditGoneCommentBody(comment.body);
+    return isRedditGoneComment(comment.author, comment.body);
 }
 
 /** Reddit user identity for cards. Deleted accounts get a plain `[deleted]` label and no profile link. */
@@ -988,6 +997,72 @@ function redditCrawlerCommentOwnHtml(html: string, index: number, commentTag: st
     return scope;
 }
 
+/**
+ * old.reddit's page for a deleted or removed comment that has no replies (#106):
+ * HTTP 200, Reddit resolves the comment id (the page's `event_target` is
+ * `t1_<id>`; an id that is not under this post is a 404 instead), but the
+ * single-comment thread under the post is empty (`noresults`). The page names no
+ * author or body, so this alone never means gone. It only says to look the
+ * comment up.
+ */
+function isRedditCrawlerEmptyCommentThread(html: string, postId: string, commentId: string): boolean {
+    const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const targetsComment = new RegExp(
+        `"target_fullname":\\s*"t1_${escape(commentId)}"`,
+        'i',
+    ).test(html);
+    if (!targetsComment) return false;
+    return new RegExp(
+        `<div\\b(?=[^>]*\\bid=["']siteTable_t3_${escape(postId)}["'])[^>]*>\\s*<p\\b[^>]*\\bid=["']noresults["']`,
+        'i',
+    ).test(html);
+}
+
+type RedditInfoListing = {
+    data?: { children?: Array<RedditListingChild<Partial<RedditComment>>> };
+};
+
+/**
+ * Look a comment up on old.reddit's `api/info.json` (#106), the same host and
+ * user agent as the crawler page. Gone only when the comment is under this post
+ * and passes isRedditGoneComment. Any error, timeout, or mismatch is unknown, so
+ * an outage never turns into a tombstone. No retry: this runs only on the rare
+ * empty-thread page, inside the request's remaining budget.
+ */
+async function lookUpRedditCommentFromInfo(
+    postId: string,
+    commentId: string,
+    trace: RedditFetchTrace | undefined,
+    budget: RedditCommentBudget,
+): Promise<RedditCommentCrawlerResult> {
+    const infoUrl = `https://old.reddit.com/api/info.json?id=t1_${encodeURIComponent(commentId)}&raw_json=1`;
+    let listing: RedditInfoListing;
+    try {
+        listing = await timeRedditFetch(trace, 'old_reddit_info', () => fetchRedditCommentJSON<RedditInfoListing>(
+            infoUrl,
+            { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' },
+            budget(REDDIT_COMMENT_TIMEOUTS.jsonMs),
+        ));
+    } catch (error) {
+        return {
+            kind: 'unknown',
+            reason: `crawler empty thread, info ${redditHttpStatusFromError(error) ?? 'error'}`,
+        };
+    }
+    const child = listing?.data?.children?.[0];
+    const comment = child?.kind === 't1' ? child.data : undefined;
+    if (!comment || String(comment.id || '').toLowerCase() !== commentId.toLowerCase()) {
+        return { kind: 'unknown', reason: 'crawler empty thread, info has no comment' };
+    }
+    if (String(comment.link_id || '').toLowerCase() !== `t3_${postId}`.toLowerCase()) {
+        return { kind: 'unknown', reason: 'crawler empty thread, info comment is on another post' };
+    }
+    if (typeof comment.body !== 'string' || !isRedditGoneComment(comment.author, comment.body)) {
+        return { kind: 'unknown', reason: 'crawler empty thread, info comment is live' };
+    }
+    return { kind: 'gone', permalink: comment.permalink || undefined };
+}
+
 async function recoverRedditCommentFromCrawlerPage(
     subreddit: string,
     postId: string,
@@ -1037,7 +1112,12 @@ async function recoverRedditCommentFromCrawlerPage(
     if (!html) return { kind: 'unknown', reason: 'crawler empty html' };
 
     const located = findRedditCrawlerCommentTag(html, commentId);
-    if (!located) return { kind: 'unknown', reason: 'crawler comment tag not found' };
+    if (!located) {
+        if (isRedditCrawlerEmptyCommentThread(html, postId, commentId)) {
+            return lookUpRedditCommentFromInfo(postId, commentId, trace, budget);
+        }
+        return { kind: 'unknown', reason: 'crawler comment tag not found' };
+    }
     const { tag: commentTag, deleted: markedDeleted } = located;
 
     const author = htmlAttribute(commentTag, 'data-author');
@@ -1051,9 +1131,10 @@ async function recoverRedditCommentFromCrawlerPage(
     const body = rawBody ? redditHtmlToDiscordMarkdown(rawBody) : '';
 
     // Gone only when Reddit says so: the comment is rendered with old.reddit's
-    // `deleted` class, or its body is [deleted]/[removed]. A missing data-author
-    // alone is a deleted account whose comment is still readable.
-    if (markedDeleted || (body && isRedditGoneCommentBody(body))) {
+    // `deleted` class, or its body is [deleted]/[removed] and its author is gone
+    // too (#106). A missing data-author alone is a deleted account whose comment
+    // is still readable, and a live author's literal `[deleted]` is a real comment.
+    if (markedDeleted || (body && isRedditGoneComment(author, body))) {
         return { kind: 'gone', permalink: permalink || undefined };
     }
     // No parseable body on a comment Reddit did not mark deleted is a markup problem.

@@ -7,6 +7,15 @@
 - A Premium check that times out or fails still changes nothing in the cache, and the error log now names the server it was checking.
 - Ships with a bot restart only. No Worker deploy needed.
 
+#### **Deleted Reddit comments show as gone (#106)**
+- A link to a Reddit comment that was deleted or removed and has no replies now shows the "Comment unavailable" card. Before, FixEmbed posted nothing, as with comments paut4ly (r/discordapp) and pauldso (r/learnpython).
+- For these comments old.reddit answers 200 with the post but an empty thread, so the page itself never says the comment is gone. When the page names the comment as its target and the thread is empty, the Worker now looks the comment up once on old.reddit's `api/info.json`.
+- A comment counts as gone only when its text is exactly `[deleted]` or `[removed]` and its author is gone too, or old.reddit marks it deleted. Someone who really typed `[deleted]` or `[removed]` keeps a normal comment card. This rule now applies to Reddit's API, the old.reddit page and the new lookup.
+- The lookup uses only what is left of the 8 second comment budget, capped at 3 seconds, and is never retried. A timeout, error, 403, 429, 5xx, a comment on another post or a live author still means "Reddit is temporarily unavailable" and Discord keeps Reddit's own preview.
+- The lookup logs a `reddit_fetch` line with the stage `old_reddit_info`.
+- Deleted comments still get the "Comment unavailable" card, not the post card with a deleted line. The existing cards and tests for deleted comments expect that card, and the post card would need its own bot rendering, so it is left for a follow-up.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Faster Reddit comment cards when Reddit is slow (#98)**
 - A Reddit comment card can no longer wait about 10 seconds on one slow Reddit call. Before, every Reddit call for a comment could take up to 10 seconds, and one comment card took 9.6 seconds in a test.
 - Each Reddit call for a comment link now has its own limit: 3 seconds for the link check and for Reddit's API, 4 seconds for the old.reddit page and 4 seconds to read it, and 2 seconds for each subreddit icon lookup.
