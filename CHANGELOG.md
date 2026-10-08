@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Faster premium checks (#99)**
+- Servers without saved FixEmbed settings, which is most free servers, no longer ask Discord for their Premium status on every message. The answer is now cached for 10 minutes for every server, Premium or not, the same as servers with saved settings.
+- Subscribing, renewing, or cancelling still updates the cached status right away, now for every server.
+- The Premium check now gives up after 2.5 seconds, so a slow or rate limited Discord response can no longer hold up a card. If the check fails, FixEmbed uses the last known status. With no known status, that one message is handled as free and the next message checks again, so a paying server is never stuck on free.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **Reddit text keeps underscores and inline code (#87)**
 - When Reddit's API is blocked and a comment or post body comes from Reddit's HTML page instead, the Worker now turns that HTML back into Discord markdown instead of stripping the tags. Literal `_`, `*`, `~`, `|` and backslashes in the text are escaped once, so `how_are_reddit_urls_constructed` keeps its underscores and the rest of the paragraph no longer turns italic.
 - Inline code keeps its content ("you'll often see `_` used" no longer renders as "see  used"), code blocks keep their indentation, and Reddit's own bold, italics, strikethrough, spoilers and links carry over as Discord formatting.

@@ -89,9 +89,9 @@ from delivery_policy import (
     should_apply_source_message_action,
 )
 from premium_cache import (
-    any_entitlement_grants_premium,
-    get_cached_premium,
-    set_cached_premium,
+    PREMIUM_CHECK_TIMEOUT_SECONDS,
+    record_guild_premium,
+    resolve_guild_premium,
 )
 from premium_roles import (
     entitlement_is_active,
@@ -409,28 +409,29 @@ def get_guild_lang(guild_id):
         return "en"
     return bot_settings.get(guild_id, {}).get("language", "en")
 
+# Premium status per guild id, for every guild whether or not it has a
+# bot_settings row. Entries use the premium_cache TTL helpers.
+premium_status_cache = {}
+
 async def is_guild_premium(guild_id):
     """Check if a guild has an active premium subscription."""
     if not PREMIUM_SKU_ID:
         return False
-    # Fresh cache hit avoids an entitlements round-trip on every message.
-    settings = bot_settings.get(guild_id)
-    cached = get_cached_premium(settings)
-    if cached is not None:
-        return cached
-    # Query entitlements (also refreshes after TTL expiry or event invalidation)
-    try:
+
+    async def fetch_entitlements():
         guild = client.get_guild(guild_id)
         if guild is None:
-            return False
-        entitlements = [e async for e in client.entitlements(guild=guild, skus=[discord.Object(id=int(PREMIUM_SKU_ID))])]
-        is_premium = any_entitlement_grants_premium(entitlements)
-        if guild_id in bot_settings:
-            set_cached_premium(bot_settings[guild_id], is_premium)
-        return is_premium
-    except Exception as e:
-        logging.error(f"Error checking premium status: {e}")
-        return False
+            return None
+        return [e async for e in client.entitlements(guild=guild, skus=[discord.Object(id=int(PREMIUM_SKU_ID))])]
+
+    # Fresh cache hit (premium or not) skips Discord. Otherwise one lookup capped
+    # at PREMIUM_CHECK_TIMEOUT_SECONDS, falling back to the last cached value.
+    return await resolve_guild_premium(
+        premium_status_cache,
+        guild_id,
+        fetch_entitlements,
+        timeout=PREMIUM_CHECK_TIMEOUT_SECONDS,
+    )
 
 
 def get_footer_branding(guild, settings, premium):
@@ -3044,8 +3045,7 @@ async def on_entitlement_create(entitlement):
     """Called when a user subscribes to premium."""
     if entitlement.guild_id:
         guild_id = entitlement.guild_id
-        if guild_id in bot_settings:
-            set_cached_premium(bot_settings[guild_id], True)
+        record_guild_premium(premium_status_cache, guild_id, True)
         logging.info(f"Premium activated for guild {guild_id}")
     if PREMIUM_SKU_ID:
         await sync_supporter_role(
@@ -3057,8 +3057,7 @@ async def on_entitlement_update(entitlement):
     if entitlement.guild_id:
         guild_id = entitlement.guild_id
         is_active = entitlement_is_active(entitlement)
-        if guild_id in bot_settings:
-            set_cached_premium(bot_settings[guild_id], is_active)
+        record_guild_premium(premium_status_cache, guild_id, is_active)
         logging.info(f"Premium {'activated' if is_active else 'deactivated'} for guild {guild_id}")
     if PREMIUM_SKU_ID:
         await sync_supporter_role(
@@ -3069,8 +3068,7 @@ async def on_entitlement_delete(entitlement):
     """Called when a user's subscription to premium is removed."""
     if entitlement.guild_id:
         guild_id = entitlement.guild_id
-        if guild_id in bot_settings:
-            set_cached_premium(bot_settings[guild_id], False)
+        record_guild_premium(premium_status_cache, guild_id, False)
         logging.info(f"Premium removed for guild {guild_id}")
     if PREMIUM_SKU_ID:
         await sync_supporter_role(
