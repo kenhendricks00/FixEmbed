@@ -28,8 +28,15 @@ def resolve_delivery_mode(
     *,
     legacy_delete_original: bool,
     can_manage_messages: bool,
+    keep_source_preview: bool = False,
 ) -> DeliveryModeDecision:
-    """Choose a mode that preserves delivery when destructive access is absent."""
+    """Choose a mode that preserves delivery when destructive access is absent.
+
+    ``keep_source_preview`` is set when a link in the source message was left
+    for Discord's native preview (a Reddit outage, #80). Deleting or
+    suppressing the source would then drop that link or its preview, so the
+    message falls back to reply mode.
+    """
     candidate = str(configured_mode or "")
     normalized = (
         candidate
@@ -41,6 +48,12 @@ def resolve_delivery_mode(
             configured_mode=normalized,
             effective_mode="reply",
             downgrade_reason="missing_manage_messages",
+        )
+    if normalized in {"delete", "suppress"} and keep_source_preview:
+        return DeliveryModeDecision(
+            configured_mode=normalized,
+            effective_mode="reply",
+            downgrade_reason="kept_native_preview",
         )
     return DeliveryModeDecision(
         configured_mode=normalized,

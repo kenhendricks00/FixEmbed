@@ -2577,6 +2577,7 @@ async def on_message(message):
             )
             formatted_links = []
             component_layouts = []
+            kept_native_preview = False
             for item in links:
                 default_enabled = item.service in enabled_services
                 service_enabled = get_service_rule(guild_id, message.channel.id, item.service, default_enabled)
@@ -2586,6 +2587,7 @@ async def on_message(message):
 
                 if service_enabled and not recently_processed:
                     rich_card_built = False
+                    skipped_for_outage = False
                     translated_item = with_translation_language(
                         item,
                         guild_settings,
@@ -2612,10 +2614,13 @@ async def on_message(message):
                             # comment permalink means Reddit was unreachable, so
                             # post nothing and leave the source message unsuppressed:
                             # Discord's native Reddit card stays (#71).
-                            if not keeps_native_reddit_og_on_failure(
+                            if keeps_native_reddit_og_on_failure(
                                 item.service,
                                 item.canonical_url,
                             ):
+                                skipped_for_outage = True
+                                kept_native_preview = True
+                            else:
                                 formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(
@@ -2635,16 +2640,27 @@ async def on_message(message):
                                 guild_id,
                                 error,
                             )
-                    processed_link_cache[dedup_key] = time.time()
+                    # A temporary Reddit failure is not "done": let a retry
+                    # inside the dedup window try the card again.
+                    if not skipped_for_outage:
+                        processed_link_cache[dedup_key] = time.time()
             if formatted_links or component_layouts:
                 permissions = message.channel.permissions_for(message.guild.me)
+                # A skipped Reddit link relies on the source message and its
+                # native preview, so never delete or suppress it (#80).
                 delivery_decision = resolve_delivery_mode(
                     delivery_mode,
                     legacy_delete_original=delete_original,
                     can_manage_messages=permissions.manage_messages,
+                    keep_source_preview=kept_native_preview,
                 )
                 effective_delivery_mode = delivery_decision.effective_mode
-                if delivery_decision.downgrade_reason:
+                if delivery_decision.downgrade_reason == "kept_native_preview":
+                    logging.info(
+                        "Delivery mode %s downgraded to reply: kept_native_preview",
+                        delivery_decision.configured_mode,
+                    )
+                elif delivery_decision.downgrade_reason:
                     delivery_telemetry.mode_downgraded(
                         delivery_decision.downgrade_reason
                     )
