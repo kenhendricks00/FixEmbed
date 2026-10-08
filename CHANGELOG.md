@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Premium shows active right after purchase (#101)**
+- A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
+- Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
+- This works both ways: a cancellation is not undone by an older check that still saw the subscription.
+- A Premium check that times out or fails still changes nothing in the cache, and the error log now names the server it was checking.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Faster Reddit comment cards when Reddit is slow (#98)**
 - A Reddit comment card can no longer wait about 10 seconds on one slow Reddit call. Before, every Reddit call for a comment could take up to 10 seconds, and one comment card took 9.6 seconds in a test.
 - Each Reddit call for a comment link now has its own limit: 3 seconds for the link check and for Reddit's API, 4 seconds for the old.reddit page and 4 seconds to read it, and 2 seconds for each subreddit icon lookup.
