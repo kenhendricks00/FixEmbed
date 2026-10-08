@@ -6,6 +6,7 @@ import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
+import { redditHtmlToDiscordMarkdown } from '../utils/markdown.ts';
 
 interface RedditPost {
     title: string;
@@ -333,20 +334,7 @@ function redditPostBodyFromHtml(html: string, postId?: string): string {
         )?.[1];
     if (!body) return '';
 
-    return decodeRedditHtml(
-        body
-            .replace(/<h([1-6])\b[^>]*>/gi, (_, level: string) => `${'#'.repeat(Number(level))} `)
-            .replace(/<\/(?:h[1-6]|p|blockquote|pre)>/gi, '\n\n')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<li\b[^>]*>/gi, '- ')
-            .replace(/<\/li>/gi, '\n')
-            .replace(/<[^>]+>/g, ''),
-    )
-        .replace(/\u00a0/g, ' ')
-        .replace(/[ \t]+\n/g, '\n')
-        .replace(/\n[ \t]+/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+    return redditHtmlToDiscordMarkdown(body);
 }
 
 async function redditVideoFromHtml(
@@ -804,17 +792,7 @@ async function recoverRedditCommentFromCrawlerPage(
     const rawBody = commentHtml.match(
         /<div\b(?=[^>]*\bclass=["'][^"']*\bmd\b[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     )?.[1];
-    const body = rawBody
-        ? decodeRedditHtml(
-            rawBody
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/<\/p>/gi, '\n\n')
-                .replace(/<[^>]+>/g, ''),
-        )
-            .replace(/\u00a0/g, ' ')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim()
-        : '';
+    const body = rawBody ? redditHtmlToDiscordMarkdown(rawBody) : '';
 
     // old.reddit drops data-author on deleted comments and renders [deleted]/[removed]
     // as the body. Only those explicit markers mean gone; an author with an

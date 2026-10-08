@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit text keeps underscores and inline code (#87)**
+- When Reddit's API is blocked and a comment or post body comes from Reddit's HTML page instead, the Worker now turns that HTML back into Discord markdown instead of stripping the tags. Literal `_`, `*`, `~`, `|` and backslashes in the text are escaped once, so `how_are_reddit_urls_constructed` keeps its underscores and the rest of the paragraph no longer turns italic.
+- Inline code keeps its content ("you'll often see `_` used" no longer renders as "see  used"), code blocks keep their indentation, and Reddit's own bold, italics, strikethrough, spoilers and links carry over as Discord formatting.
+- Lines that start with `#`, `>`, `-`, `+` or `1.` in the text are escaped so they stay text, and URLs are left untouched so their underscores keep working.
+- The result matches what Reddit's JSON API returns for the same comment, so the bot shows both paths the same way. The bot's quote block, bold subreddit label and links are not escaped a second time.
+
 #### **DeviantArt fallback stats (#77)**
 - When DeviantArt blocks the Worker and the card falls back to Cardyb, a `www.deviantart.com` lookup that comes back as a generic card ("Deviantart.com image by ...", no Published date, likes, or views) is retried once with the bare `deviantart.com` URL, which Cardyb has been answering with the full description.
 - The retry shares the existing 5 second Cardyb timeout, so the slowest case is no slower than before, and it is skipped when Cardyb rate limits (429), when under 1 second is left, or for Sta.sh links.

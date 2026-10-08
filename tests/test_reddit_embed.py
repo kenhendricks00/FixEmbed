@@ -197,6 +197,77 @@ class RedditEmbedTests(unittest.TestCase):
         self.assertNotIn("Parent post\n", rendered_text)
         self.assertIn("<t:1783900900:R>", rendered_text)
 
+    def test_comment_quote_renders_worker_markdown_once_and_keeps_card_formatting(self):
+        """#87: the Worker escapes Reddit text once; the bot must not escape it again."""
+        comment_url = (
+            "https://www.reddit.com/r/redditdev/comments/e62riz/"
+            "how_are_reddit_urls_constructed/f9ncp3g/"
+        )
+        # The f9ncp3g body as the Worker returns it (same markdown as Reddit's JSON).
+        body = (
+            "You're close. Let's take a look at the permalink to this comment as an example:\n\n"
+            f"{comment_url}\n\n"
+            "e62riz is the *post* ID, not a \"root comment\"\n\n"
+            "'how\\_are\\_reddit\\_urls\\_constructed' is a title slug. When fetching data, "
+            "you can replace it with any text (you'll often see `_` used as a placeholder "
+            "when constructing URLs from an existing ID)."
+        )
+        payload = {
+            "title": "r/redditdev \u2022 How are reddit urls constructed?",
+            "url": comment_url,
+            "authorName": "u/milisis",
+            "authorUrl": "https://www.reddit.com/user/milisis/",
+            "sections": [
+                {
+                    "kind": "quote",
+                    "title": "Comment by u/kemitche",
+                    "body": body,
+                    "url": comment_url,
+                    "authorName": "u/kemitche",
+                    "authorUrl": "https://www.reddit.com/user/kemitche/",
+                },
+                {
+                    "kind": "quote",
+                    "title": "How are reddit urls constructed?",
+                    "body": "Parent post",
+                    "url": "https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/",
+                    "authorName": "u/milisis",
+                    "authorUrl": "https://www.reddit.com/user/milisis/",
+                },
+            ],
+        }
+
+        container = build_reddit_layout(payload).to_components()[0]
+        texts = [
+            component.get("content", "")
+            for component in container["components"]
+            if component.get("type") == 10
+        ]
+        header_text = texts[0]
+        quote_text = next(text for text in texts if "Comment by" in text)
+
+        # Our own formatting is untouched.
+        self.assertTrue(header_text.startswith("**r/redditdev**  \u00b7  Posted by [u/milisis]("))
+        self.assertIn(
+            "### [How are reddit urls constructed?](https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/)",
+            header_text,
+        )
+        self.assertRegex(
+            quote_text,
+            r"^> <:quote:\d+> Comment by \[u/kemitche\]\(https://www\.reddit\.com/user/kemitche/\):\n> \u200b\n",
+        )
+        # User text appears exactly as the Worker escaped it, inside the quote block.
+        self.assertIn(
+            "> 'how\\_are\\_reddit\\_urls\\_constructed' is a title slug.",
+            quote_text,
+        )
+        self.assertNotIn("\\\\", quote_text)
+        self.assertIn("you'll often see `_` used as a placeholder", quote_text)
+        self.assertIn(f"> {comment_url}\n", quote_text)
+        self.assertIn("e62riz is the *post* ID", quote_text)
+        for line in quote_text.splitlines():
+            self.assertTrue(line.startswith("> "), line)
+
     def test_comment_card_omits_parent_thumbnail_when_absent(self):
         payload = {
             "title": "r/programming • Parent discussion thread",
