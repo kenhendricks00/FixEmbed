@@ -6,6 +6,10 @@
 - The old.reddit fallback now tells a live comment, a deleted comment, and an unclear page apart, and only the deleted case turns into the unavailable card.
 - The bot no longer builds its own "Comment unavailable" card when a Reddit comment card fails. Automatic fixes skip the link and leave the original message alone, and the slash command sends the plain link like other services.
 
+#### **Twitter canary contract update (#72)**
+- The production canary's translation check now reads the Worker's `translation` metadata (target language matches the requested `lang`, translated description present) and looks for the bot's "Translated from …" footer, instead of the retired `Translation (XX):` description text.
+- The `twitter-tombstone` canary now uses a post whose quoted post really is unavailable. The old fixture's quoted post is live again, so the Worker correctly rendered a normal quote there; the parser was not at fault.
+
 #### **TikTok avatar and Bilibili author canary fixes (#75)**
 - TikTok cards that fall back to the FxTikTok relay avatar now check that the relay's signed CDN redirect really ends in an image before using it. A stale or broken avatar is swapped for the first-party profile avatar when TikTok serves it, or left off instead of rendering a broken thumbnail.
 - Bilibili emergency fallback cards retry the BiliFix oEmbed once on a timeout, 429, or 5xx, so one slow answer no longer drops the uploader name from the card.

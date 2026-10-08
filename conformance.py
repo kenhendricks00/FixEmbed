@@ -296,6 +296,21 @@ def _media_matches(data: Mapping[str, Any], media_type: Optional[str]) -> bool:
     return bool(video_url and video_type != "gif")
 
 
+def _has_translation(data: Mapping[str, Any], target_lang: Optional[str]) -> bool:
+    """Match the Worker translation contract: metadata plus translated text."""
+    translation = data.get("translation")
+    if not isinstance(translation, Mapping):
+        return False
+    target = str(translation.get("targetLanguage") or "").strip().casefold()
+    if not target:
+        return False
+    if target_lang and target != target_lang.strip().casefold():
+        return False
+    if not str(translation.get("sourceLanguage") or "").strip():
+        return False
+    return _has_text(data, "description")
+
+
 def evaluate_payload(
     case: ConformanceCase, payload: object, *, duration_ms: int
 ) -> ConformanceResult:
@@ -327,12 +342,7 @@ def evaluate_payload(
             "timestamp": _has_text(data, "timestamp"),
             "stats": _has_text(data, "stats"),
             "media": _media_matches(data, None),
-            "translation": bool(
-                re.search(
-                    r"Translation \([A-Z]{2}\):",
-                    str(data.get("description") or ""),
-                )
-            ),
+            "translation": _has_translation(data, case.options.get("lang")),
         }
         for requirement in (
             "title",

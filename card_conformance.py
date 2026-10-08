@@ -268,7 +268,7 @@ def validate_serialized_card(
         codes.append("card-missing-footer")
     if "timestamp" in requires and "<t:" not in footer:
         codes.append("card-missing-timestamp")
-    if "translation" in requires and "translation (" not in rendered_text:
+    if "translation" in requires and "translated from" not in footer.casefold():
         codes.append("card-missing-translation")
 
     return tuple(dict.fromkeys(codes))
