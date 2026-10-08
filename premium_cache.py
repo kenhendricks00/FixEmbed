@@ -182,8 +182,10 @@ async def resolve_guild_premium(
       entitlement event bumped it while the lookup was in flight, the lookup's
       answer is older than the event's, so it is not written. The event's
       cached value is returned instead (or the lookup's answer if that entry
-      has since been evicted). A lookup never bumps the generation itself, so
-      a timeout or error leaves it unchanged (#101).
+      has since been evicted). This holds when ``fetch_entitlements`` returned
+      None too, so that call is served the event's value, not False. A lookup
+      never bumps the generation itself, so a timeout or error leaves it
+      unchanged (#101).
     """
     entry = cache.get(guild_id)
     cached = get_cached_premium(entry, now=now, ttl_seconds=ttl_seconds)
@@ -213,13 +215,18 @@ async def resolve_guild_premium(
             "last cached value" if fallback is not None else "free for this message",
         )
         return bool(fallback)
+    raced = premium_generation(cache, guild_id) != generation
+    if raced:
+        # An entitlement event landed mid-lookup; its value is fresher.
+        newer = get_cached_premium(cache.get(guild_id), now=now, ttl_seconds=ttl_seconds)
+        if newer is not None:
+            return newer
     if entitlements is None:
         return False
     is_premium = any_entitlement_grants_premium(entitlements)
-    if premium_generation(cache, guild_id) != generation:
-        # An entitlement event landed mid-lookup; its value is fresher.
-        newer = get_cached_premium(cache.get(guild_id), now=now, ttl_seconds=ttl_seconds)
-        return is_premium if newer is None else newer
+    if raced:
+        # The event's entry was evicted; don't re-add the guild with the older answer.
+        return is_premium
     # Same write as record_guild_premium, minus the generation bump.
     set_cached_premium(cache.setdefault(guild_id, {}), is_premium, now=now)
     _touch(cache, guild_id)

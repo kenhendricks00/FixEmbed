@@ -26,7 +26,8 @@ class GatedEntitlements:
     """An entitlements lookup that stays in flight until the test releases it."""
 
     def __init__(self, entitlements=(), *, error=None):
-        self.entitlements = list(entitlements)
+        # None stands for a guild that can't be checked (not in the client cache).
+        self.entitlements = None if entitlements is None else list(entitlements)
         self.error = error
         self.started = asyncio.Event()
         self.release = asyncio.Event()
@@ -38,7 +39,7 @@ class GatedEntitlements:
         await self.release.wait()
         if self.error is not None:
             raise self.error
-        return list(self.entitlements)
+        return None if self.entitlements is None else list(self.entitlements)
 
 
 class StaleLookupRaceTests(unittest.IsolatedAsyncioTestCase):
@@ -111,6 +112,27 @@ class StaleLookupRaceTests(unittest.IsolatedAsyncioTestCase):
         # Still dropped: the evicted guild is not re-added with the older answer.
         self.assertNotIn(GUILD, cache)
         self.assertEqual(1, premium_generation(cache, GUILD))
+
+    async def test_create_event_during_unavailable_lookup_is_served(self):
+        cache = PremiumStatusCache()
+        unavailable = GatedEntitlements(None)
+        lookup = await self.start_lookup(cache, unavailable, now=10.0)
+
+        record_guild_premium(cache, GUILD, True, now=10.0)
+        unavailable.release.set()
+
+        self.assertIs(True, await lookup)
+        self.assertIs(True, cache[GUILD]["is_premium"])
+        self.assertEqual(10.0, cache[GUILD]["is_premium_cached_at"])
+
+    async def test_unavailable_lookup_without_event_is_free_and_not_cached(self):
+        cache = PremiumStatusCache()
+        unavailable = GatedEntitlements(None)
+        lookup = await self.start_lookup(cache, unavailable, now=10.0)
+        unavailable.release.set()
+
+        self.assertIs(False, await lookup)
+        self.assertNotIn(GUILD, cache)
 
 
 class GenerationTests(unittest.IsolatedAsyncioTestCase):
