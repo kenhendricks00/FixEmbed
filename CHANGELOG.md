@@ -1,5 +1,15 @@
 ## Unreleased
 
+#### **Faster Reddit comment cards when Reddit is slow (#98)**
+- A Reddit comment card can no longer wait about 10 seconds on one slow Reddit call. Before, every Reddit call for a comment could take up to 10 seconds, and one comment card took 9.6 seconds in a test.
+- Each Reddit call for a comment link now has its own limit: 3 seconds for the link check and for Reddit's API, 4 seconds for the old.reddit page and 4 seconds to read it, and 2 seconds for each subreddit icon lookup.
+- The whole comment request now has 8 seconds in total, well inside the bot's 15 second wait. Later calls only get the time that is left, and the icon lookups are skipped when less than a quarter second remains, so the card keeps Reddit's default icon.
+- If the old.reddit page times out or Reddit answers with a server error (5xx), it is tried once more, but only when at least 1 second is left. A 403, 404, 429 or any other answer is never retried.
+- Timeouts and errors still mean "Reddit is temporarily unavailable" and Discord keeps Reddit's own preview. Only Reddit saying the comment is gone shows "Comment unavailable", the same as before.
+- The `reddit_fetch` log line for the old.reddit page now has an `attempt` field (1, or 2 for the retry), so Workers Logs show how often the retry fires.
+- Reddit posts, share links before they resolve, and every other platform keep their current timeouts. The embed cache and the other log lines are unchanged.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Reddit titles with mentions keep their link (#103)**
 - A Reddit post title that contains `@everyone` or `@here` now shows as a clickable title again. Discord refuses a masked link whose text holds a mention, so the card showed the raw `[title](https://www.reddit.com/...)` markdown instead, as on the comment cards for r/discordapp post 1ib8uq6.
 - Mentions in link text now get a zero-width space after the `@` or `#`, so they read the same but Discord no longer sees a mention. `[`, `]`, `)` and backslashes in link text are escaped so a title can't end its own link early.

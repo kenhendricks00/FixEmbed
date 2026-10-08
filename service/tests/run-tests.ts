@@ -8,7 +8,7 @@ import {
     normalizeTwitterWebsiteCard,
 } from '../src/handlers/twitter_graphql.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
-import { decodeHtmlEntitiesOnce, redditHandler } from '../src/handlers/reddit.ts';
+import { decodeHtmlEntitiesOnce, REDDIT_COMMENT_TIMEOUTS, redditHandler } from '../src/handlers/reddit.ts';
 import { RedditFetchTrace, responseStatus, timeRedditFetch } from '../src/utils/reddit_timing.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
@@ -217,6 +217,148 @@ async function captureRedditTimingLogs(body: () => Promise<void>): Promise<Array
     }
     return lines;
 }
+
+/**
+ * Virtual clock for the #98 timeout tests. Date.now, setTimeout and clearTimeout
+ * are replaced, so a 4s Reddit timeout fires instantly in test time. `hang` is a
+ * Reddit request that never answers: it rejects with AbortError when its signal
+ * aborts, and jumps the clock to the earliest pending timer (its own timeout).
+ */
+type FakeRedditClock = {
+    now: number;
+    /** Every setTimeout delay the code under test asked for, in order. */
+    delays: number[];
+    advance(ms: number): void;
+    hang(init?: RequestInit): Promise<Response>;
+    /** A body stream that never delivers a byte. */
+    hangingBody(): ReadableStream<Uint8Array>;
+};
+
+async function withFakeRedditClock<T>(body: (clock: FakeRedditClock) => Promise<T>): Promise<T> {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const originalNow = Date.now;
+    const timers = new Map<number, { at: number; fn: () => void }>();
+    let nextId = 1;
+    const fireNext = () => {
+        const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next) throw new Error('fake clock: a request hangs with no timeout pending');
+        timers.delete(next[0]);
+        clock.now = Math.max(clock.now, next[1].at);
+        next[1].fn();
+    };
+    const clock: FakeRedditClock = {
+        now: 1_700_000_000_000,
+        delays: [],
+        advance(ms) {
+            clock.now += ms;
+        },
+        hang(init) {
+            return new Promise<Response>((_, reject) => {
+                init?.signal?.addEventListener('abort', () => {
+                    reject(new DOMException('The operation was aborted.', 'AbortError'));
+                }, { once: true });
+                // setImmediate is not faked: it runs once the handler is idle.
+                setImmediate(fireNext);
+            });
+        },
+        hangingBody() {
+            return new ReadableStream<Uint8Array>({
+                pull() {
+                    setImmediate(fireNext);
+                    return new Promise<void>(() => {});
+                },
+            });
+        },
+    };
+    globalThis.setTimeout = ((fn: () => void, ms = 0) => {
+        const id = nextId++;
+        clock.delays.push(ms);
+        timers.set(id, { at: clock.now + ms, fn });
+        return id;
+    }) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = ((id?: number) => {
+        if (id !== undefined) timers.delete(id);
+    }) as unknown as typeof clearTimeout;
+    Date.now = () => clock.now;
+    try {
+        return await body(clock);
+    } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+        Date.now = originalNow;
+    }
+}
+
+type RedditBudgetReply = (init: RequestInit | undefined, clock: FakeRedditClock) => Response | Promise<Response>;
+
+/**
+ * Drive one Reddit comment permalink on the fake clock. Unlisted stages answer
+ * fast: probe 200 (20ms), JSON 403 (30ms), icons `{ data: {} }` (10ms).
+ */
+async function runRedditBudgetScenario(options: {
+    url?: string;
+    probe?: RedditBudgetReply;
+    json?: RedditBudgetReply;
+    crawler?: RedditBudgetReply;
+    icon?: RedditBudgetReply;
+}): Promise<{
+    response: HandlerResponse;
+    requested: string[];
+    delays: number[];
+    elapsed: number;
+    logged: Array<Record<string, unknown>>;
+}> {
+    const commentUrl = options.url ?? `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+    const originalFetch = globalThis.fetch;
+    return withFakeRedditClock(async (clock) => {
+        const requested: string[] = [];
+        const fast = (ms: number, make: () => Response): RedditBudgetReply => () => {
+            clock.advance(ms);
+            return make();
+        };
+        const probe = options.probe ?? fast(20, () => new Response(null, { status: 200 }));
+        const json = options.json ?? fast(30, () => new Response('blocked', { status: 403, statusText: 'Forbidden' }));
+        const icon = options.icon ?? fast(10, () => Response.json({ data: {} }));
+        let response: HandlerResponse | undefined;
+        const started = clock.now;
+        let elapsed = 0;
+        try {
+            globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+                const url = String(input);
+                requested.push(url);
+                if (url === commentUrl) return probe(init, clock);
+                if (url.includes('/comments/') && url.includes('.json')) return json(init, clock);
+                if (url.startsWith('https://old.reddit.com/')) {
+                    if (!options.crawler) throw new Error(`Crawler should not be called: ${url}`);
+                    return options.crawler(init, clock);
+                }
+                if (url.includes('/about') || url.startsWith('https://embed.reddit.com/r/')) return icon(init, clock);
+                throw new Error(`Unexpected fetch: ${url}`);
+            }) as typeof fetch;
+            const logged = await captureRedditTimingLogs(async () => {
+                response = await redditHandler.handle(commentUrl, {} as Env);
+                elapsed = clock.now - started;
+            });
+            assert.ok(response);
+            return { response, requested, delays: clock.delays, elapsed, logged };
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+}
+
+const redditFetchLines = (logged: Array<Record<string, unknown>>) => logged.filter(
+    (line) => line.event === 'reddit_fetch',
+);
+const redditTimingSummary = (logged: Array<Record<string, unknown>>) => {
+    const summaries = logged.filter((line) => line.event === 'reddit_comment_timing');
+    assert.equal(summaries.length, 1);
+    return summaries[0];
+};
+const oldRedditRequests = (requested: string[]) => requested.filter(
+    (url) => url.startsWith('https://old.reddit.com/'),
+);
 
 const redditCrawlerCommentHtml = (commentTag: string, body: string) => `
     <div class="thing link" id="thing_t3_abc123"
@@ -9513,7 +9655,13 @@ const tests: TestCase[] = [
                     crawler: () => new Response('busy', { status: 503 }),
                     check: (response) => assertRedditCommentTransient(response),
                     outcome: 'temporary',
-                    stages: [['probe', 200, true], ['json', 403, false], ['old_reddit', 503, false]],
+                    // The 503 is retried once (#98).
+                    stages: [
+                        ['probe', 200, true],
+                        ['json', 403, false],
+                        ['old_reddit', 503, false],
+                        ['old_reddit', 503, false],
+                    ],
                 },
                 {
                     label: 'JSON 429 and crawler timeout stay temporary',
@@ -9524,7 +9672,13 @@ const tests: TestCase[] = [
                     },
                     check: (response) => assertRedditCommentTransient(response),
                     outcome: 'temporary',
-                    stages: [['probe', 200, true], ['json', 429, false], ['old_reddit', null, false]],
+                    // The timeout is retried once (#98).
+                    stages: [
+                        ['probe', 200, true],
+                        ['json', 429, false],
+                        ['old_reddit', null, false],
+                        ['old_reddit', null, false],
+                    ],
                 },
             ];
 
@@ -9550,6 +9704,16 @@ const tests: TestCase[] = [
                 assert.equal(
                     fetchLines.filter((line) => line.stage !== 'old_reddit_body').length,
                     result.requested.length,
+                    scenario.label,
+                );
+                // old.reddit lines are numbered 1, then 2 for the retry (#98).
+                const attempts = fetchLines
+                    .filter((line) => line.stage === 'old_reddit')
+                    .map((line) => line.attempt);
+                assert.deepEqual(attempts, attempts.map((_, index) => index + 1), scenario.label);
+                assert.equal(
+                    fetchLines.some((line) => line.stage !== 'old_reddit' && 'attempt' in line),
+                    false,
                     scenario.label,
                 );
                 for (const line of fetchLines) {
@@ -9585,6 +9749,242 @@ const tests: TestCase[] = [
                 assert.deepEqual(silent.response, result.response, scenario.label);
                 assert.deepEqual(silent.requested, result.requested, scenario.label);
             }
+        },
+    },
+    {
+        name: 'redditHandler retries a slow old.reddit page once, then stays temporary (#98)',
+        run: async () => {
+            const result = await runRedditBudgetScenario({
+                crawler: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(result.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+            assert.equal(oldRedditRequests(result.requested).length, 2, 'one retry, never a third request');
+            // probe 3s, JSON 3s, old.reddit 4s, then the retry gets what is left of 8s.
+            assert.deepEqual(result.delays, [3_000, 3_000, 4_000, 3_950]);
+            assert.equal(result.elapsed, REDDIT_COMMENT_TIMEOUTS.budgetMs);
+
+            const crawlerLines = redditFetchLines(result.logged).filter((line) => line.stage === 'old_reddit');
+            assert.deepEqual(
+                crawlerLines.map((line) => [line.attempt, line.status, line.ok, line.ms, line.timed_out, line.error]),
+                [
+                    [1, null, false, 4_000, true, 'AbortError'],
+                    [2, null, false, 3_950, true, 'AbortError'],
+                ],
+            );
+            const summary = redditTimingSummary(result.logged);
+            assert.equal(summary.outcome, 'temporary');
+            assert.equal(summary.total_ms, 8_000);
+        },
+    },
+    {
+        name: 'redditHandler retry after a slow old.reddit page still renders the card (#98)',
+        run: async () => {
+            let attempt = 0;
+            const result = await runRedditBudgetScenario({
+                crawler: (init, clock) => {
+                    attempt += 1;
+                    if (attempt === 1) return clock.hang(init);
+                    clock.advance(480);
+                    return redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML));
+                },
+            });
+            assert.equal(result.response.success, true);
+            assert.equal(result.response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+            assert.equal(result.response.data?.sections?.some((section) => section.kind === 'tombstone'), false);
+            assert.equal(oldRedditRequests(result.requested).length, 2);
+            assert.deepEqual(
+                redditFetchLines(result.logged)
+                    .filter((line) => line.stage === 'old_reddit')
+                    .map((line) => [line.attempt, line.status, line.timed_out]),
+                [[1, null, true], [2, 200, false]],
+            );
+            assert.equal(redditTimingSummary(result.logged).outcome, 'card');
+            assert.ok(result.elapsed <= REDDIT_COMMENT_TIMEOUTS.budgetMs);
+        },
+    },
+    {
+        name: 'redditHandler retries an old.reddit 5xx once and only once (#98)',
+        run: async () => {
+            for (const status of [500, 502, 503]) {
+                let calls = 0;
+                const recovered = await runRedditBudgetScenario({
+                    crawler: () => {
+                        calls += 1;
+                        return calls === 1
+                            ? new Response('busy', { status })
+                            : redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML));
+                    },
+                });
+                assert.equal(recovered.response.success, true, `${status}`);
+                assert.equal(recovered.response.data?.sections?.[0]?.title, 'Comment by [deleted]', `${status}`);
+                assert.deepEqual(
+                    redditFetchLines(recovered.logged)
+                        .filter((line) => line.stage === 'old_reddit')
+                        .map((line) => [line.attempt, line.status]),
+                    [[1, status], [2, 200]],
+                    `${status}`,
+                );
+
+                const down = await runRedditBudgetScenario({
+                    crawler: () => new Response('busy', { status }),
+                });
+                assertRedditCommentTransient(down.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+                assert.equal(oldRedditRequests(down.requested).length, 2, `${status}`);
+                assert.equal(redditTimingSummary(down.logged).outcome, 'temporary', `${status}`);
+            }
+        },
+    },
+    {
+        name: 'redditHandler never retries an old.reddit 404 and keeps its tombstone (#98)',
+        run: async () => {
+            const result = await runRedditBudgetScenario({
+                url: `${REDDIT_REAL_THREAD_URL}o2m8ovr/`,
+                crawler: () => new Response('not found', { status: 404 }),
+            });
+            assertRedditCommentTombstone(result.response);
+            assert.equal(oldRedditRequests(result.requested).length, 1);
+            assert.deepEqual(
+                redditFetchLines(result.logged)
+                    .filter((line) => line.stage === 'old_reddit')
+                    .map((line) => [line.attempt, line.status]),
+                [[1, 404]],
+            );
+            assert.equal(redditTimingSummary(result.logged).outcome, 'gone');
+        },
+    },
+    {
+        name: 'redditHandler never retries an old.reddit 403, 429 or network error (#98)',
+        run: async () => {
+            const replies: Array<[string, () => Response]> = [
+                ['403', () => new Response('blocked', { status: 403 })],
+                ['429', () => new Response('slow down', { status: 429 })],
+                ['network', () => {
+                    throw new TypeError('fetch failed');
+                }],
+            ];
+            for (const [label, reply] of replies) {
+                const result = await runRedditBudgetScenario({ crawler: reply });
+                assertRedditCommentTransient(result.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+                assert.equal(oldRedditRequests(result.requested).length, 1, label);
+                assert.deepEqual(
+                    redditFetchLines(result.logged)
+                        .filter((line) => line.stage === 'old_reddit')
+                        .map((line) => line.attempt),
+                    [1],
+                    label,
+                );
+                assert.equal(redditTimingSummary(result.logged).outcome, 'temporary', label);
+            }
+        },
+    },
+    {
+        name: 'redditHandler keeps every Reddit comment stage inside the 8s budget (#98)',
+        run: async () => {
+            // Every stage hangs: probe and JSON use their 3s caps, old.reddit gets the
+            // 2s left, and the retry is skipped because under 1s remains.
+            const allSlow = await runRedditBudgetScenario({
+                probe: (init, clock) => clock.hang(init),
+                json: (init, clock) => clock.hang(init),
+                crawler: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(allSlow.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+            assert.deepEqual(allSlow.delays, [3_000, 3_000, 2_000]);
+            assert.equal(allSlow.elapsed, REDDIT_COMMENT_TIMEOUTS.budgetMs);
+            assert.equal(oldRedditRequests(allSlow.requested).length, 1);
+            assert.deepEqual(
+                redditFetchLines(allSlow.logged).map((line) => [line.stage, line.ms, line.timed_out]),
+                [['probe', 3_000, true], ['json', 3_000, true], ['old_reddit', 2_000, true]],
+            );
+            assert.equal(redditTimingSummary(allSlow.logged).total_ms, 8_000);
+
+            // A retry that answers late leaves too little for the icon lookups, so the
+            // card keeps Reddit's fallback icon instead of running past the budget.
+            let attempt = 0;
+            const lateRetry = await runRedditBudgetScenario({
+                crawler: (init, clock) => {
+                    attempt += 1;
+                    if (attempt === 1) return clock.hang(init);
+                    clock.advance(3_500);
+                    return redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML));
+                },
+                icon: (init, clock) => clock.hang(init),
+            });
+            assert.equal(lateRetry.response.success, true);
+            assert.equal(lateRetry.response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+            assert.equal(lateRetry.elapsed, REDDIT_COMMENT_TIMEOUTS.budgetMs);
+            // icon gets the last 450ms, icon_fallback and the bootstrap are skipped.
+            assert.deepEqual(
+                redditFetchLines(lateRetry.logged).map((line) => [line.stage, line.attempt, line.ms]),
+                [
+                    ['probe', undefined, 20],
+                    ['json', undefined, 30],
+                    ['old_reddit', 1, 4_000],
+                    ['old_reddit', 2, 3_500],
+                    ['old_reddit_body', undefined, 0],
+                    ['icon', undefined, 450],
+                ],
+            );
+
+            // An old.reddit body that never finishes is cut off by the budget and
+            // stays temporary, never a tombstone.
+            const stuckBody = await runRedditBudgetScenario({
+                crawler: (_init, clock) => new Response(clock.hangingBody(), {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/html' },
+                }),
+            });
+            assertRedditCommentTransient(stuckBody.response, `${REDDIT_REAL_THREAD_URL}o2o5rsi/`);
+            assert.deepEqual(
+                redditFetchLines(stuckBody.logged)
+                    .filter((line) => line.stage.toString().startsWith('old_reddit'))
+                    .map((line) => [line.stage, line.ms, line.timed_out, line.error]),
+                [['old_reddit', 0, false, undefined], ['old_reddit_body', 4_000, true, 'TimeoutError']],
+            );
+        },
+    },
+    {
+        name: 'redditHandler falls back to old.reddit when the JSON API hits its 3s cap (#98)',
+        run: async () => {
+            const result = await runRedditBudgetScenario({
+                json: (init, clock) => clock.hang(init),
+                crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML)),
+            });
+            assert.equal(result.response.success, true);
+            assert.equal(result.response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+            const json = redditFetchLines(result.logged).find((line) => line.stage === 'json');
+            assert.deepEqual([json?.ms, json?.timed_out], [3_000, true]);
+            assert.equal(result.delays[1], REDDIT_COMMENT_TIMEOUTS.jsonMs);
+        },
+    },
+    {
+        name: 'redditHandler keeps the default 10s timeouts for Reddit posts (#98)',
+        run: async () => {
+            const postUrl = 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/';
+            const originalFetch = globalThis.fetch;
+            await withFakeRedditClock(async (clock) => {
+                try {
+                    globalThis.fetch = (async (input: RequestInfo | URL) => {
+                        const url = String(input);
+                        if (url === postUrl) return new Response(null, { status: 200 });
+                        if (url.includes('.json')) {
+                            return Response.json([{ data: { children: [{ kind: 't3', data: {
+                                subreddit: 'programming', title: 'Parent discussion thread', author: 'someone',
+                                permalink: '/r/programming/comments/abc123/parent_discussion_thread/',
+                                url: postUrl, selftext: 'body', num_comments: 1, score: 2, created_utc: 1769805460,
+                                thumbnail: 'self',
+                            } }] } }, { data: { children: [] } }]);
+                        }
+                        if (url.includes('/about')) return Response.json({ data: {} });
+                        throw new Error(`Unexpected fetch: ${url}`);
+                    }) as typeof fetch;
+                    const response = await redditHandler.handle(postUrl, {} as Env);
+                    assert.equal(response.success, true);
+                    assert.ok(clock.delays.length >= 3);
+                    assert.ok(clock.delays.every((delay) => delay === 10_000), String(clock.delays));
+                } finally {
+                    globalThis.fetch = originalFetch;
+                }
+            });
         },
     },
     {
