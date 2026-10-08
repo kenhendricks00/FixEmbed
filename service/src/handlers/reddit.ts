@@ -116,6 +116,43 @@ function decodeRedditHtml(value: string): string {
         .trim();
 }
 
+const HTML_NAMED_ENTITIES: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: '\u00a0',
+};
+
+/**
+ * Decode HTML entities in old.reddit text exactly once, in a single pass, so
+ * `&amp;gt;` stays the literal text `&gt;`. Handles the named entities old.reddit
+ * emits plus decimal and hex numeric entities. Invalid code points stay as written.
+ */
+export function decodeHtmlEntitiesOnce(value: string): string {
+    return value.replace(
+        /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g,
+        (entity, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
+            if (name !== undefined) {
+                return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
+                    ? HTML_NAMED_ENTITIES[name]
+                    : entity;
+            }
+            const codePoint = decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex!, 16);
+            if (
+                !Number.isFinite(codePoint)
+                || codePoint === 0
+                || codePoint > 0x10ffff
+                || (codePoint >= 0xd800 && codePoint <= 0xdfff)
+            ) {
+                return entity;
+            }
+            return String.fromCodePoint(codePoint);
+        },
+    );
+}
+
 function safeDecodeURIComponent(value: string): string {
     try {
         return decodeURIComponent(value);
@@ -879,8 +916,9 @@ async function recoverRedditCommentFromCrawlerPage(
     const rawBody = commentHtml.match(
         /<div\b(?=[^>]*\bclass=["'][^"']*\bmd\b[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     )?.[1];
+    // Strip tags first, then decode once: an escaped `&lt;b&gt;` in the comment is text, not markup.
     const body = rawBody
-        ? decodeRedditHtml(
+        ? decodeHtmlEntitiesOnce(
             rawBody
                 .replace(/<br\s*\/?>/gi, '\n')
                 .replace(/<\/p>/gi, '\n\n')

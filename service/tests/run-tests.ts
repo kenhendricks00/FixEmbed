@@ -8,7 +8,7 @@ import {
     normalizeTwitterWebsiteCard,
 } from '../src/handlers/twitter_graphql.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
-import { redditHandler } from '../src/handlers/reddit.ts';
+import { decodeHtmlEntitiesOnce, redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
@@ -218,6 +218,24 @@ const REDDIT_REAL_DELETED_COMMENT_HTML = `<div class=" thing noncollapsed &#32; 
 const REDDIT_REAL_OTHER_DELETED_COMMENT_HTML = `<div class=" thing collapsed &#32; deleted comment " onclick="click_thing(this)" data-gildings="0" data-subreddit="news" data-subreddit-prefixed="r/news" data-subreddit-fullname="t5_2qh3l" data-subreddit-type="public" data-replies="0" data-permalink="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2mb7ia/" ><p class="parent"></p><div class="midcol unvoted" ><div class="arrow up login-required archived access-required" data-event-action="upvote" role="button" aria-label="upvote" tabindex="0" ></div><div class="arrow down login-required archived access-required" data-event-action="downvote" role="button" aria-label="downvote" tabindex="0" ></div></div><div class="entry unvoted"><p class="tagline"><a href="javascript:void(0)" class="expand" onclick="return togglecomment(this)">[+]</a><em>[deleted]</em>&#32;<time title="Fri Jan 30 15:38:41 2026 UTC" datetime="2026-01-30T15:38:41+00:00" class="live-timestamp">8 months ago</time>&nbsp;<a href="javascript:void(0)" class="numchildren" onclick="return togglecomment(this)">(33 children)</a></p><div class="usertext grayed"><input type="hidden" name="thing_id" value=""/><div class="usertext-body may-blank-within md-container " ><div class="md"><p>[deleted]</p>
 </div>
 </div></div><ul class="flat-list buttons"></ul><div class="reportform report-t1_o2mb7ia"></div></div><div class="child"></div></div>`;
+/** o2mv18r: real body with escaped `&lt;` / `&gt;`. */
+const REDDIT_REAL_ENTITY_LT_GT_COMMENT_HTML = `<div class=" thing id-t1_o2mv18r noncollapsed &#32; comment " id="thing_t1_o2mv18r" onclick="click_thing(this)" data-fullname="t1_o2mv18r" data-type="comment" data-gildings="0" data-subreddit="news" data-subreddit-prefixed="r/news" data-subreddit-fullname="t5_2qh3l" data-subreddit-type="public" data-author="enters_and_leaves" data-author-fullname="t2_1oy6i3ra16" data-replies="0" data-permalink="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2mv18r/" ><p class="parent"><a name="o2mv18r"></a></p><div class="midcol unvoted" ><div class="arrow up login-required archived access-required" data-event-action="upvote" role="button" aria-label="upvote" tabindex="0" ></div><div class="arrow down login-required archived access-required" data-event-action="downvote" role="button" aria-label="downvote" tabindex="0" ></div></div><div class="entry unvoted"><p class="tagline"><a href="javascript:void(0)" class="expand" onclick="return togglecomment(this)">[–]</a><a href="https://old.reddit.com/user/enters_and_leaves" class="author may-blank id-t2_1oy6i3ra16" >enters_and_leaves</a><span class="userattrs"></span>&#32;<span class="score dislikes" title="18">18 points</span><span class="score unvoted" title="19">19 points</span><span class="score likes" title="20">20 points</span>&#32;<time title="Fri Jan 30 17:07:15 2026 UTC" datetime="2026-01-30T17:07:15+00:00" class="live-timestamp">8 months ago</time>&nbsp;<a href="javascript:void(0)" class="numchildren" onclick="return togglecomment(this)">(1 child)</a></p><form action="#" class="usertext warn-on-unload" onsubmit="return post_form(this, 'editusertext')" id="form-t1_o2mv18rlbq"><input type="hidden" name="thing_id" value="t1_o2mv18r"/><div class="usertext-body may-blank-within md-container " ><div class="md"><p>&lt;For simplicity, the kids are named A, B, C, D, and E and are lined up in that order.&gt;</p>
+
+<p>If B were to hurt A, the teacher would probably come and talk to B. </p>
+
+<p>If B were to walk past C and D to hurt E, then the teacher might come and talk to B. </p>
+
+<p>If B were to push C and D on his way to hurt E, then the principal would probably come talk to B. </p>
+
+<p>The judge decided that B looking at C and D in a scary way is the same as walking past them. That is what this person did, so it is something for the teacher to deal with and not the principal.</p>
+</div>
+</div></form><ul class="flat-list buttons"><li class="first"><a href="https://old.reddit.com/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2mv18r/" data-event-action="permalink" class="bylink" rel="nofollow" >permalink</a></li><li><a href="javascript:void(0)" data-comment="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2mv18r/" data-media="www.redditmedia.com" data-link="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/" data-root="false" data-title="Luigi Mangione will not face death penalty, judge rules" class="embed-comment" >embed</a></li><li class="comment-save-button save-button login-required"><a href="javascript:void(0)">save</a></li><li><a href="#o2mkd5m" data-event-action="parent" class="bylink" rel="nofollow" >parent</a></li><li class="report-button login-required"><a href="javascript:void(0)" class="reportbtn access-required" data-event-action="report">report</a></li></ul><div class="reportform report-t1_o2mv18r"></div></div><div class="child"></div></div>`;
+/** o2miic1: real body with `&amp;` and `&#39;` (trimmed to its first two paragraphs). */
+const REDDIT_REAL_ENTITY_AMP_COMMENT_HTML = `<div class=" thing id-t1_o2miic1 noncollapsed &#32; comment " id="thing_t1_o2miic1" onclick="click_thing(this)" data-fullname="t1_o2miic1" data-type="comment" data-gildings="0" data-subreddit="news" data-subreddit-prefixed="r/news" data-subreddit-fullname="t5_2qh3l" data-subreddit-type="public" data-author="ElizaMaySampson" data-author-fullname="t2_7yfbo9ly" data-replies="0" data-permalink="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2miic1/" ><p class="parent"><a name="o2miic1"></a></p><div class="midcol unvoted" ><div class="arrow up login-required archived access-required" data-event-action="upvote" role="button" aria-label="upvote" tabindex="0" ></div><div class="arrow down login-required archived access-required" data-event-action="downvote" role="button" aria-label="downvote" tabindex="0" ></div></div><div class="entry unvoted"><p class="tagline"><a href="javascript:void(0)" class="expand" onclick="return togglecomment(this)">[–]</a><a href="https://old.reddit.com/user/ElizaMaySampson" class="author may-blank id-t2_7yfbo9ly" >ElizaMaySampson</a><span class="userattrs"></span>&#32;<span class="score dislikes" title="14">14 points</span><span class="score unvoted" title="15">15 points</span><span class="score likes" title="16">16 points</span>&#32;<time title="Fri Jan 30 16:11:32 2026 UTC" datetime="2026-01-30T16:11:32+00:00" class="live-timestamp">8 months ago</time>&nbsp;<a href="javascript:void(0)" class="numchildren" onclick="return togglecomment(this)">(1 child)</a></p><form action="#" class="usertext warn-on-unload" onsubmit="return post_form(this, 'editusertext')" id="form-t1_o2miic1khj"><input type="hidden" name="thing_id" value="t1_o2miic1"/><div class="usertext-body may-blank-within md-container " ><div class="md"><p>As I understand it, it&#39;s to do with who was murdered, and where, that decides state cases vs federal. The murder occured on non-federal property (not on military base, national park, federal building, maritime territorial waters), did not involve  federal personnel or their family (federal judge, DEA or FBI agent, elected official &amp; their family members) but a civilian. Because of these things the case must drop to State level.</p>
+
+<p>Here&#39;s the perts from a google search for those readers who&#39;d like a bit more detail:</p>
+</div>
+</div></form><ul class="flat-list buttons"><li class="first"><a href="https://old.reddit.com/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2miic1/" data-event-action="permalink" class="bylink" rel="nofollow" >permalink</a></li><li><a href="javascript:void(0)" data-comment="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2miic1/" data-media="www.redditmedia.com" data-link="/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/" data-root="false" data-title="Luigi Mangione will not face death penalty, judge rules" class="embed-comment" >embed</a></li><li class="comment-save-button save-button login-required"><a href="javascript:void(0)">save</a></li><li><a href="#o2mfer0" data-event-action="parent" class="bylink" rel="nofollow" >parent</a></li><li class="report-button login-required"><a href="javascript:void(0)" class="reportbtn access-required" data-event-action="report">report</a></li></ul><div class="reportform report-t1_o2miic1"></div></div><div class="child"></div></div>`;
 const redditRealCrawlerPage = (...comments: string[]) => `<!doctype html><html><body>
 ${REDDIT_REAL_POST_HTML}
 <div class="commentarea"><div class="sitetable nestedlisting">
@@ -3483,6 +3501,21 @@ const tests: TestCase[] = [
                 });
                 assertRedditCommentTransient(response, commentUrl);
             }
+
+            // o2m92yc is a live reply nested under the deleted o2m8ovr: it renders as itself.
+            const liveUrl = `${REDDIT_REAL_THREAD_URL}o2m92yc/`;
+            const { response: live } = await runRedditCommentScenario({
+                url: liveUrl,
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: redditRealHtmlResponse(redditRealCrawlerPage(
+                    REDDIT_REAL_DELETED_COMMENT_HTML,
+                    REDDIT_REAL_OTHER_DELETED_COMMENT_HTML,
+                )),
+            });
+            assert.equal(live.success, true);
+            assert.equal(live.data?.sections?.some((section) => section.kind === 'tombstone'), false);
+            assert.equal(live.data?.sections?.[0]?.authorName, 'u/Lord0fHats');
+            assert.match(live.data?.sections?.[0]?.body || '', /^It's this\. The idea that the police/);
         },
     },
     {
@@ -3604,6 +3637,97 @@ const tests: TestCase[] = [
                 });
                 assertRedditCommentTombstone(response);
                 assert.equal(response.data?.url, commentUrl);
+            }
+        },
+    },
+    {
+        name: 'decodeHtmlEntitiesOnce decodes named and numeric entities exactly once (#84)',
+        run: () => {
+            assert.equal(decodeHtmlEntitiesOnce('&lt;b&gt; &amp; &quot;q&quot; &#39;s &apos;'), '<b> & "q" \'s \'');
+            assert.equal(decodeHtmlEntitiesOnce('&#8217; &#x2019; &#X2019; &#x1F600; &#32;|'), '\u2019 \u2019 \u2019 \u{1F600}  |');
+            assert.equal(decodeHtmlEntitiesOnce('&nbsp;'), '\u00a0');
+            // Exactly once: a double-escaped entity becomes the literal entity text.
+            assert.equal(decodeHtmlEntitiesOnce('&amp;gt; &amp;amp; &amp;#39; &amp;lt;b&amp;gt;'), '&gt; &amp; &#39; &lt;b&gt;');
+            // Unknown names, invalid code points, and bare ampersands stay as written.
+            assert.equal(
+                decodeHtmlEntitiesOnce('&bogus; &#xD800; &#0; &#99999999; &#x110000; AT&T & co'),
+                '&bogus; &#xD800; &#0; &#99999999; &#x110000; AT&T & co',
+            );
+        },
+    },
+    {
+        name: 'redditHandler decodes HTML entities in real old.reddit comment bodies exactly once (#84)',
+        run: async () => {
+            for (const [commentId, markup, expected] of [
+                ['o2mv18r', REDDIT_REAL_ENTITY_LT_GT_COMMENT_HTML, [
+                    /^<For simplicity, the kids are named A, B, C, D, and E and are lined up in that order\.>\n\n/,
+                ]],
+                ['o2miic1', REDDIT_REAL_ENTITY_AMP_COMMENT_HTML, [
+                    /^As I understand it, it's to do with who was murdered/,
+                    /elected official & their family members\)/,
+                    /Here's the perts from a google search for those readers who'd like/,
+                ]],
+            ] as const) {
+                const commentUrl = `${REDDIT_REAL_THREAD_URL}${commentId}/`;
+                const { response } = await runRedditCommentScenario({
+                    url: commentUrl,
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler: redditRealHtmlResponse(redditRealCrawlerPage(markup)),
+                });
+                assert.equal(response.success, true);
+                const body = response.data?.sections?.[0]?.body || '';
+                for (const pattern of expected) assert.match(body, pattern);
+                assert.doesNotMatch(body, /&(?:lt|gt|amp|quot|#39);/);
+            }
+
+            // Same real o2o5rsi markup with a body that is double-escaped and uses numeric entities.
+            const commentUrl = `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+            const markup = REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML.replace(
+                /<div class="md">[\s\S]*?<\/div>/,
+                '<div class="md"><p>&amp;gt; not a quote &amp;amp; &lt;b&gt;not bold&lt;/b&gt;</p>\n\n'
+                    + '<p>it&#8217;s &#x2019;fine&#x2019; &#x1F600;&nbsp;ok &#x200B; &#xD800; &bogus;</p>\n</div>',
+            );
+            const { response } = await runRedditCommentScenario({
+                url: commentUrl,
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: redditRealHtmlResponse(redditRealCrawlerPage(markup)),
+            });
+            assert.equal(response.success, true);
+            assert.equal(
+                response.data?.sections?.[0]?.body,
+                '&gt; not a quote &amp; <b>not bold</b>\n\nit\u2019s \u2019fine\u2019 \u{1F600} ok \u200b &#xD800; &bogus;',
+            );
+        },
+    },
+    {
+        name: 'redditHandler keeps the temporary failure for every outage on the real deleted-account permalink (#84)',
+        run: async () => {
+            const commentUrl = `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+            const timeout = () => {
+                throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+            };
+            const jsonOutages: RedditCommentScenarioReply[] = [
+                () => new Response('slow down', { status: 429, statusText: 'Too Many Requests' }),
+                () => new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                () => new Response('busy', { status: 503, statusText: 'Service Unavailable' }),
+                () => new Response('<html>not json</html>', {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                }),
+                timeout,
+            ];
+            const crawlerOutages: RedditCommentScenarioReply[] = [
+                () => new Response('slow down', { status: 429 }),
+                () => new Response('blocked', { status: 403 }),
+                () => new Response('bad gateway', { status: 502 }),
+                () => redditRealHtmlResponse('<html><body>whoa there, pardner!</body></html>'),
+                timeout,
+            ];
+            for (const json of jsonOutages) {
+                for (const crawler of crawlerOutages) {
+                    const { response } = await runRedditCommentScenario({ url: commentUrl, json, crawler });
+                    assertRedditCommentTransient(response, commentUrl);
+                }
             }
         },
     },

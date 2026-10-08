@@ -6,6 +6,7 @@
 - Only a `[deleted]` or `[removed]` body, an empty JSON body, or old.reddit's own `deleted comment` marker now counts as gone. A missing or `[deleted]` author on its own does not.
 - The old.reddit fallback now finds real deleted comments, which have no `thing_t1_` id and only a `deleted comment` class plus a permalink. It matches the exact comment id from the permalink, so another deleted comment on the same page never turns the target into a tombstone.
 - The fallback reads the comment body only from the comment itself, never from a reply below it.
+- The fallback decodes HTML entities in comment text exactly once, including numeric ones like `&#8217;` and `&#x200B;`. A comment that says `&lt;b&gt;` shows `<b>` as text, and a double-escaped `&amp;gt;` shows the literal `&gt;` instead of `>`.
 - Outages are unchanged: 429, 5xx, 403, timeouts, and parse errors still fall back and then fail as temporary, with no tombstone.
 - Ships with a Worker deploy. No bot restart needed.
 
