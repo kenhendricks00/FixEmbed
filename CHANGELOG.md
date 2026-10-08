@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit comment cards from the old.reddit fallback show when the comment was posted (#91)**
+- When Reddit's API blocks the Worker, comment cards are built from old.reddit's page, and those cards had no timestamp. old.reddit's comment markup has no timestamp attribute, unlike posts.
+- The time now comes from the comment's own header on old.reddit, the same time old.reddit shows as "8 months ago". If the comment was edited, the original posting time is used, not the edit time.
+- Cards built from Reddit's API are unchanged.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Premium shows active right after purchase (#101)**
 - A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
 - Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
