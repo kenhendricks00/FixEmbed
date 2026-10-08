@@ -30,6 +30,8 @@ import {
 } from './utils/status_report_cache.ts';
 import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from './utils/embed_cache.ts';
 import { applyRequestedTranslation } from './utils/translation.ts';
+import { parseRedditUrl } from './utils/fetch.ts';
+import { logRedditCommentCacheHit } from './utils/reddit_timing.ts';
 import { handleTopGgWebhook } from './webhooks/topgg.ts';
 import { proxyInstagramImage } from './routes/instagram_media_proxy.ts';
 import {
@@ -1548,6 +1550,24 @@ app.get('/debug/bilibili', async (c) => {
 });
 
 // API endpoint for embed data (JSON)
+/** #98 timing summary for a Reddit comment permalink served from the embed cache. */
+function logRedditCommentCacheHitFor(url: string, totalMs: number): void {
+    const parsed = parseRedditUrl(url);
+    if (!parsed?.commentId) return;
+    const decode = (value: string) => {
+        try {
+            return decodeURIComponent(value);
+        } catch {
+            return value;
+        }
+    };
+    logRedditCommentCacheHit({
+        subreddit: decode(parsed.subreddit),
+        postId: decode(parsed.postId),
+        commentId: decode(parsed.commentId),
+    }, totalMs);
+}
+
 app.get('/api/embed', async (c) => {
     const url = c.req.query('url');
     const language = c.req.query('lang');
@@ -1565,13 +1585,26 @@ app.get('/api/embed', async (c) => {
     }
 
     try {
+        const startedAt = Date.now();
         const options: HandlerOptions = { language, mode };
         const cacheContext = await prepareEmbedCache(c.env, c.req.url, url, options);
         const cached = await readEmbedCache(cacheContext);
-        if (cached) return cached;
+        if (cached) {
+            if (handler.name === 'reddit') {
+                try {
+                    logRedditCommentCacheHitFor(url, Date.now() - startedAt);
+                } catch {
+                    // Timing logs (#98) must never change the cached response.
+                }
+            }
+            return cached;
+        }
 
         const result = await applyRequestedTranslation(
-            await handler.handle(url, c.env, options),
+            await handler.handle(url, c.env, {
+                ...options,
+                embedCache: cacheContext ? 'miss' : 'off',
+            }),
             c.env,
             options,
         );
