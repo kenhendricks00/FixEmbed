@@ -13,9 +13,20 @@ example ``<@&1234567>`` as @unknown-role (#96). A zero-width space after the
 ``@`` or ``#`` keeps the text readable while Discord no longer sees a mention,
 the same trick ``discord.utils.escape_mentions`` uses.
 
-Mentions inside code spans, code blocks and URLs are left as they are: they
-never render there and a URL must keep its bytes. Both helpers are idempotent
-on mentions, and ``masked_link_label(..., escaped=True)`` takes text that was
+In bodies, mentions inside code spans, code blocks and URLs are left as they
+are: they never render there and a URL must keep its bytes. A label is only
+display text, and a code span inside it does not stop Discord from seeing the
+mention and dropping the link, so ``masked_link_label`` breaks mentions
+everywhere in the label, code and URLs included. The zero-width space is
+invisible either way.
+
+``@everyone`` and ``@here`` are broken wherever they appear, whatever comes
+before or after them (``@everyones``, ``@here_x``, ``ops@here.com``). Discord
+reads the mention at the ``@`` without a word boundary, so these still parse,
+and ``discord.utils.escape_mentions`` has no boundary either. Other ``@`` text
+such as ``someone@example.com`` or ``@heroes`` is left alone.
+
+Both helpers are idempotent on mentions, and ``masked_link_label(..., escaped=True)`` takes text that was
 already markdown-escaped once (DeviantArt's ``escape_markdown``, Pixiv's
 author names) and only escapes what is still live, so nothing is escaped twice.
 """
@@ -35,7 +46,8 @@ _PROTECTED = re.compile(
     r"|(?<!\\)`[^`\n]+`"
     r"|https?://[^\s<>\"]+"
 )
-_BROADCAST_MENTION = re.compile(r"@(everyone|here)\b")
+# No word boundary on either side: ``@everyones`` and ``x@here`` still parse.
+_BROADCAST_MENTION = re.compile(r"@(everyone|here)")
 _ANGLE_MENTION = re.compile(r"<([@#])(?!\u200b)")
 _LABEL_SPECIAL = re.compile(r"[\\\[\])]")
 # In already-escaped text, a ``[``, ``]`` or ``)`` preceded by an even number
@@ -83,7 +95,8 @@ def masked_link_label(text: str, *, escaped: bool = False) -> str:
     """
     if not text:
         return text
-    # Escaping covers URLs and code too: Discord's link rule ends the label at
-    # the first live ``]`` no matter where it sits.
+    # Escaping and mention breaking cover URLs and code too: Discord's link
+    # rule ends the label at the first live ``]`` no matter where it sits, and
+    # a mention inside backticks in the label still makes Discord drop the link.
     escape = _escape_live_label if escaped else _escape_label
-    return escape(_outside_protected(text, _break_mentions))
+    return escape(_break_mentions(text))
