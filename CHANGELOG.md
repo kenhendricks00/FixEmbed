@@ -6,6 +6,13 @@
 - Lines that start with `#`, `>`, `-`, `+` or `1.` in the text are escaped so they stay text, and URLs are left untouched so their underscores keep working.
 - The result matches what Reddit's JSON API returns for the same comment, so the bot shows both paths the same way. The bot's quote block, bold subreddit label and links are not escaped a second time.
 
+#### **Block mentions from embedded content (#93)**
+- FixEmbed can no longer ping anyone through text it copies from other sites or users. An `@everyone`, `@here`, `<@user>` or `<@&role>` inside a Reddit comment, a post title, a caption, an author name, or a link's text now shows as plain text and notifies nobody.
+- The bot client now defaults to no mentions, so every message it posts is silent unless a send opts in.
+- Cards and link text in reply, suppress, and delete modes, plus `/fix` and the Fix Embed message command, now send with no mentions, including the plain-link fallback.
+- In delete mode, the "Sent by" line can still ping the person who posted the link when Mention Users is on, as before. Tagged users stay listed without being pinged, and the card itself never pings, even the poster.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **No "Translated from" footer on untranslated text (#88)**
 - Reddit comment cards no longer send the generated "Parent post" label to the translator. Language detection read it as French, the model echoed back "Parent Post", and the card claimed "Translated from English" on an English comment.
 - Translation output that only differs from the original in case, spacing or punctuation is no longer counted as a translation.
