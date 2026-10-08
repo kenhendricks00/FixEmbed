@@ -12,6 +12,7 @@ import discord
 from component_emojis import application_emoji, format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
+from markdown_safety import masked_link_label, neutralize_mentions
 from timestamp_utils import parse_post_timestamp
 
 
@@ -32,8 +33,12 @@ def _split_title(value: Any) -> tuple[str, str]:
 def _section_text(section: Mapping[str, Any]) -> str:
     title = str(section.get("title") or "Linked content").strip()
     url = str(section.get("url") or "").strip()
-    body = str(section.get("body") or "").strip()
-    heading = f"### [{title}]({url})" if url else f"### {title}"
+    body = neutralize_mentions(str(section.get("body") or "").strip())
+    heading = (
+        f"### [{masked_link_label(title)}]({url})"
+        if url
+        else f"### {neutralize_mentions(title)}"
+    )
     return "\n".join(part for part in (heading, body[:900]) if part)
 
 
@@ -163,14 +168,14 @@ def _blockquote_comment(section: Mapping[str, Any]) -> str:
     if not author and title.casefold().startswith("comment by "):
         author = title.split(":", 1)[0][len("Comment by ") :].strip().lstrip("@")
     author_url = str(section.get("authorUrl") or "").strip()
-    body = str(section.get("body") or "").strip()
+    body = neutralize_mentions(str(section.get("body") or "").strip())
     if len(body) > 3000:
         body = f"{body[:2997].rstrip()}…"
 
     if author and author_url:
-        author_text = f"[{author}]({author_url})"
+        author_text = f"[{masked_link_label(author)}]({author_url})"
     else:
-        author_text = author or "unknown"
+        author_text = neutralize_mentions(author) or "unknown"
     heading = f"> {application_emoji('quote')} Comment by {author_text}:"
     if not body:
         return heading
@@ -223,11 +228,16 @@ def build_reddit_layout(
         str(linked_article.get("url") or "").strip() if linked_article else ""
     )
 
-    author_text = f"[{author}]({author_url})" if author_url else author
+    author_text = (
+        f"[{masked_link_label(author)}]({author_url})"
+        if author_url
+        else neutralize_mentions(author)
+    )
     identity = f"**{subreddit}**  ·  Posted by {author_text}"
     preferences = card_preferences or CardPreferences()
     description = str(payload.get("description") or payload.get("caption") or "").strip()
     description = apply_caption_preferences(description, preferences)
+    description = neutralize_mentions(description)
     if len(description) > 3000:
         description = f"{description[:2997].rstrip()}…"
 
@@ -238,16 +248,16 @@ def build_reddit_layout(
             or "Reddit post"
         )
         title_text = (
-            f"### [{display_title}]({parent_post_url})"
+            f"### [{masked_link_label(display_title)}]({parent_post_url})"
             if parent_post_url
-            else f"### {display_title}"
+            else f"### {neutralize_mentions(display_title)}"
         )
         header_description = ""
     else:
         title_text = (
-            f"### [{post_title}]({linked_article_url})"
+            f"### [{masked_link_label(post_title)}]({linked_article_url})"
             if linked_article_url
-            else f"### {post_title}"
+            else f"### {neutralize_mentions(post_title)}"
         )
         header_description = description
     header_text = "\n".join(part for part in (identity, title_text, header_description) if part)

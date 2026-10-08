@@ -14,6 +14,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
+from markdown_safety import masked_link_label
 from timestamp_utils import parse_post_timestamp
 from pixiv_relay import PixivRelayService, UpstreamResponseError
 
@@ -211,14 +212,14 @@ def build_pixiv_layout(
     escaped_author_name = _escape_markdown(author_name)
     escaped_author_handle = _escape_markdown(author_handle)
     if author_url and escaped_author_handle:
-        creator_line = f"**{escaped_author_name}** ([@{escaped_author_handle}]({author_url}))"
+        creator_line = f"**{escaped_author_name}** ([{masked_link_label('@' + escaped_author_handle, escaped=True)}]({author_url}))"
     elif author_url:
-        creator_line = f"**[{escaped_author_name}]({author_url})**"
+        creator_line = f"**[{masked_link_label(escaped_author_name, escaped=True)}]({author_url})**"
     elif escaped_author_handle:
         creator_line = f"**{escaped_author_name} (@{escaped_author_handle})**"
     else:
         creator_line = f"**{escaped_author_name}**"
-    title_line = f"**[{title}]({source_url})**" if source_url else f"**{title}**"
+    title_line = f"**[{masked_link_label(title)}]({source_url})**" if source_url else f"**{title}**"
     header_text = "\n".join(part for part in (creator_line, title_line, description) if part)
 
     children: list[discord.ui.Item[Any]] = []
