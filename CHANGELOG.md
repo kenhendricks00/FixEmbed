@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **DeviantArt fallback stats (#77)**
+- When DeviantArt blocks the Worker and the card falls back to Cardyb, a `www.deviantart.com` lookup that comes back as a generic card ("Deviantart.com image by ...", no Published date, likes, or views) is retried once with the bare `deviantart.com` URL, which Cardyb has been answering with the full description.
+- The retry shares the existing 5 second Cardyb timeout, so the slowest case is no slower than before, and it is skipped when Cardyb rate limits (429), when under 1 second is left, or for Sta.sh links.
+- The richer card wins, and any timestamp, stats, or image the winner lacks is filled from the other lookup, so the card is never worse than before. The card link stays the `www.deviantart.com` URL.
+
 #### **Premium checklist path wrapping (#73)**
 - Active-subscriber `/premium` checklist rows now put each `/settings → ...` target on its own line inside one inline code span.
 - Spaces inside that path use non-breaking spaces so Discord cannot wrap mid-path (after `/`, or so page names like Embed Color / Card Style stay intact) on desktop or mobile.
