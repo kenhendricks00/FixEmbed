@@ -64,7 +64,8 @@ class RedditCommentOutageSourceTests(unittest.TestCase):
     def test_automatic_path_skips_reddit_comment_outages(self):
         automatic_handler = max(self.handlers, key=lambda handler: handler.lineno)
         source = ast.get_source_segment(MAIN_SOURCE, automatic_handler) or ""
-        self.assertIn("if not keeps_native_reddit_og_on_failure(", source)
+        self.assertIn("if keeps_native_reddit_og_on_failure(", source)
+        self.assertIn("kept_native_preview = True", source)
         self.assertIn("formatted_links.append(automatic_url)", source)
 
 
