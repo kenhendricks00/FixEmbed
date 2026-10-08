@@ -1869,6 +1869,294 @@ const tests: TestCase[] = [
     },
 
     {
+        name: 'deviantartHandler retries Cardyb on the bare domain when www returns a generic card',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const lookups: string[] = [];
+            const www = 'https://www.deviantart.com/team/art/Fella-Cardyb-Bare-971957233';
+            const bare = 'https://deviantart.com/team/art/Fella-Cardyb-Bare-971957233';
+            const image = 'https://cardyb.bsky.app/v1/image?url='
+                + encodeURIComponent('https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/bare.jpg?token=abc');
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed') || url === www) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    lookups.push(requested);
+                    if (requested === www) {
+                        return Response.json({
+                            error: '',
+                            title: 'Fella Celebrates 100k',
+                            description: 'Deviantart.com image by Team',
+                            image,
+                        });
+                    }
+                    if (requested === bare) {
+                        return Response.json({
+                            error: '',
+                            title: 'Fella Celebrates 100k by Team on DeviantArt',
+                            description:
+                                'Fella Celebrates 100k — artwork by Team on DeviantArt. Published: 2023-07-14 · Likes: 1308 · Views: 637077 · Comments: 354',
+                            image,
+                        });
+                    }
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(www, env);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.deepEqual(lookups, [www, bare]);
+                assert.equal(response.data?.url, www);
+                assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.authorName, 'Team');
+                assert.equal(response.data?.authorUrl, 'https://www.deviantart.com/team');
+                assert.equal(response.data?.timestamp, '2023-07-14T12:00:00.000Z');
+                assert.match(response.data?.stats || '', /637\.1K/);
+                assert.match(response.data?.stats || '', /1\.3K/);
+                assert.match(response.data?.stats || '', /354/);
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/bare.jpg?token=abc',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler keeps the first Cardyb card when both lookups are generic',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let cardybCalls = 0;
+            const www = 'https://www.deviantart.com/team/art/Fella-Cardyb-Generic-971957234';
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed') || url === www) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    cardybCalls += 1;
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    return Response.json({
+                        error: '',
+                        title: requested === www ? 'Fella Celebrates 100k' : 'Bare generic title',
+                        description: 'Deviantart.com image by Team',
+                        image: 'https://cardyb.bsky.app/v1/image?url='
+                            + encodeURIComponent('https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/first.jpg'),
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(www, env);
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(cardybCalls, 2);
+                assert.equal(response.data?.title, 'Fella Celebrates 100k');
+                assert.equal(response.data?.description, 'Deviantart.com image by Team');
+                assert.equal(response.data?.timestamp, undefined);
+                assert.equal(response.data?.stats, undefined);
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/first.jpg',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler bare-domain retry fills stats without dropping first-card media',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const www = 'https://www.deviantart.com/team/art/Fella-Cardyb-Merge-971957235';
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed') || url === www) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    if (requested === www) {
+                        return Response.json({
+                            error: '',
+                            title: 'Fella Celebrates 100k',
+                            description: 'Deviantart.com image by Team',
+                            image: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/first.jpg',
+                        });
+                    }
+                    return Response.json({
+                        error: '',
+                        title: 'Fella Celebrates 100k by Team on DeviantArt',
+                        description: 'Published: 2023-07-14 · Likes: 1308 · Views: 637077 · Comments: 354',
+                        image: '',
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(www, env);
+                assert.equal(response.success, true);
+                assert.equal(response.data?.timestamp, '2023-07-14T12:00:00.000Z');
+                assert.match(response.data?.stats || '', /637\.1K/);
+                assert.equal(
+                    response.data?.image,
+                    'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/first.jpg',
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler recovers via the bare domain when the www Cardyb lookup fails',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const lookups: string[] = [];
+            const www = 'https://www.deviantart.com/team/art/Fella-Cardyb-Fail-971957236';
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed') || url === www) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    lookups.push(requested);
+                    if (requested === www) return Response.json({ error: 'Unable to fetch' });
+                    return Response.json({
+                        error: '',
+                        title: 'Fella Celebrates 100k by Team on DeviantArt',
+                        description: 'Published: 2023-07-14 · Likes: 1308 · Views: 637077 · Comments: 354',
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await deviantartHandler.handle(www, env);
+                assert.equal(response.success, true);
+                assert.equal(lookups.length, 2);
+                assert.equal(response.data?.timestamp, '2023-07-14T12:00:00.000Z');
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler skips the bare-domain retry on Cardyb 429 and for sta.sh',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            let cardybCalls = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed')
+                    || url === 'https://www.deviantart.com/team/art/Fella-Cardyb-Throttled-971957237'
+                    || url === 'https://sta.sh/0cardybgeneric') {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    cardybCalls += 1;
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    if (requested.includes('Throttled')) return new Response('slow down', { status: 429 });
+                    return Response.json({ error: '', title: 'Stash item', description: 'Deviantart.com image by Someone' });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const throttled = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Cardyb-Throttled-971957237',
+                    env,
+                );
+                assert.equal(throttled.success, false);
+                assert.equal(cardybCalls, 1);
+
+                const stash = await deviantartHandler.handle('https://sta.sh/0cardybgeneric', env);
+                assert.equal(stash.success, true);
+                assert.equal(stash.data?.title, 'Stash item');
+                assert.equal(cardybCalls, 2);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
+        name: 'deviantartHandler bare-domain retry stays inside the Cardyb timeout budget',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalNow = Date.now;
+            const lookups: string[] = [];
+            let clock = originalNow();
+            Date.now = () => clock;
+            const generic = () => Response.json({
+                error: '',
+                title: 'Fella Celebrates 100k',
+                description: 'Deviantart.com image by Team',
+                image: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/slow.jpg',
+            });
+            let firstLookupCostMs = 0;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('backend.deviantart.com/oembed') || url.startsWith('https://www.deviantart.com/team/art/')) {
+                    return new Response('Forbidden', { status: 403 });
+                }
+                if (url.startsWith('https://cardyb.bsky.app/v1/extract?')) {
+                    const requested = new URL(url).searchParams.get('url') || '';
+                    lookups.push(requested);
+                    if (requested.startsWith('https://www.')) {
+                        clock += firstLookupCostMs;
+                        return generic();
+                    }
+                    return Response.json({
+                        error: '',
+                        title: 'Fella Celebrates 100k by Team on DeviantArt',
+                        description: 'Published: 2023-07-14 · Likes: 1308 · Views: 637077 · Comments: 354',
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                // First lookup eats 4.5 s of the 5 s Cardyb budget: no retry, generic card kept.
+                firstLookupCostMs = 4_500;
+                const slow = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Cardyb-Slow-971957238',
+                    env,
+                );
+                assert.equal(slow.success, true);
+                assert.deepEqual(lookups, ['https://www.deviantart.com/team/art/Fella-Cardyb-Slow-971957238']);
+                assert.equal(slow.data?.stats, undefined);
+                assert.equal(slow.data?.image, 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/demo/slow.jpg');
+
+                // First lookup takes 2 s: 3 s left, so the retry runs and wins.
+                lookups.length = 0;
+                firstLookupCostMs = 2_000;
+                const quick = await deviantartHandler.handle(
+                    'https://www.deviantart.com/team/art/Fella-Cardyb-Quick-971957239',
+                    env,
+                );
+                assert.equal(lookups.length, 2);
+                assert.equal(quick.data?.timestamp, '2023-07-14T12:00:00.000Z');
+            } finally {
+                Date.now = originalNow;
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+
+    {
         name: 'deviantartHandler negatively caches not-found responses',
         run: async () => {
             const originalFetch = globalThis.fetch;

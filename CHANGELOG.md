@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **DeviantArt fallback stats (#77)**
+- When DeviantArt blocks the Worker and the card falls back to Cardyb, a `www.deviantart.com` lookup that comes back as a generic card ("Deviantart.com image by ...", no Published date, likes, or views) is retried once with the bare `deviantart.com` URL, which Cardyb has been answering with the full description.
+- The retry shares the existing 5 second Cardyb timeout, so the slowest case is no slower than before, and it is skipped when Cardyb rate limits (429), when under 1 second is left, or for Sta.sh links.
+- The richer card wins, and any timestamp, stats, or image the winner lacks is filled from the other lookup, so the card is never worse than before. The card link stays the `www.deviantart.com` URL.
+
 #### **Keep Reddit links in multi-link messages during outages (#85)**
 - When a Reddit comment link is skipped because Reddit is temporarily unavailable, and another link in the same message still gets a card, FixEmbed now keeps the original message and replies with that card. It no longer deletes the message (which dropped the Reddit link) or suppresses its embeds (which hid Discord's own Reddit preview).
 - This applies to both delete and suppress modes for that one message only. Messages without a skipped Reddit link behave as before.

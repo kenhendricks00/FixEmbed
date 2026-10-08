@@ -8,7 +8,7 @@
  * usable first-party media URL while Discord V2 cards continue to use the bot host.
  */
 import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import { createTimeoutBudget, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { formatNumber, getBrandedSiteName, platformColors } from '../utils/embed.ts';
 import { normalizePostTimestamp } from '../utils/timestamp.ts';
 
@@ -19,6 +19,12 @@ const MEDIA_HOST_SUFFIXES = ['wixmp.com', 'deviantart.net', 'deviantart.com'];
 const SUCCESS_CACHE_TTL_MS = 5 * 60_000;
 const NEGATIVE_CACHE_TTL_MS = 30_000;
 const MAX_CACHE_ENTRIES = 256;
+// Cardyb gets one shared wall-clock budget (the old single-request timeout),
+// so the bare-domain retry never adds latency on top of today's worst case.
+const CARDYB_TOTAL_TIMEOUT_MS = 5_000;
+// Skip the bare-domain retry when less than this is left; Cardyb answers in
+// roughly 0.6-1.5 s, so a shorter window would only burn a request.
+const CARDYB_RETRY_MIN_MS = 1_000;
 
 type CachedResponse = {
     expiresAt: number;
@@ -313,13 +319,19 @@ type CardybExtractPayload = {
     url?: unknown;
 };
 
-async function recoverViaCardyb(
+type CardybAttempt = {
+    response: HandlerResponse;
+    status?: number;
+};
+
+async function fetchCardybCard(
     parsedUrl: DeviantArtUrl,
+    lookupUrl: string,
     timeoutMs: number,
-): Promise<HandlerResponse> {
+): Promise<CardybAttempt> {
     try {
         const endpoint = new URL(CARDYB_EXTRACT_ENDPOINT);
-        endpoint.searchParams.set('url', parsedUrl.canonical);
+        endpoint.searchParams.set('url', lookupUrl);
         const response = await fetchWithTimeout(endpoint.toString(), {
             headers: {
                 'Accept': 'application/json',
@@ -328,18 +340,24 @@ async function recoverViaCardyb(
         }, timeoutMs);
         if (!response.ok) {
             return {
-                success: false,
-                error: `DeviantArt metadata fallback returned ${response.status}`,
-                redirect: parsedUrl.canonical,
+                status: response.status,
+                response: {
+                    success: false,
+                    error: `DeviantArt metadata fallback returned ${response.status}`,
+                    redirect: parsedUrl.canonical,
+                },
             };
         }
 
         const payload = await response.json() as CardybExtractPayload;
         if (text(payload.error)) {
             return {
-                success: false,
-                error: 'DeviantArt metadata unavailable',
-                redirect: parsedUrl.canonical,
+                status: response.status,
+                response: {
+                    success: false,
+                    error: 'DeviantArt metadata unavailable',
+                    redirect: parsedUrl.canonical,
+                },
             };
         }
 
@@ -348,9 +366,12 @@ async function recoverViaCardyb(
         const ogDescription = text(payload.description);
         if (!ogTitle && !ogImage) {
             return {
-                success: false,
-                error: 'DeviantArt metadata unavailable',
-                redirect: parsedUrl.canonical,
+                status: response.status,
+                response: {
+                    success: false,
+                    error: 'DeviantArt metadata unavailable',
+                    redirect: parsedUrl.canonical,
+                },
             };
         }
 
@@ -382,14 +403,69 @@ async function recoverViaCardyb(
             platform: 'deviantart',
             stats: parsedDescription.stats,
         };
-        return { success: true, source: 'fallback', data };
+        return { status: response.status, response: { success: true, source: 'fallback', data } };
     } catch (error) {
         return {
-            success: false,
-            error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
-            redirect: parsedUrl.canonical,
+            response: {
+                success: false,
+                error: error instanceof Error ? error.message : 'DeviantArt metadata unavailable',
+                redirect: parsedUrl.canonical,
+            },
         };
     }
+}
+
+/** Cardyb sometimes gives www.deviantart.com a generic card; the bare domain gets the full one (#77). */
+function bareDomainLookupUrl(parsedUrl: DeviantArtUrl): string | undefined {
+    const prefix = 'https://www.deviantart.com/';
+    return parsedUrl.canonical.startsWith(prefix)
+        ? `https://deviantart.com/${parsedUrl.canonical.slice(prefix.length)}`
+        : undefined;
+}
+
+function hasPublishedStats(response: HandlerResponse): boolean {
+    return Boolean(response.success && response.data?.timestamp && response.data.stats);
+}
+
+function cardRichness(response: HandlerResponse): number {
+    if (!response.success || !response.data) return -1;
+    const data = response.data;
+    return [data.timestamp, data.stats, data.image].filter(Boolean).length;
+}
+
+/**
+ * Keep the richer Cardyb card, then fill any field it lacks from the other
+ * one, so the retry can only add timestamp, stats, or media, never drop them.
+ */
+function preferRicherCard(first: HandlerResponse, retry: HandlerResponse): HandlerResponse {
+    if (!retry.success || !retry.data) return first;
+    if (!first.success || !first.data) return retry;
+    if (cardRichness(retry) <= cardRichness(first)) return first;
+    return {
+        ...retry,
+        data: {
+            ...retry.data,
+            image: retry.data.image || first.data.image,
+            timestamp: retry.data.timestamp || first.data.timestamp,
+            stats: retry.data.stats || first.data.stats,
+        },
+    };
+}
+
+async function recoverViaCardyb(parsedUrl: DeviantArtUrl): Promise<HandlerResponse> {
+    const remaining = createTimeoutBudget(CARDYB_TOTAL_TIMEOUT_MS);
+    const first = await fetchCardybCard(parsedUrl, parsedUrl.canonical, remaining());
+    if (hasPublishedStats(first.response)) return first.response;
+
+    // Cardyb often answers www.deviantart.com with a generic "Deviantart.com
+    // image by X" card (no Published/Likes/Views) while the bare domain gets
+    // the full description (#77). Retry once there, inside the same budget.
+    const bareUrl = bareDomainLookupUrl(parsedUrl);
+    if (!bareUrl || first.status === 429) return first.response;
+    const retryMs = remaining();
+    if (retryMs < CARDYB_RETRY_MIN_MS) return first.response;
+    const retry = await fetchCardybCard(parsedUrl, bareUrl, retryMs);
+    return preferRicherCard(first.response, retry.response);
 }
 
 async function scrapeDeviantArtPage(
@@ -508,7 +584,7 @@ export const deviantartHandler: PlatformHandler = {
                     if (response.status === 403) {
                         const pageResult = await scrapeDeviantArtPage(parsedUrl, 5_000);
                         if (pageResult.success) return pageResult;
-                        const cardybResult = await recoverViaCardyb(parsedUrl, 5_000);
+                        const cardybResult = await recoverViaCardyb(parsedUrl);
                         if (cardybResult.success) return cardybResult;
                         return {
                             success: false,
