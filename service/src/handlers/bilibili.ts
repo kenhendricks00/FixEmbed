@@ -231,6 +231,34 @@ async function fetchBilibiliMobilePage(bvid: string): Promise<HandlerResponse | 
     }
 }
 
+const BILIFIX_OEMBED_ATTEMPTS = 2;
+const BILIFIX_OEMBED_TIMEOUT_MS = 2500;
+
+// BiliFix oEmbed carries the uploader name, title, and stats. One slow answer
+// used to drop the author from the whole fallback card, so retry once.
+async function fetchBiliFixOEmbed(bvid: string): Promise<BiliFixOEmbedResponse | undefined> {
+    const url = `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-cn`;
+    for (let attempt = 0; attempt < BILIFIX_OEMBED_ATTEMPTS; attempt += 1) {
+        try {
+            const response = await fetchWithTimeout(
+                url,
+                { headers: { 'Accept': 'application/json' } },
+                BILIFIX_OEMBED_TIMEOUT_MS,
+            );
+            if (response.ok) {
+                // A 200 is a real answer; an empty body is not worth a retry.
+                const payload = await response.json() as BiliFixOEmbedResponse;
+                return payload?.author_name || payload?.title ? payload : undefined;
+            } else if (response.status < 500 && response.status !== 429) {
+                return undefined;
+            }
+        } catch {
+            // Timeout or network error: retry once.
+        }
+    }
+    return undefined;
+}
+
 // Scrape vxbilibili.com HTML for OG tags
 async function scrapeVxBilibili(bvid: string): Promise<{
     success: boolean;
@@ -252,14 +280,7 @@ async function scrapeVxBilibili(bvid: string): Promise<{
                 'Accept': 'text/html',
             },
         }, 4000);
-        const oembedPromise = fetchWithTimeout(
-            `https://www.vxbilibili.com/oembed/video?id=${encodeURIComponent(bvid)}&lang=zh-cn`,
-            { headers: { 'Accept': 'application/json' } },
-            2000,
-        ).then(async (oembedResponse): Promise<BiliFixOEmbedResponse | undefined> => {
-            if (!oembedResponse.ok) return undefined;
-            return oembedResponse.json() as Promise<BiliFixOEmbedResponse>;
-        }).catch(() => undefined);
+        const oembedPromise = fetchBiliFixOEmbed(bvid);
 
         const [response, oembed] = await Promise.all([pagePromise, oembedPromise]);
 
