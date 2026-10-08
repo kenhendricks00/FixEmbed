@@ -99,6 +99,33 @@ def evaluate_activation_checklist(
     ]
 
 
+
+
+def harden_settings_path(path: str) -> str:
+    """Keep a /settings path on one Discord line (no mid-path wraps).
+
+    Discord TextDisplay rows wrap at ordinary spaces, and mobile clients can
+    even split after `/` when only part of the path is in inline code. Wrap the
+    whole `/settings → Page` target in one code span and replace spaces with
+    NBSP so the path stays a single non-breaking token on desktop and mobile.
+    """
+    text = (path or "").strip()
+    if text.startswith("`") and text.endswith("`") and text.count("`") == 2:
+        inner = text[1:-1]
+    else:
+        inner = text.replace("`", "")
+    # Collapse any odd whitespace, then freeze breaks with NBSP.
+    inner = " ".join(inner.split())
+    return f"`{inner.replace(' ', '\u00a0')}`"
+
+
+def format_checklist_row(mark: str, label: str, path: str | None = None) -> str:
+    """Render one checklist row; settings path sits on its own line when present."""
+    if path:
+        return f"{mark} {label}\n{harden_settings_path(path)}"
+    return f"{mark} {label}"
+
+
 def checklist_settings_targets(items: Sequence[ActivationItem]) -> list[ActivationItem]:
     """Items that deep-link into a /settings page (excludes always-on bot-fix)."""
     return [item for item in items if item.settings_page]

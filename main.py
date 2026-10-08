@@ -56,6 +56,7 @@ from premium_controls import (
 from premium_activation import (
     evaluate_activation_checklist,
     checklist_settings_targets,
+    format_checklist_row,
 )
 from message_context import format_tagged_users
 from command_components import render_command_layout, render_settings_layout
@@ -1251,7 +1252,11 @@ class SettingsNoticeView(ui.LayoutView):
 
 
 def format_premium_activation_checklist(lang, settings, items):
-    """Render configured-vs-available checklist lines with /settings paths."""
+    """Render configured-vs-available checklist lines with /settings paths.
+
+    Each settings path sits on its own line as one NBSP-backed inline-code
+    token so Discord cannot wrap mid-path (e.g. after `/` or inside page names).
+    """
     lines = []
     for item in items:
         mark = get_text(
@@ -1272,10 +1277,12 @@ def format_premium_activation_checklist(lang, settings, items):
             label = get_text(lang, f"premium_item_{item.key}_{suffix}")
         if item.settings_page:
             path = get_text(lang, "premium_item_path", page=item.settings_page)
-            lines.append(f"{mark} {label} — {path}")
+            lines.append(format_checklist_row(mark, label, path))
         else:
-            lines.append(f"{mark} {label}")
+            lines.append(format_checklist_row(mark, label))
     return "\n".join(lines)
+
+
 
 
 async def open_settings_surface(source_interaction, interaction, settings, value):

@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Premium checklist path wrapping (#73)**
+- Active-subscriber `/premium` checklist rows now put each `/settings → ...` target on its own line inside one inline code span.
+- Spaces inside that path use non-breaking spaces so Discord cannot wrap mid-path (after `/`, or so page names like Embed Color / Card Style stay intact) on desktop or mobile.
+- Checklist meaning is unchanged: same configured-vs-available perks, same deep-links, non-premium `/premium` untouched.
+
 #### **Twitter canary contract update (#72)**
 - The production canary's translation check now reads the Worker's `translation` metadata (target language matches the requested `lang`, translated description present) and looks for the bot's "Translated from …" footer, instead of the retired `Translation (XX):` description text.
 - The `twitter-tombstone` canary now uses a post whose quoted post really is unavailable. The old fixture's quoted post is live again, so the Worker correctly rendered a normal quote there; the parser was not at fault.
