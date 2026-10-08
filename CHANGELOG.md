@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit comment outages vs deletions (#71)**
+- Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body or author, or the comment missing from a normal listing.
+- When Reddit is rate limited, down, blocking the request, timing out, or sending a broken response, the Worker no longer guesses. It returns a temporary failure that redirects to Reddit, so Discord keeps Reddit's own preview instead of a wrong "deleted" card.
+- The old.reddit fallback now tells a live comment, a deleted comment, and an unclear page apart, and only the deleted case turns into the unavailable card.
+- The bot no longer builds its own "Comment unavailable" card when a Reddit comment card fails. Automatic fixes skip the link and leave the original message alone, and the slash command sends the plain link like other services.
+
 #### **TikTok avatar and Bilibili author canary fixes (#75)**
 - TikTok cards that fall back to the FxTikTok relay avatar now check that the relay's signed CDN redirect really ends in an image before using it. A stale or broken avatar is swapped for the first-party profile avatar when TikTok serves it, or left off instead of rendering a broken thumbnail.
 - Bilibili emergency fallback cards retry the BiliFix oEmbed once on a timeout, 429, or 5xx, so one slow answer no longer drops the uploader name from the card.

@@ -19,9 +19,8 @@ from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, ext
 from instagram_embed import fetch_instagram_delivery
 from twitter_embed import build_twitter_layout, fetch_twitter_payload
 from reddit_embed import (
-    build_reddit_comment_unavailable_layout,
     fetch_reddit_layout,
-    is_reddit_comment_permalink,
+    keeps_native_reddit_og_on_failure,
 )
 from threads_embed import fetch_threads_layout
 from bluesky_embed import fetch_bluesky_layout
@@ -970,23 +969,15 @@ async def send_components_v2_links(interaction, links):
                 item.service,
                 type(error).__name__,
             )
-            if (
-                item.service == "Reddit"
-                and is_reddit_comment_permalink(item.canonical_url)
-            ):
-                delivery = ComponentsV2Delivery(
-                    view=build_reddit_comment_unavailable_layout(
-                        item.canonical_url,
-                        fallback_url,
-                        footer_branding,
-                        card_preferences,
-                    ),
-                    fallback_url=fallback_url,
-                    files=(),
+            # Real Reddit comment deletions arrive as a success:true tombstone
+            # payload and render above. An exception here means Reddit was
+            # unreachable, so fall back to the plain link like other services.
+            if keeps_native_reddit_og_on_failure(item.service, item.canonical_url):
+                logging.info(
+                    "Reddit comment metadata unavailable; sending plain link (#71)"
                 )
-            else:
-                await interaction.followup.send(fallback_url)
-                continue
+            await interaction.followup.send(fallback_url)
+            continue
 
         try:
             send_options = {"view": delivery.view}
@@ -2616,28 +2607,15 @@ async def on_message(message):
                             component_layouts.append(delivery)
                             rich_card_built = True
                         except Exception:
-                            # Unavailable Reddit comments must not fall back to a bare
-                            # FixEmbed URL — Discord would keep the native Reddit OG
-                            # (wrong-sub / deleted community) unless we deliver a
-                            # failure card and suppress the original embeds.
-                            if (
-                                item.service == "Reddit"
-                                and is_reddit_comment_permalink(item.canonical_url)
+                            # Deleted Reddit comments arrive as a success:true
+                            # tombstone payload and render above. An exception on a
+                            # comment permalink means Reddit was unreachable, so
+                            # post nothing and leave the source message unsuppressed:
+                            # Discord's native Reddit card stays (#71).
+                            if not keeps_native_reddit_og_on_failure(
+                                item.service,
+                                item.canonical_url,
                             ):
-                                component_layouts.append(
-                                    ComponentsV2Delivery(
-                                        view=build_reddit_comment_unavailable_layout(
-                                            item.canonical_url,
-                                            automatic_url,
-                                            footer_branding,
-                                            card_preferences,
-                                        ),
-                                        fallback_url=automatic_url,
-                                        files=(),
-                                    )
-                                )
-                                rich_card_built = True
-                            else:
                                 formatted_links.append(automatic_url)
                     else:
                         formatted_links.append(

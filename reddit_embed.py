@@ -78,34 +78,15 @@ def is_reddit_comment_permalink(url: str) -> bool:
     )
 
 
-def build_reddit_comment_unavailable_layout(
-    source_url: str,
-    converted_url: Optional[str] = None,
-    footer_branding: Optional[FooterBranding] = None,
-    card_preferences: Optional[CardPreferences] = None,
-) -> discord.ui.LayoutView:
-    """Bot-authored failure card when comment metadata cannot be recovered."""
-    return build_reddit_layout(
-        {
-            "title": "Reddit • Comment unavailable",
-            "description": (
-                "This Reddit comment was deleted or is no longer available."
-            ),
-            "url": source_url,
-            "sections": [
-                {
-                    "kind": "tombstone",
-                    "title": "Comment unavailable",
-                    "body": (
-                        "This Reddit comment was deleted or is no longer available."
-                    ),
-                }
-            ],
-        },
-        converted_url,
-        footer_branding,
-        card_preferences,
-    )
+def keeps_native_reddit_og_on_failure(service: str, url: str) -> bool:
+    """True when a failed card build should leave Discord's native Reddit card alone.
+
+    The Worker now returns a success:true tombstone payload only when Reddit says a
+    comment is gone (404, [deleted]/[removed], or missing from a live listing). Any
+    exception while building a Reddit comment card therefore means Reddit was
+    unreachable (rate limit, 5xx, block, timeout), not that the comment was deleted.
+    """
+    return service == "Reddit" and is_reddit_comment_permalink(url)
 
 
 def _build_unavailable_comment_layout(

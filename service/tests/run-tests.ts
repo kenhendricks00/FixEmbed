@@ -19,7 +19,7 @@ import { tiktokHandler } from '../src/handlers/tiktok.ts';
 import { tumblrHandler } from '../src/handlers/tumblr.ts';
 import { twitchHandler } from '../src/handlers/twitch.ts';
 import { deviantartHandler } from '../src/handlers/deviantart.ts';
-import type { Env } from '../src/types.ts';
+import type { Env, HandlerResponse } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
     StatusProbeTimeoutError,
@@ -110,6 +110,79 @@ async function signedRelayResponse(payload: unknown, secret: string): Promise<Re
         },
     });
 }
+
+const REDDIT_OUTAGE_COMMENT_URL = 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/live456/';
+
+type RedditCommentScenarioReply = Response | (() => Response | Promise<Response>);
+
+/** Drive redditHandler for one comment permalink with stubbed JSON + old.reddit replies. */
+async function runRedditCommentScenario(options: {
+    json: RedditCommentScenarioReply;
+    crawler?: RedditCommentScenarioReply;
+}): Promise<{ response: HandlerResponse; requested: string[] }> {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    const reply = async (value: RedditCommentScenarioReply) => (
+        typeof value === 'function' ? value() : value
+    );
+    try {
+        globalThis.fetch = (async (input: RequestInfo | URL) => {
+            const url = String(input);
+            requested.push(url);
+            if (url === REDDIT_OUTAGE_COMMENT_URL) {
+                // Canonical-path probe: no Location, already canonical.
+                return new Response(null, { status: 200 });
+            }
+            if (url.includes('/comments/') && url.includes('.json')) {
+                return reply(options.json);
+            }
+            if (url.startsWith('https://old.reddit.com/')) {
+                if (!options.crawler) throw new Error(`Crawler should not be called: ${url}`);
+                return reply(options.crawler);
+            }
+            if (url.includes('/about')) {
+                return new Response(JSON.stringify({ data: {} }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+            throw new Error(`Unexpected fetch: ${url}`);
+        }) as typeof fetch;
+        const response = await redditHandler.handle(REDDIT_OUTAGE_COMMENT_URL, {} as Env);
+        return { response, requested };
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
+function assertRedditCommentTombstone(response: HandlerResponse): void {
+    assert.equal(response.success, true);
+    assert.equal(response.redirect, undefined);
+    assert.match(response.data?.title || '', /Comment unavailable/i);
+    assert.equal(response.data?.sections?.[0]?.kind, 'tombstone');
+}
+
+function assertRedditCommentTransient(response: HandlerResponse): void {
+    assert.equal(response.success, false);
+    assert.equal(response.error, 'Reddit is temporarily unavailable');
+    assert.equal(response.redirect, REDDIT_OUTAGE_COMMENT_URL);
+    assert.equal(response.data, undefined);
+    // Must not trip generateErrorHTML's comment-unavailable tombstone branch.
+    assert.doesNotMatch(response.error || '', /comment not found or unavailable/i);
+    assert.doesNotMatch(response.error || '', /comment unavailable/i);
+}
+
+const redditCrawlerCommentHtml = (commentTag: string, body: string) => `
+    <div class="thing link" id="thing_t3_abc123"
+        data-author="post_author"
+        data-permalink="/r/programming/comments/abc123/parent_discussion_thread/">
+        <a class="title" href="/r/programming/comments/abc123/parent_discussion_thread/">Parent discussion thread</a>
+    </div>
+    ${commentTag}
+        <span class="score unvoted" title="7">7 points</span>
+        ${body}
+    </div>
+`;
 
 const tests: TestCase[] = [
     {
@@ -3177,6 +3250,188 @@ const tests: TestCase[] = [
                     response.data?.sections?.[0]?.kind,
                     'tombstone',
                 );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler tombstones a comment when the JSON API returns 404 (#71)',
+        run: async () => {
+            const { response, requested } = await runRedditCommentScenario({
+                json: new Response('not found', { status: 404, statusText: 'Not Found' }),
+            });
+            assertRedditCommentTombstone(response);
+            assert.equal(
+                requested.some((url) => url.startsWith('https://old.reddit.com/')),
+                false,
+                'a JSON 404 is authoritative; no crawler fallback needed',
+            );
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when JSON is rate limited and the crawler is down (#71)',
+        run: async () => {
+            const { response, requested } = await runRedditCommentScenario({
+                json: new Response('slow down', { status: 429, statusText: 'Too Many Requests' }),
+                crawler: new Response('unavailable', { status: 503 }),
+            });
+            assertRedditCommentTransient(response);
+            assert.ok(requested.some((url) => url.startsWith('https://old.reddit.com/')));
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when JSON is 503 and the crawler times out (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('upstream error', { status: 503, statusText: 'Service Unavailable' }),
+                crawler: () => {
+                    throw new DOMException('The operation was aborted.', 'AbortError');
+                },
+            });
+            assertRedditCommentTransient(response);
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when the JSON fetch itself fails (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: () => {
+                    throw new TypeError('fetch failed');
+                },
+                crawler: new Response('bad gateway', { status: 502 }),
+            });
+            assertRedditCommentTransient(response);
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when JSON is unparseable and the crawler errors (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('<html>not json</html>', {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                }),
+                crawler: new Response('server error', { status: 500 }),
+            });
+            assertRedditCommentTransient(response);
+        },
+    },
+    {
+        // Spec change (#71): an empty listing used to tombstone. It is a shape error, not a deletion.
+        name: 'redditHandler keeps Reddit OG when JSON returns an empty listing and the crawler errors (#71)',
+        run: async () => {
+            for (const body of ['[]', JSON.stringify([{ data: { children: [] } }])]) {
+                const { response } = await runRedditCommentScenario({
+                    json: new Response(body, {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    }),
+                    crawler: new Response('server error', { status: 500 }),
+                });
+                assertRedditCommentTransient(response);
+            }
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when the crawler page has no matching comment (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: new Response('<html><body>whoa there, pardner!</body></html>', {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/html' },
+                }),
+            });
+            assertRedditCommentTransient(response);
+        },
+    },
+    {
+        name: 'redditHandler keeps Reddit OG when the crawler comment has an author but no parseable body (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: new Response(redditCrawlerCommentHtml(
+                    '<div class="thing comment" id="thing_t1_live456" data-author="someone">',
+                    '<div class="usertext-body"></div>',
+                ), { status: 200, headers: { 'Content-Type': 'text/html' } }),
+            });
+            assertRedditCommentTransient(response);
+        },
+    },
+    {
+        name: 'redditHandler tombstones when JSON is 403 and the crawler shows a deleted comment (#71)',
+        run: async () => {
+            for (const marker of ['[deleted]', '[removed]']) {
+                const { response } = await runRedditCommentScenario({
+                    json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                    crawler: new Response(redditCrawlerCommentHtml(
+                        '<div class="thing comment deleted" id="thing_t1_live456"'
+                            + ' data-permalink="/r/programming/comments/abc123/parent_discussion_thread/live456/">',
+                        `<div class="md"><p>${marker}</p></div>`,
+                    ), { status: 200, headers: { 'Content-Type': 'text/html' } }),
+                });
+                assertRedditCommentTombstone(response);
+                assert.equal(
+                    response.data?.url,
+                    'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/live456/',
+                );
+            }
+        },
+    },
+    {
+        name: 'redditHandler tombstones when JSON is 403 and the crawler page is 404 (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: new Response('page not found', { status: 404 }),
+            });
+            assertRedditCommentTombstone(response);
+        },
+    },
+    {
+        name: 'redditHandler renders the full card when JSON is 500 and the crawler has the live comment (#71)',
+        run: async () => {
+            const { response } = await runRedditCommentScenario({
+                json: new Response('server error', { status: 500, statusText: 'Internal Server Error' }),
+                crawler: new Response(redditCrawlerCommentHtml(
+                    '<div class="thing comment" id="thing_t1_live456" data-author="kemitche"'
+                        + ' data-permalink="/r/programming/comments/abc123/parent_discussion_thread/live456/">',
+                    '<div class="md"><p>Still here.</p></div>',
+                ), { status: 200, headers: { 'Content-Type': 'text/html' } }),
+            });
+            assert.equal(response.success, true);
+            assert.equal(response.data?.title, 'r/programming \u2022 Parent discussion thread');
+            const commentSection = response.data?.sections?.find(
+                (section) => section.title?.startsWith('Comment by '),
+            );
+            assert.equal(commentSection?.authorName, 'u/kemitche');
+            assert.match(commentSection?.body || '', /Still here\./);
+            assert.equal(
+                response.data?.sections?.some((section) => section.kind === 'tombstone'),
+                false,
+            );
+        },
+    },
+    {
+        name: 'embed route redirects Discord to Reddit on a transient comment failure (#71)',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url === REDDIT_OUTAGE_COMMENT_URL) return new Response(null, { status: 200 });
+                    if (url.includes('.json')) return new Response('busy', { status: 503 });
+                    if (url.startsWith('https://old.reddit.com/')) return new Response('busy', { status: 503 });
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+                const response = await app.request(
+                    '/embed?url=' + encodeURIComponent(REDDIT_OUTAGE_COMMENT_URL),
+                    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' } },
+                    {} as Env,
+                );
+                assert.equal(response.status, 302);
+                assert.equal(response.headers.get('Location'), REDDIT_OUTAGE_COMMENT_URL);
             } finally {
                 globalThis.fetch = originalFetch;
             }
