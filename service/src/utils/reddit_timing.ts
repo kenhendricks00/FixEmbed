@@ -36,6 +36,14 @@ interface RedditFetchRecord {
     ms: number;
     timedOut: boolean;
     error?: string;
+    /** 1 for the first request, 2 for its retry. Set only on stages that can retry. */
+    attempt?: number;
+}
+
+/** Extra fields for one `reddit_fetch` line. */
+export interface RedditFetchDetails {
+    /** 1 for the first request, 2 for its retry (#98). */
+    attempt?: number;
 }
 
 function httpStatusFromError(error: unknown): number | null {
@@ -74,8 +82,10 @@ export class RedditFetchTrace {
         stage: RedditFetchStage,
         run: () => Promise<T>,
         statusOf?: (value: T) => number | undefined,
+        details: RedditFetchDetails = {},
     ): Promise<T> {
         const start = this.now();
+        const attempt = details.attempt === undefined ? {} : { attempt: details.attempt };
         try {
             const value = await run();
             const status = statusOf?.(value);
@@ -85,6 +95,7 @@ export class RedditFetchTrace {
                 ok: status === undefined ? true : status >= 200 && status < 300,
                 ms: Math.max(0, this.now() - start),
                 timedOut: false,
+                ...attempt,
             });
             return value;
         } catch (error) {
@@ -97,6 +108,7 @@ export class RedditFetchTrace {
                 // fetchWithTimeout aborts its own controller when the timeout fires.
                 timedOut: name === 'AbortError' || name === 'TimeoutError',
                 error: name,
+                ...attempt,
             });
             throw error;
         }
@@ -119,6 +131,7 @@ export class RedditFetchTrace {
                 ms: record.ms,
                 timed_out: record.timedOut,
                 ...(record.error ? { error: record.error } : {}),
+                ...(record.attempt !== undefined ? { attempt: record.attempt } : {}),
                 ...idFields(ids),
             });
         }
@@ -141,8 +154,9 @@ export function timeRedditFetch<T>(
     stage: RedditFetchStage,
     run: () => Promise<T>,
     statusOf?: (value: T) => number | undefined,
+    details?: RedditFetchDetails,
 ): Promise<T> {
-    return trace ? trace.time(stage, run, statusOf) : run();
+    return trace ? trace.time(stage, run, statusOf, details) : run();
 }
 
 export const responseStatus = (response: Response): number => response.status;

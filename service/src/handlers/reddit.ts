@@ -3,7 +3,13 @@
  */
 
 import type { EmbedData, Env, HandlerOptions, HandlerResponse, PlatformHandler } from '../types.ts';
-import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import {
+    createTimeoutBudget,
+    parseRedditUrl,
+    fetchJSON,
+    fetchWithTimeout,
+    truncateText,
+} from '../utils/fetch.ts';
 import {
     RedditFetchTrace,
     responseStatus,
@@ -108,6 +114,69 @@ const MAX_REDDIT_EMBED_HTML_BYTES = 512_000;
 const MAX_REDDIT_MANIFEST_BYTES = 128_000;
 const MAX_REDDIT_VIDEO_HEIGHT = 720;
 
+/**
+ * Time limits for a Reddit comment permalink (#98). The bot gives /api/embed 15s
+ * with no retry, and every Reddit call used to get fetchWithTimeout's default 10s,
+ * so one slow call could cost ~10s. Each call now has its own cap, and all of them
+ * share one budget so a retry or a later stage can never push the request past it.
+ * Posts, share links and other platforms keep the default.
+ */
+export const REDDIT_COMMENT_TIMEOUTS = {
+    /** Whole comment request, from the canonical-path probe to the last icon lookup. */
+    budgetMs: 8_000,
+    /** Canonical-path probe (`probe`). */
+    probeMs: 3_000,
+    /** Reddit's JSON API, headers and body (`json`). */
+    jsonMs: 3_000,
+    /** old.reddit page headers (`old_reddit`), and separately its body read (`old_reddit_body`). */
+    oldRedditMs: 4_000,
+    /** Each subreddit icon lookup, headers and body (`icon*`). */
+    iconMs: 2_000,
+    /** old.reddit is retried once only when at least this much budget is left. */
+    minRetryMs: 1_000,
+    /** Icon lookups are skipped (fallback icon) when less than this is left. */
+    minIconMs: 250,
+} as const;
+
+/** Remaining time from a comment request's budget, capped at `maxMs`. */
+type RedditCommentBudget = (maxMs?: number) => number;
+
+function isRedditTimeoutError(error: unknown): boolean {
+    const name = typeof error === 'object' && error !== null && 'name' in error
+        ? String((error as { name?: unknown }).name)
+        : '';
+    return name === 'AbortError' || name === 'TimeoutError';
+}
+
+/**
+ * fetchJSON for the comment path: one timeout covers the response headers and the
+ * JSON body read. Non-2xx throws the same `HTTP <status>: <text>` error as fetchJSON.
+ */
+async function fetchRedditCommentJSON<T>(
+    url: string,
+    headers: Record<string, string>,
+    timeoutMs: number,
+): Promise<T> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'FixEmbed/1.0',
+                ...headers,
+            },
+            signal: controller.signal,
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json() as T;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 type RedditVideo = {
     url: string;
     width: number;
@@ -195,9 +264,12 @@ async function fetchSubredditIcon(
     fallback = '',
     initialCookie = '',
     trace?: RedditFetchTrace,
+    budget?: RedditCommentBudget,
 ): Promise<string | undefined> {
     const fallbackIcon = decodeRedditHtml(fallback) || undefined;
     const encodedSubreddit = encodeURIComponent(safeDecodeURIComponent(subreddit));
+    // Comment path (#98): too little budget left for a lookup means the fallback icon.
+    const outOfTime = () => budget !== undefined && budget() < REDDIT_COMMENT_TIMEOUTS.minIconMs;
     const fetchCommunityIcon = async (
         cookie = '',
         stages: readonly RedditFetchStage[] = ['icon', 'icon_fallback'],
@@ -213,11 +285,18 @@ async function fetchSubredditIcon(
         ];
         let lastError: unknown;
         for (const [index, url] of urls.entries()) {
+            if (outOfTime()) break;
             try {
                 const community = await timeRedditFetch(
                     trace,
                     stages[index],
-                    () => fetchJSON<RedditCommunityResponse>(url, { headers }),
+                    () => budget
+                        ? fetchRedditCommentJSON<RedditCommunityResponse>(
+                            url,
+                            headers,
+                            budget(REDDIT_COMMENT_TIMEOUTS.iconMs),
+                        )
+                        : fetchJSON<RedditCommunityResponse>(url, { headers }),
                 );
                 const icon = decodeRedditHtml(
                     community?.data?.community_icon || community?.data?.icon_img || '',
@@ -238,6 +317,7 @@ async function fetchSubredditIcon(
         if (initialCookie) return fallbackIcon;
     }
 
+    if (outOfTime()) return fallbackIcon;
     try {
         const bootstrap = await timeRedditFetch(trace, 'icon_bootstrap', () => fetchWithTimeout(
             `https://embed.reddit.com/r/${encodedSubreddit}/`,
@@ -247,6 +327,7 @@ async function fetchSubredditIcon(
                     'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
                 },
             },
+            budget?.(REDDIT_COMMENT_TIMEOUTS.iconMs),
         ), responseStatus);
         if (!bootstrap.ok) return fallbackIcon;
         const cookie = redditCookieHeader(bootstrap);
@@ -310,24 +391,41 @@ function linkedArticleSection(value: string | undefined) {
     }];
 }
 
-async function readBoundedText(response: Response, maxBytes: number): Promise<string> {
+/**
+ * Read up to `maxBytes` of a response body as text. With `timeoutMs`, a read that
+ * is still going after that long cancels the body and throws a `TimeoutError`.
+ */
+async function readBoundedText(response: Response, maxBytes: number, timeoutMs?: number): Promise<string> {
     const declared = Number.parseInt(response.headers.get('Content-Length') || '', 10);
     if (Number.isFinite(declared) && declared > maxBytes) return '';
     if (!response.body) return '';
 
     const reader = response.body.getReader();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const deadline = timeoutMs === undefined
+        ? undefined
+        : new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new DOMException('Response body read timed out', 'TimeoutError'));
+                reader.cancel().catch(() => {});
+            }, timeoutMs);
+        });
     const decoder = new TextDecoder();
     let size = 0;
     let html = '';
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > maxBytes) {
-            await reader.cancel();
-            return '';
+    try {
+        while (true) {
+            const { done, value } = await (deadline ? Promise.race([reader.read(), deadline]) : reader.read());
+            if (done) break;
+            size += value.byteLength;
+            if (size > maxBytes) {
+                await reader.cancel();
+                return '';
+            }
+            html += decoder.decode(value, { stream: true });
         }
-        html += decoder.decode(value, { stream: true });
+    } finally {
+        clearTimeout(timeoutId);
     }
     return html + decoder.decode();
 }
@@ -895,22 +993,42 @@ async function recoverRedditCommentFromCrawlerPage(
     postId: string,
     commentId: string,
     trace?: RedditFetchTrace,
+    budget: RedditCommentBudget = createTimeoutBudget(REDDIT_COMMENT_TIMEOUTS.budgetMs),
 ): Promise<RedditCommentCrawlerResult> {
     const pageUrl = `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${encodeURIComponent(postId)}/_/${encodeURIComponent(commentId)}/`;
-    const response = await timeRedditFetch(trace, 'old_reddit', () => fetchWithTimeout(pageUrl, {
+    const fetchPage = (attempt: number) => timeRedditFetch(trace, 'old_reddit', () => fetchWithTimeout(pageUrl, {
         headers: {
             'Accept': 'text/html',
             'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
         },
-    }), responseStatus);
+    }, budget(REDDIT_COMMENT_TIMEOUTS.oldRedditMs)), responseStatus, { attempt });
+    const canRetry = () => budget() >= REDDIT_COMMENT_TIMEOUTS.minRetryMs;
+
+    // One retry (#98), only for a timeout or a 5xx, and only with budget left.
+    // 403/404/429 and other errors are Reddit's answer and are never retried.
+    let response: Response;
+    try {
+        response = await fetchPage(1);
+    } catch (error) {
+        if (!isRedditTimeoutError(error) || !canRetry()) throw error;
+        response = await fetchPage(2);
+    }
+    if (response.status >= 500 && response.status <= 599 && canRetry()) {
+        response.body?.cancel().catch(() => {});
+        response = await fetchPage(2);
+    }
     if (response.status === 404) return { kind: 'gone' };
     if (!response.ok) return { kind: 'unknown', reason: `crawler HTTP ${response.status}` };
 
-    // The body read has no timeout of its own, so it is timed as its own stage.
+    // fetchWithTimeout stops at the headers, so the body read has its own cap and stage.
     const html = await timeRedditFetch(
         trace,
         'old_reddit_body',
-        () => readBoundedText(response, MAX_ARTICLE_HTML_BYTES),
+        () => readBoundedText(
+            response,
+            MAX_ARTICLE_HTML_BYTES,
+            budget(REDDIT_COMMENT_TIMEOUTS.oldRedditMs),
+        ),
     );
     if (!html) return { kind: 'unknown', reason: 'crawler empty html' };
 
@@ -962,6 +1080,7 @@ async function recoverRedditCommentFromCrawlerPage(
         REDDIT_FALLBACK_ICON,
         redditCookieHeader(response),
         trace,
+        budget,
     );
 
     return {
@@ -1271,6 +1390,11 @@ async function handleReddit(
     timing: { ids?: RedditCommentIds },
 ): Promise<HandlerResponse> {
     let resolvedUrl = url;
+    // Comment permalinks run on one shared time budget (#98). Share links and
+    // posts keep the default timeouts until a share link resolves to a comment.
+    let commentBudget: RedditCommentBudget | undefined = parseRedditUrl(url)?.commentId
+        ? createTimeoutBudget(REDDIT_COMMENT_TIMEOUTS.budgetMs)
+        : undefined;
     try {
         const candidate = new URL(url);
         const hostname = candidate.hostname.toLowerCase().replace(/^www\./, '');
@@ -1290,7 +1414,7 @@ async function handleReddit(
                         'Accept': 'text/html',
                         'User-Agent': 'FixEmbed/1.0 (embed service)',
                     },
-                }), responseStatus);
+                }, commentBudget?.(REDDIT_COMMENT_TIMEOUTS.probeMs)), responseStatus);
                 const location = response.headers.get('location');
                 if (!location) {
                     if (isShareUrl) {
@@ -1346,6 +1470,7 @@ async function handleReddit(
     }
 
     if (parsed.commentId) {
+        commentBudget ??= createTimeoutBudget(REDDIT_COMMENT_TIMEOUTS.budgetMs);
         timing.ids = {
             subreddit: safeDecodeURIComponent(parsed.subreddit),
             postId: safeDecodeURIComponent(parsed.postId),
@@ -1359,15 +1484,21 @@ async function handleReddit(
             ? `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}/_/${commentId}.json?raw_json=1&sr_detail=1&limit=1`
             : `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json?raw_json=1&sr_detail=1`;
 
-        const fetchListing = () => fetchJSON<Array<{
+        type RedditListing = Array<{
             data: {
                 children: Array<RedditListingChild<RedditPost | (RedditComment & { replies?: unknown })>>;
             };
-        }>>(apiUrl, {
-            headers: {
-                'User-Agent': 'FixEmbed/1.0 (embed service)',
-            },
-        });
+        }>;
+        const listingHeaders = {
+            'User-Agent': 'FixEmbed/1.0 (embed service)',
+        };
+        const fetchListing = () => commentId && commentBudget
+            ? fetchRedditCommentJSON<RedditListing>(
+                apiUrl,
+                listingHeaders,
+                commentBudget(REDDIT_COMMENT_TIMEOUTS.jsonMs),
+            )
+            : fetchJSON<RedditListing>(apiUrl, { headers: listingHeaders });
         const response = await (commentId ? trace.time('json', fetchListing) : fetchListing());
 
         if (!response || !response[0]?.data?.children?.[0]) {
@@ -1414,6 +1545,7 @@ async function handleReddit(
                 fallbackSubredditIcon,
                 '',
                 trace,
+                commentBudget,
             );
             const parentUrl = post.permalink
                 ? `https://www.reddit.com${post.permalink}`
@@ -1561,6 +1693,7 @@ async function handleReddit(
                     postId,
                     commentId,
                     trace,
+                    commentBudget,
                 );
                 if (recovered.kind === 'card') return recovered.response;
                 if (recovered.kind === 'gone') {

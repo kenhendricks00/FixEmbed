@@ -1,5 +1,15 @@
 ## Unreleased
 
+#### **Faster Reddit comment cards when Reddit is slow (#98)**
+- A Reddit comment card can no longer wait about 10 seconds on one slow Reddit call. Before, every Reddit call for a comment could take up to 10 seconds, and one comment card took 9.6 seconds in a test.
+- Each Reddit call for a comment link now has its own limit: 3 seconds for the link check and for Reddit's API, 4 seconds for the old.reddit page and 4 seconds to read it, and 2 seconds for each subreddit icon lookup.
+- The whole comment request now has 8 seconds in total, well inside the bot's 15 second wait. Later calls only get the time that is left, and the icon lookups are skipped when less than a quarter second remains, so the card keeps Reddit's default icon.
+- If the old.reddit page times out or Reddit answers with a server error (5xx), it is tried once more, but only when at least 1 second is left. A 403, 404, 429 or any other answer is never retried.
+- Timeouts and errors still mean "Reddit is temporarily unavailable" and Discord keeps Reddit's own preview. Only Reddit saying the comment is gone shows "Comment unavailable", the same as before.
+- The `reddit_fetch` log line for the old.reddit page now has an `attempt` field (1, or 2 for the retry), so Workers Logs show how often the retry fires.
+- Reddit posts, share links before they resolve, and every other platform keep their current timeouts. The embed cache and the other log lines are unchanged.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **More mentions in link text show as plain text (#103)**
 - A mention inside backticks in a title or author name, like ``Why `@everyone` fails``, is now broken too. Code formatting in link text does not stop Discord from refusing the link, so the card could still show raw markdown. Code in comment and post text keeps its exact text as before.
 - `@everyone` and `@here` are now broken wherever they appear, including `@everyones`, `@everyone_x`, `@hereby` and `foo@here`, because Discord still reads those as mentions. Other `@` text such as email addresses or `@heroes` is unchanged.
