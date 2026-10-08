@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit text can't flip or hide parts of a card (#90)**
+- A Reddit comment could contain invisible control characters, either typed in or written as codes like `&#x202E;` that the old.reddit fallback decodes. A right-to-left override such as U+202E reversed the rest of the comment on the card, so `gnp.exe` could read as `exe.png`.
+- Comment text and post titles on Reddit comment cards now drop these characters, whichever way Reddit sends them: control characters other than tab and newline, and the bidi embedding, override and isolate marks (U+202A to U+202E, U+2066 to U+2069).
+- Normal right-to-left text, emoji and the left-to-right and right-to-left marks are unchanged.
+- The two copies of the old.reddit entity decoder are now one (part of #96).
+
 #### **Titles with @everyone are clickable links again (#103)**
 - A Reddit title such as "How do i stop regular members from using @everyone? ... (see image) ..." still showed as raw `[title](https://...)` markdown on two of three comment cards after #104 and #105.
 - Posting each version in #embedded-testing showed why: Discord ignores a zero-width space inside `@everyone` and still refuses the link, and it shows every backslash in link text instead of reading it as an escape, so `(see image\)` leaked a `\`.

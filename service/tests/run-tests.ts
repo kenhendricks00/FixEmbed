@@ -47,7 +47,7 @@ import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import { applyRequestedTranslation } from '../src/utils/translation.ts';
-import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown } from '../src/utils/markdown.ts';
+import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown, stripUnsafeText } from '../src/utils/markdown.ts';
 import {
     cleanUrl,
     createTimeoutBudget,
@@ -4463,6 +4463,50 @@ const tests: TestCase[] = [
                 decodeHtmlEntitiesOnce('&bogus; &#xD800; &#0; &#99999999; &#x110000; AT&T & co'),
                 '&bogus; &#xD800; &#0; &#99999999; &#x110000; AT&T & co',
             );
+        },
+    },
+    {
+        name: 'decodeHtmlEntitiesOnce drops control and bidi characters, literal or from entities (#90)',
+        run: () => {
+            // C0 (not tab/newline), DEL, C1, bidi embeddings/overrides, isolates.
+            const unsafe = [
+                0x01, 0x07, 0x08, 0x0b, 0x0c, 0x0d, 0x1b, 0x1f, 0x7f, 0x80, 0x85, 0x9f,
+                0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069,
+            ];
+            for (const codePoint of unsafe) {
+                const hex = codePoint.toString(16);
+                assert.equal(decodeHtmlEntitiesOnce(`a&#x${hex};b`), 'ab', `&#x${hex};`);
+                assert.equal(decodeHtmlEntitiesOnce(`a&#${codePoint};b`), 'ab', `&#${codePoint};`);
+                assert.equal(decodeHtmlEntitiesOnce(`a${String.fromCodePoint(codePoint)}b`), 'ab', `literal ${hex}`);
+                assert.equal(stripUnsafeText(`a${String.fromCodePoint(codePoint)}b`), 'ab', `strip ${hex}`);
+            }
+            // Tab, newline, LRM/RLM, ZWJ, line separator and emoji stay.
+            assert.equal(
+                decodeHtmlEntitiesOnce('a&#9;b&#10;c&#x200E;d&#x200F;e&#x200D;f&#x2028;g&#x1F600;'),
+                'a\tb\nc‎d‏e‍f g\u{1F600}',
+            );
+            // The converter uses the same decoder, so the override never reaches a card.
+            assert.equal(
+                redditHtmlToDiscordMarkdown('<div class="md"><p>open &#x202E;gnp.exe&#x202C; now &#x2067;x&#x2069;</p></div>'),
+                'open gnp.exe now x',
+            );
+        },
+    },
+    {
+        name: 'redditHandler strips bidi overrides from Reddit JSON comment text (#90)',
+        run: async () => {
+            const result = await runRedditBudgetScenario({
+                json: () => redditRealCommentJson({
+                    id: 'o2o5rsi',
+                    author: 'someone',
+                    body: 'open ‮gnp.exe‬ now\u0007',
+                    score: 5,
+                    created_utc: 1769790000,
+                    permalink: '/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2o5rsi/',
+                }),
+            });
+            assert.equal(result.response.success, true);
+            assert.equal(result.response.data?.sections?.[0]?.body, 'open gnp.exe now');
         },
     },
     {
