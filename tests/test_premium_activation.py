@@ -10,6 +10,8 @@ from premium_activation import (
     PAGE_FOOTER,
     checklist_settings_targets,
     evaluate_activation_checklist,
+    format_checklist_row,
+    harden_settings_path,
 )
 from translations import TRANSLATIONS, get_text
 
@@ -132,6 +134,99 @@ class PremiumActivationChecklistTests(unittest.TestCase):
         # Non-premium path still advertises perks + SKU subscribe.
         self.assertIn("premium_perks_title", source)
         self.assertIn("ButtonStyle.premium", source)
+
+
+    def test_harden_settings_path_is_single_nbsp_code_span(self):
+        path = harden_settings_path("`/settings` → Embed Color")
+        self.assertTrue(path.startswith("`"))
+        self.assertTrue(path.endswith("`"))
+        self.assertEqual(2, path.count("`"))
+        inner = path[1:-1]
+        self.assertNotIn(" ", inner)
+        self.assertIn("\u00a0", inner)
+        self.assertIn("/settings", inner)
+        self.assertIn("Embed\u00a0Color", inner)
+
+    def test_checklist_rows_keep_each_settings_path_intact(self):
+        pages = (
+            PAGE_EMBED_COLOR,
+            PAGE_FOOTER,
+            PAGE_CARD_STYLE,
+            PAGE_EXCLUSIONS,
+            PAGE_ANALYTICS,
+        )
+        for page in pages:
+            translated = get_text("en", "premium_item_path", page=page)
+            # Translation wraps the whole path in one code span (#73).
+            self.assertTrue(translated.startswith("`"))
+            self.assertTrue(translated.endswith("`"))
+            self.assertEqual(2, translated.count("`"))
+            row = format_checklist_row("⬜", "Configure perk", translated)
+            label_line, path_line = row.split("\n", 1)
+            self.assertTrue(label_line.startswith("⬜ "))
+            self.assertNotIn("`/settings", label_line)
+            self.assertTrue(path_line.startswith("`"))
+            self.assertTrue(path_line.endswith("`"))
+            self.assertEqual(2, path_line.count("`"))
+            inner = path_line[1:-1]
+            # Path is one token: no ordinary spaces Discord can wrap on.
+            self.assertNotIn(" ", inner)
+            self.assertIn("/settings", inner)
+            self.assertNotIn("/ settings", inner)
+            for word in page.split():
+                self.assertIn(word, inner)
+            # Contiguous page name via NBSP (no "Color" orphan).
+            self.assertIn(page.replace(" ", "\u00a0"), inner)
+            # Sane length for Discord mobile TextDisplay (~narrow column).
+            self.assertLessEqual(len(inner), 40)
+
+    def test_activation_checklist_render_keeps_paths_on_own_nbsp_lines(self):
+        """Mirror format_premium_activation_checklist without importing main (it runs the bot)."""
+        items = evaluate_activation_checklist({})
+        lines = []
+        for item in items:
+            mark = get_text(
+                "en",
+                "premium_checklist_done" if item.configured else "premium_checklist_todo",
+            )
+            if item.key == "color":
+                label = get_text("en", "premium_item_color_todo")
+            else:
+                suffix = "done" if item.configured else "todo"
+                label = get_text("en", f"premium_item_{item.key}_{suffix}")
+            if item.settings_page:
+                path = get_text("en", "premium_item_path", page=item.settings_page)
+                lines.append(format_checklist_row(mark, label, path))
+            else:
+                lines.append(format_checklist_row(mark, label))
+        rendered = "\n".join(lines)
+
+        path_lines = [
+            line for line in rendered.splitlines() if line.startswith("`/settings")
+        ]
+        self.assertEqual(5, len(path_lines))
+        for line in path_lines:
+            self.assertTrue(line.endswith("`"))
+            self.assertEqual(2, line.count("`"))
+            inner = line[1:-1]
+            self.assertNotIn(" ", inner, msg=repr(line))
+            self.assertIn("\u00a0", inner)
+            self.assertNotIn("/ settings", inner)
+            self.assertLessEqual(len(inner), 40)
+        self.assertIn("Bot/webhook auto-fix is on (automatic)", rendered)
+        all_lines = rendered.splitlines()
+        bot_idx = next(
+            i
+            for i, line in enumerate(all_lines)
+            if "Bot/webhook auto-fix is on (automatic)" in line
+        )
+        # bot_fix is last and has no path line under it.
+        self.assertEqual(bot_idx, len(all_lines) - 1)
+
+        source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("format_checklist_row", source)
 
 
 if __name__ == "__main__":

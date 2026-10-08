@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Premium checklist path wrapping (#73)**
+- Active-subscriber `/premium` checklist rows now put each `/settings → ...` target on its own line inside one inline code span.
+- Spaces inside that path use non-breaking spaces so Discord cannot wrap mid-path (after `/`, or so page names like Embed Color / Card Style stay intact) on desktop or mobile.
+- Checklist meaning is unchanged: same configured-vs-available perks, same deep-links, non-premium `/premium` untouched.
+
 #### **Reddit comment outages vs deletions (#71)**
 - Reddit comment cards only show "Comment unavailable" when Reddit says the comment is gone: a 404, a `[deleted]` or `[removed]` body or author, or the comment missing from a normal listing.
 - When Reddit is rate limited, down, blocking the request, timing out, or sending a broken response, the Worker no longer guesses. It returns a temporary failure that redirects to Reddit, so Discord keeps Reddit's own preview instead of a wrong "deleted" card.
