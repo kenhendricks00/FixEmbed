@@ -2,8 +2,16 @@
  * FixEmbed Service - Reddit Handler
  */
 
-import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.ts';
+import type { EmbedData, Env, HandlerOptions, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import {
+    RedditFetchTrace,
+    responseStatus,
+    timeRedditFetch,
+    type RedditCommentIds,
+    type RedditCommentOutcome,
+    type RedditFetchStage,
+} from '../utils/reddit_timing.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
 import { redditHtmlToDiscordMarkdown } from '../utils/markdown.ts';
@@ -186,10 +194,14 @@ async function fetchSubredditIcon(
     subreddit: string,
     fallback = '',
     initialCookie = '',
+    trace?: RedditFetchTrace,
 ): Promise<string | undefined> {
     const fallbackIcon = decodeRedditHtml(fallback) || undefined;
     const encodedSubreddit = encodeURIComponent(safeDecodeURIComponent(subreddit));
-    const fetchCommunityIcon = async (cookie = ''): Promise<string | undefined> => {
+    const fetchCommunityIcon = async (
+        cookie = '',
+        stages: readonly RedditFetchStage[] = ['icon', 'icon_fallback'],
+    ): Promise<string | undefined> => {
         const headers: Record<string, string> = {
             'Accept': 'application/json',
             'User-Agent': 'Discordbot/2.0; +https://fixembed.app',
@@ -200,9 +212,13 @@ async function fetchSubredditIcon(
             `https://www.reddit.com/r/${encodedSubreddit}/about.json?raw_json=1`,
         ];
         let lastError: unknown;
-        for (const url of urls) {
+        for (const [index, url] of urls.entries()) {
             try {
-                const community = await fetchJSON<RedditCommunityResponse>(url, { headers });
+                const community = await timeRedditFetch(
+                    trace,
+                    stages[index],
+                    () => fetchJSON<RedditCommunityResponse>(url, { headers }),
+                );
                 const icon = decodeRedditHtml(
                     community?.data?.community_icon || community?.data?.icon_img || '',
                 );
@@ -223,7 +239,7 @@ async function fetchSubredditIcon(
     }
 
     try {
-        const bootstrap = await fetchWithTimeout(
+        const bootstrap = await timeRedditFetch(trace, 'icon_bootstrap', () => fetchWithTimeout(
             `https://embed.reddit.com/r/${encodedSubreddit}/`,
             {
                 headers: {
@@ -231,11 +247,11 @@ async function fetchSubredditIcon(
                     'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
                 },
             },
-        );
+        ), responseStatus);
         if (!bootstrap.ok) return fallbackIcon;
         const cookie = redditCookieHeader(bootstrap);
         if (!cookie) return fallbackIcon;
-        return await fetchCommunityIcon(cookie) || fallbackIcon;
+        return await fetchCommunityIcon(cookie, ['icon_retry', 'icon_retry_fallback']) || fallbackIcon;
     } catch {
         return fallbackIcon;
     }
@@ -878,18 +894,24 @@ async function recoverRedditCommentFromCrawlerPage(
     subreddit: string,
     postId: string,
     commentId: string,
+    trace?: RedditFetchTrace,
 ): Promise<RedditCommentCrawlerResult> {
     const pageUrl = `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${encodeURIComponent(postId)}/_/${encodeURIComponent(commentId)}/`;
-    const response = await fetchWithTimeout(pageUrl, {
+    const response = await timeRedditFetch(trace, 'old_reddit', () => fetchWithTimeout(pageUrl, {
         headers: {
             'Accept': 'text/html',
             'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
         },
-    });
+    }), responseStatus);
     if (response.status === 404) return { kind: 'gone' };
     if (!response.ok) return { kind: 'unknown', reason: `crawler HTTP ${response.status}` };
 
-    const html = await readBoundedText(response, MAX_ARTICLE_HTML_BYTES);
+    // The body read has no timeout of its own, so it is timed as its own stage.
+    const html = await timeRedditFetch(
+        trace,
+        'old_reddit_body',
+        () => readBoundedText(response, MAX_ARTICLE_HTML_BYTES),
+    );
     if (!html) return { kind: 'unknown', reason: 'crawler empty html' };
 
     const located = findRedditCrawlerCommentTag(html, commentId);
@@ -939,6 +961,7 @@ async function recoverRedditCommentFromCrawlerPage(
         subreddit,
         REDDIT_FALLBACK_ICON,
         redditCookieHeader(response),
+        trace,
     );
 
     return {
@@ -1213,224 +1236,174 @@ export const redditHandler: PlatformHandler = {
         /redd\.it\/([^\/\?]+)/i,
     ],
 
-    async handle(url: string, env: Env): Promise<HandlerResponse> {
-        let resolvedUrl = url;
+    async handle(url: string, env: Env, options?: HandlerOptions): Promise<HandlerResponse> {
+        const trace = new RedditFetchTrace();
+        const timing: { ids?: RedditCommentIds } = {};
+        let result: HandlerResponse | undefined;
         try {
-            const candidate = new URL(url);
-            const hostname = candidate.hostname.toLowerCase().replace(/^www\./, '');
-            const isShareUrl = candidate.protocol === 'https:'
-                && hostname === 'reddit.com'
-                && /^\/r\/[^/]+\/s\/[^/]+\/?$/i.test(candidate.pathname);
-            // Wrong-subreddit comment/post permalinks 301 to the canonical /r/{real}/comments/... path.
-            const isCommentsUrl = candidate.protocol === 'https:'
-                && hostname === 'reddit.com'
-                && /^\/r\/[^/]+\/comments\/[^/]+/i.test(candidate.pathname);
-
-            if (isShareUrl || isCommentsUrl) {
+            result = await handleReddit(url, env, trace, timing);
+            return result;
+        } finally {
+            if (timing.ids) {
                 try {
-                    const response = await fetchWithTimeout(url, {
-                        redirect: 'manual',
-                        headers: {
-                            'Accept': 'text/html',
-                            'User-Agent': 'FixEmbed/1.0 (embed service)',
-                        },
-                    });
-                    const location = response.headers.get('location');
-                    if (!location) {
-                        if (isShareUrl) {
-                            return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
-                        }
-                    } else {
-                        const destination = new URL(location, url);
-                        const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
-                        if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
-                            return {
-                                success: false,
-                                error: isShareUrl ? 'Invalid Reddit share redirect' : 'Invalid Reddit comment redirect',
-                                redirect: url,
-                            };
-                        }
-                        resolvedUrl = destination.toString();
-                    }
-                } catch (resolveError) {
+                    trace.flush(timing.ids, redditCommentOutcome(result), options?.embedCache ?? 'none');
+                } catch {
+                    // Timing logs (#98) must never change what the handler returns.
+                }
+            }
+        }
+    },
+};
+
+/** Classify a comment-path result for the #98 timing summary. */
+function redditCommentOutcome(result: HandlerResponse | undefined): RedditCommentOutcome {
+    if (!result) return 'error';
+    if (result.success) {
+        return result.data?.sections?.[0]?.kind === 'tombstone' ? 'gone' : 'card';
+    }
+    return result.error === REDDIT_TRANSIENT_ERROR ? 'temporary' : 'error';
+}
+
+async function handleReddit(
+    url: string,
+    env: Env,
+    trace: RedditFetchTrace,
+    timing: { ids?: RedditCommentIds },
+): Promise<HandlerResponse> {
+    let resolvedUrl = url;
+    try {
+        const candidate = new URL(url);
+        const hostname = candidate.hostname.toLowerCase().replace(/^www\./, '');
+        const isShareUrl = candidate.protocol === 'https:'
+            && hostname === 'reddit.com'
+            && /^\/r\/[^/]+\/s\/[^/]+\/?$/i.test(candidate.pathname);
+        // Wrong-subreddit comment/post permalinks 301 to the canonical /r/{real}/comments/... path.
+        const isCommentsUrl = candidate.protocol === 'https:'
+            && hostname === 'reddit.com'
+            && /^\/r\/[^/]+\/comments\/[^/]+/i.test(candidate.pathname);
+
+        if (isShareUrl || isCommentsUrl) {
+            try {
+                const response = await trace.time('probe', () => fetchWithTimeout(url, {
+                    redirect: 'manual',
+                    headers: {
+                        'Accept': 'text/html',
+                        'User-Agent': 'FixEmbed/1.0 (embed service)',
+                    },
+                }), responseStatus);
+                const location = response.headers.get('location');
+                if (!location) {
                     if (isShareUrl) {
+                        return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
+                    }
+                } else {
+                    const destination = new URL(location, url);
+                    const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
+                    if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
                         return {
                             success: false,
-                            error: resolveError instanceof Error
-                                ? resolveError.message
-                                : 'Could not resolve Reddit share link',
+                            error: isShareUrl ? 'Invalid Reddit share redirect' : 'Invalid Reddit comment redirect',
                             redirect: url,
                         };
                     }
-                    // Comment/post permalinks can still be fetched from the original URL if
-                    // the canonical redirect probe is blocked or unavailable.
+                    resolvedUrl = destination.toString();
                 }
-            }
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Could not resolve Reddit share link',
-                redirect: url,
-            };
-        }
-
-        const parsed = parseRedditUrl(resolvedUrl);
-
-        if (!parsed) {
-            // Try short URL format
-            const shortMatch = url.match(/redd\.it\/([^\/\?]+)/i);
-            if (!shortMatch) {
-                return { success: false, error: 'Invalid Reddit URL' };
-            }
-            // Redirect short URLs
-            return {
-                success: false,
-                redirect: `https://reddit.com/comments/${shortMatch[1]}`
-            };
-        }
-
-        try {
-            const commentId = parsed.commentId;
-            const apiUrl = commentId
-                ? `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}/_/${commentId}.json?raw_json=1&sr_detail=1&limit=1`
-                : `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json?raw_json=1&sr_detail=1`;
-
-            const response = await fetchJSON<Array<{
-                data: {
-                    children: Array<RedditListingChild<RedditPost | (RedditComment & { replies?: unknown })>>;
-                };
-            }>>(apiUrl, {
-                headers: {
-                    'User-Agent': 'FixEmbed/1.0 (embed service)',
-                },
-            });
-
-            if (!response || !response[0]?.data?.children?.[0]) {
-                if (commentId) {
-                    // An empty or malformed listing is a shape problem, not proof the
-                    // comment is gone. Let the catch try the crawler page instead.
-                    throw new Error('Reddit returned an empty comment listing');
-                }
-                return {
-                    success: false,
-                    error: 'Post not found',
-                };
-            }
-
-            const postChild = response[0].data.children[0];
-            // Listing[0] is the link/post; older fixtures omit kind, so only reject explicit non-posts.
-            if (postChild.kind && postChild.kind !== 't3') {
-                if (commentId) {
-                    throw new Error('Reddit returned an unexpected comment listing shape');
-                }
-                return { success: false, error: 'Post not found' };
-            }
-            const post = postChild.data as RedditPost;
-
-            if (commentId) {
-                const commentChildren = (response[1]?.data?.children || []) as Array<
-                    RedditListingChild<RedditComment & { replies?: unknown }>
-                >;
-                const comment = findRedditComment(commentChildren, commentId);
-                if (!comment || isUnavailableRedditComment(comment)) {
-                    return unavailableRedditCommentResponse(
-                        post.subreddit || safeDecodeURIComponent(parsed.subreddit),
-                        safeDecodeURIComponent(parsed.postId),
-                        safeDecodeURIComponent(commentId),
-                        comment?.permalink,
-                    );
-                }
-
-                const fallbackSubredditIcon = decodeRedditHtml(
-                    post.sr_detail?.community_icon || post.sr_detail?.icon_img || '',
-                );
-                const subredditIcon = await fetchSubredditIcon(
-                    post.subreddit,
-                    fallbackSubredditIcon,
-                );
-                const parentUrl = post.permalink
-                    ? `https://www.reddit.com${post.permalink}`
-                    : `https://www.reddit.com/r/${encodeURIComponent(post.subreddit)}/comments/${encodeURIComponent(parsed.postId)}/`;
-                const timestamp = Number.isFinite(comment.created_utc) && comment.created_utc > 0
-                    ? new Date(comment.created_utc * 1000).toISOString()
-                    : undefined;
-                const parentImage = (() => {
-                    const gallery = redditGalleryImages(post);
-                    if (gallery.length) return gallery[0];
-                    const direct = directRedditImageUrl(post.url);
-                    if (direct) return direct;
-                    const thumb = decodeRedditHtml(post.thumbnail || '');
-                    if (thumb && !['self', 'default', 'nsfw', 'spoiler', 'image'].includes(thumb)) {
-                        return thumb;
-                    }
-                    return undefined;
-                })();
-
-                return {
-                    success: true,
-                    source: 'first-party',
-                    data: buildRedditCommentCard({
-                        subreddit: post.subreddit,
-                        postId: parsed.postId,
-                        commentId,
-                        commentAuthor: comment.author,
-                        commentBody: comment.body,
-                        commentPermalinkPath: comment.permalink,
-                        commentScore: Number(comment.score ?? comment.ups),
-                        commentTimestamp: timestamp,
-                        parentTitle: post.title,
-                        parentUrl,
-                        parentAuthor: post.author,
-                        parentCommentCount: post.num_comments,
-                        parentImage,
-                        parentOver18: post.over_18 === true,
-                        parentSpoiler: post.spoiler === true,
-                        authorAvatar: subredditIcon,
-                    }),
-                };
-            }
-
-            // Build description (no stats here - moved to oEmbed row)
-            const description = post.selftext ? truncateText(post.selftext, 3000) : '';
-
-            // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
-            const stats = formatStats({
-                comments: post.num_comments,
-                likes: post.score, // Reddit uses score/upvotes as "likes"
-            });
-
-            // Check for media
-            let image: string | undefined;
-            const images = redditGalleryImages(post);
-            const directImageUrl = directRedditImageUrl(post.url);
-            let video: RedditVideo | undefined;
-
-            // Video content
-            const redditVideo = post.secure_media?.reddit_video || post.media?.reddit_video;
-            if (post.is_video && redditVideo) {
-                const thumbnail = post.thumbnail !== 'self'
-                    ? decodeRedditHtml(post.thumbnail)
-                    : undefined;
-                video = await fetchRedditMuxedVideo(post.subreddit, parsed.postId, thumbnail)
-                    || {
-                        url: redditVideo.fallback_url,
-                        width: redditVideo.width,
-                        height: redditVideo.height,
-                        thumbnail,
+            } catch (resolveError) {
+                if (isShareUrl) {
+                    return {
+                        success: false,
+                        error: resolveError instanceof Error
+                            ? resolveError.message
+                            : 'Could not resolve Reddit share link',
+                        redirect: url,
                     };
+                }
+                // Comment/post permalinks can still be fetched from the original URL if
+                // the canonical redirect probe is blocked or unavailable.
             }
-            // Image content
-            else if (!images.length && directImageUrl) {
-                image = directImageUrl;
+        }
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Could not resolve Reddit share link',
+            redirect: url,
+        };
+    }
+
+    const parsed = parseRedditUrl(resolvedUrl);
+
+    if (!parsed) {
+        // Try short URL format
+        const shortMatch = url.match(/redd\.it\/([^\/\?]+)/i);
+        if (!shortMatch) {
+            return { success: false, error: 'Invalid Reddit URL' };
+        }
+        // Redirect short URLs
+        return {
+            success: false,
+            redirect: `https://reddit.com/comments/${shortMatch[1]}`
+        };
+    }
+
+    if (parsed.commentId) {
+        timing.ids = {
+            subreddit: safeDecodeURIComponent(parsed.subreddit),
+            postId: safeDecodeURIComponent(parsed.postId),
+            commentId: safeDecodeURIComponent(parsed.commentId),
+        };
+    }
+
+    try {
+        const commentId = parsed.commentId;
+        const apiUrl = commentId
+            ? `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}/_/${commentId}.json?raw_json=1&sr_detail=1&limit=1`
+            : `https://www.reddit.com/r/${parsed.subreddit}/comments/${parsed.postId}.json?raw_json=1&sr_detail=1`;
+
+        const fetchListing = () => fetchJSON<Array<{
+            data: {
+                children: Array<RedditListingChild<RedditPost | (RedditComment & { replies?: unknown })>>;
+            };
+        }>>(apiUrl, {
+            headers: {
+                'User-Agent': 'FixEmbed/1.0 (embed service)',
+            },
+        });
+        const response = await (commentId ? trace.time('json', fetchListing) : fetchListing());
+
+        if (!response || !response[0]?.data?.children?.[0]) {
+            if (commentId) {
+                // An empty or malformed listing is a shape problem, not proof the
+                // comment is gone. Let the catch try the crawler page instead.
+                throw new Error('Reddit returned an empty comment listing');
             }
-            else if (!images.length && post.preview?.images?.[0]) {
-                const imageSource = post.preview.images[0].source;
-                // Reddit HTML-encodes URLs in the API response
-                image = imageSource.url.replace(/&amp;/g, '&');
+            return {
+                success: false,
+                error: 'Post not found',
+            };
+        }
+
+        const postChild = response[0].data.children[0];
+        // Listing[0] is the link/post; older fixtures omit kind, so only reject explicit non-posts.
+        if (postChild.kind && postChild.kind !== 't3') {
+            if (commentId) {
+                throw new Error('Reddit returned an unexpected comment listing shape');
             }
-            // External image link
-            else if (!images.length && post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                image = post.url;
+            return { success: false, error: 'Post not found' };
+        }
+        const post = postChild.data as RedditPost;
+
+        if (commentId) {
+            const commentChildren = (response[1]?.data?.children || []) as Array<
+                RedditListingChild<RedditComment & { replies?: unknown }>
+            >;
+            const comment = findRedditComment(commentChildren, commentId);
+            if (!comment || isUnavailableRedditComment(comment)) {
+                return unavailableRedditCommentResponse(
+                    post.subreddit || safeDecodeURIComponent(parsed.subreddit),
+                    safeDecodeURIComponent(parsed.postId),
+                    safeDecodeURIComponent(commentId),
+                    comment?.permalink,
+                );
             }
 
             const fallbackSubredditIcon = decodeRedditHtml(
@@ -1439,90 +1412,184 @@ export const redditHandler: PlatformHandler = {
             const subredditIcon = await fetchSubredditIcon(
                 post.subreddit,
                 fallbackSubredditIcon,
+                '',
+                trace,
             );
-            const timestamp = Number.isFinite(post.created_utc) && post.created_utc > 0
-                ? new Date(post.created_utc * 1000).toISOString()
+            const parentUrl = post.permalink
+                ? `https://www.reddit.com${post.permalink}`
+                : `https://www.reddit.com/r/${encodeURIComponent(post.subreddit)}/comments/${encodeURIComponent(parsed.postId)}/`;
+            const timestamp = Number.isFinite(comment.created_utc) && comment.created_utc > 0
+                ? new Date(comment.created_utc * 1000).toISOString()
                 : undefined;
-            const articleUrl = linkedArticleUrl(post.url);
-            if (!video && !image && !images.length) {
-                image = await fetchArticleImage(articleUrl);
-            }
-            const sections = linkedArticleSection(articleUrl);
-            const sensitivityTypes = [
-                ...(post.over_18 === true ? ['nsfw' as const] : []),
-                ...(post.spoiler === true ? ['spoiler' as const] : []),
-            ];
+            const parentImage = (() => {
+                const gallery = redditGalleryImages(post);
+                if (gallery.length) return gallery[0];
+                const direct = directRedditImageUrl(post.url);
+                if (direct) return direct;
+                const thumb = decodeRedditHtml(post.thumbnail || '');
+                if (thumb && !['self', 'default', 'nsfw', 'spoiler', 'image'].includes(thumb)) {
+                    return thumb;
+                }
+                return undefined;
+            })();
 
             return {
                 success: true,
                 source: 'first-party',
-                data: {
-                    title: `r/${post.subreddit} • ${post.title}`,
-                    description,
-                    url: `https://reddit.com${post.permalink}`,
-                    siteName: getBrandedSiteName('reddit'),
-                    authorName: `u/${post.author}`,
-                    authorUrl: `https://reddit.com/u/${post.author}`,
+                data: buildRedditCommentCard({
+                    subreddit: post.subreddit,
+                    postId: parsed.postId,
+                    commentId,
+                    commentAuthor: comment.author,
+                    commentBody: comment.body,
+                    commentPermalinkPath: comment.permalink,
+                    commentScore: Number(comment.score ?? comment.ups),
+                    commentTimestamp: timestamp,
+                    parentTitle: post.title,
+                    parentUrl,
+                    parentAuthor: post.author,
+                    parentCommentCount: post.num_comments,
+                    parentImage,
+                    parentOver18: post.over_18 === true,
+                    parentSpoiler: post.spoiler === true,
                     authorAvatar: subredditIcon,
-                    image,
-                    images: images.length ? images : undefined,
-                    video,
-                    timestamp,
-                    color: platformColors.reddit,
-                    platform: 'reddit',
-                    stats, // Consistent stats via oEmbed like other platforms
-                    sections,
-                    sensitive: sensitivityTypes.length > 0,
-                    sensitivityTypes: sensitivityTypes.length
-                        ? sensitivityTypes
-                        : undefined,
-                },
+                }),
             };
-        } catch (error) {
-            if (parsed.commentId) {
-                const subreddit = safeDecodeURIComponent(parsed.subreddit);
-                const postId = safeDecodeURIComponent(parsed.postId);
-                const commentId = safeDecodeURIComponent(parsed.commentId);
-                // Only a 404 from the JSON API is Reddit saying the comment is gone.
-                if (redditHttpStatusFromError(error) === 404) {
-                    return unavailableRedditCommentResponse(subreddit, postId, commentId);
-                }
-                console.error('Reddit comment handler error:', error);
-                try {
-                    const recovered = await recoverRedditCommentFromCrawlerPage(
+        }
+
+        // Build description (no stats here - moved to oEmbed row)
+        const description = post.selftext ? truncateText(post.selftext, 3000) : '';
+
+        // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
+        const stats = formatStats({
+            comments: post.num_comments,
+            likes: post.score, // Reddit uses score/upvotes as "likes"
+        });
+
+        // Check for media
+        let image: string | undefined;
+        const images = redditGalleryImages(post);
+        const directImageUrl = directRedditImageUrl(post.url);
+        let video: RedditVideo | undefined;
+
+        // Video content
+        const redditVideo = post.secure_media?.reddit_video || post.media?.reddit_video;
+        if (post.is_video && redditVideo) {
+            const thumbnail = post.thumbnail !== 'self'
+                ? decodeRedditHtml(post.thumbnail)
+                : undefined;
+            video = await fetchRedditMuxedVideo(post.subreddit, parsed.postId, thumbnail)
+                || {
+                    url: redditVideo.fallback_url,
+                    width: redditVideo.width,
+                    height: redditVideo.height,
+                    thumbnail,
+                };
+        }
+        // Image content
+        else if (!images.length && directImageUrl) {
+            image = directImageUrl;
+        }
+        else if (!images.length && post.preview?.images?.[0]) {
+            const imageSource = post.preview.images[0].source;
+            // Reddit HTML-encodes URLs in the API response
+            image = imageSource.url.replace(/&amp;/g, '&');
+        }
+        // External image link
+        else if (!images.length && post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            image = post.url;
+        }
+
+        const fallbackSubredditIcon = decodeRedditHtml(
+            post.sr_detail?.community_icon || post.sr_detail?.icon_img || '',
+        );
+        const subredditIcon = await fetchSubredditIcon(
+            post.subreddit,
+            fallbackSubredditIcon,
+        );
+        const timestamp = Number.isFinite(post.created_utc) && post.created_utc > 0
+            ? new Date(post.created_utc * 1000).toISOString()
+            : undefined;
+        const articleUrl = linkedArticleUrl(post.url);
+        if (!video && !image && !images.length) {
+            image = await fetchArticleImage(articleUrl);
+        }
+        const sections = linkedArticleSection(articleUrl);
+        const sensitivityTypes = [
+            ...(post.over_18 === true ? ['nsfw' as const] : []),
+            ...(post.spoiler === true ? ['spoiler' as const] : []),
+        ];
+
+        return {
+            success: true,
+            source: 'first-party',
+            data: {
+                title: `r/${post.subreddit} • ${post.title}`,
+                description,
+                url: `https://reddit.com${post.permalink}`,
+                siteName: getBrandedSiteName('reddit'),
+                authorName: `u/${post.author}`,
+                authorUrl: `https://reddit.com/u/${post.author}`,
+                authorAvatar: subredditIcon,
+                image,
+                images: images.length ? images : undefined,
+                video,
+                timestamp,
+                color: platformColors.reddit,
+                platform: 'reddit',
+                stats, // Consistent stats via oEmbed like other platforms
+                sections,
+                sensitive: sensitivityTypes.length > 0,
+                sensitivityTypes: sensitivityTypes.length
+                    ? sensitivityTypes
+                    : undefined,
+            },
+        };
+    } catch (error) {
+        if (parsed.commentId) {
+            const subreddit = safeDecodeURIComponent(parsed.subreddit);
+            const postId = safeDecodeURIComponent(parsed.postId);
+            const commentId = safeDecodeURIComponent(parsed.commentId);
+            // Only a 404 from the JSON API is Reddit saying the comment is gone.
+            if (redditHttpStatusFromError(error) === 404) {
+                return unavailableRedditCommentResponse(subreddit, postId, commentId);
+            }
+            console.error('Reddit comment handler error:', error);
+            try {
+                const recovered = await recoverRedditCommentFromCrawlerPage(
+                    subreddit,
+                    postId,
+                    commentId,
+                    trace,
+                );
+                if (recovered.kind === 'card') return recovered.response;
+                if (recovered.kind === 'gone') {
+                    return unavailableRedditCommentResponse(
                         subreddit,
                         postId,
                         commentId,
+                        recovered.permalink,
                     );
-                    if (recovered.kind === 'card') return recovered.response;
-                    if (recovered.kind === 'gone') {
-                        return unavailableRedditCommentResponse(
-                            subreddit,
-                            postId,
-                            commentId,
-                            recovered.permalink,
-                        );
-                    }
-                    console.warn('Reddit comment status unknown:', recovered.reason);
-                } catch (recoveryError) {
-                    console.error('Reddit comment recovery error:', recoveryError);
                 }
-                // 429/5xx/403/timeouts/bad payloads: do not claim the comment was deleted.
-                return transientRedditCommentFailure(url);
-            }
-
-            try {
-                const recovered = await recoverFromRedditEmbed(parsed.subreddit, parsed.postId);
-                if (recovered) return recovered;
+                console.warn('Reddit comment status unknown:', recovered.reason);
             } catch (recoveryError) {
-                console.error('Reddit embed recovery error:', recoveryError);
+                console.error('Reddit comment recovery error:', recoveryError);
             }
-            console.error('Reddit handler error:', error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Failed to fetch post',
-                redirect: url,
-            };
+            // 429/5xx/403/timeouts/bad payloads: do not claim the comment was deleted.
+            return transientRedditCommentFailure(url);
         }
-    },
-};
+
+        try {
+            const recovered = await recoverFromRedditEmbed(parsed.subreddit, parsed.postId);
+            if (recovered) return recovered;
+        } catch (recoveryError) {
+            console.error('Reddit embed recovery error:', recoveryError);
+        }
+        console.error('Reddit handler error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch post',
+            redirect: url,
+        };
+    }
+}
