@@ -268,6 +268,65 @@ class RedditEmbedTests(unittest.TestCase):
         for line in quote_text.splitlines():
             self.assertTrue(line.startswith("> "), line)
 
+    def test_comment_card_has_no_translated_footer_when_source_matches_target(self):
+        """#88: f9ncp3g came back with en -> en metadata and showed "Translated from English"."""
+        comment_url = (
+            "https://www.reddit.com/r/redditdev/comments/e62riz/"
+            "how_are_reddit_urls_constructed/f9ncp3g/"
+        )
+
+        def footer_for(translation):
+            payload = {
+                "title": "r/redditdev \u2022 How are reddit urls constructed?",
+                "url": comment_url,
+                "authorName": "u/milisis",
+                "authorUrl": "https://www.reddit.com/user/milisis/",
+                "translation": translation,
+                "sections": [
+                    {
+                        "kind": "quote",
+                        "title": "Comment by u/kemitche",
+                        "body": "You're close. Let's take a look at the permalink.",
+                        "url": comment_url,
+                        "authorName": "u/kemitche",
+                        "authorUrl": "https://www.reddit.com/user/kemitche/",
+                    },
+                    {
+                        "kind": "quote",
+                        "title": "How are reddit urls constructed?",
+                        "body": "Parent Post",
+                        "url": "https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/",
+                    },
+                ],
+            }
+            container = build_reddit_layout(payload).to_components()[0]
+            return [
+                component.get("content", "")
+                for component in container["components"]
+                if component.get("type") == 10
+            ][-1]
+
+        same_language = footer_for(
+            {
+                "sourceLanguage": "en",
+                "sourceLanguageName": "English",
+                "targetLanguage": "en",
+                "originalUrl": comment_url,
+            }
+        )
+        self.assertNotIn("Translated from", same_language)
+        self.assertIn(f"[Reddit]({comment_url})", same_language)
+
+        translated = footer_for(
+            {
+                "sourceLanguage": "ja",
+                "sourceLanguageName": "Japanese",
+                "targetLanguage": "en",
+                "originalUrl": comment_url,
+            }
+        )
+        self.assertTrue(translated.endswith("Translated from Japanese"), translated)
+
     def test_comment_card_omits_parent_thumbnail_when_absent(self):
         payload = {
             "title": "r/programming • Parent discussion thread",

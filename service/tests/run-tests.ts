@@ -7444,6 +7444,156 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'shared translation emits no footer for an English Reddit comment card requested in English (#88)',
+        run: async () => {
+            // f9ncp3g as the Worker builds it: English title, English comment, and the
+            // generated "Parent post" label that franc reads as French.
+            const calls: Array<{ text?: string; source_lang?: string }> = [];
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string; source_lang?: string }) => {
+                        calls.push(input);
+                        // m2m100 fr->en echoed the label back title-cased.
+                        return { translated_text: (input.text || '').replace('post', 'Post') };
+                    },
+                } as unknown as Ai,
+            };
+            const commentUrl = 'https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/';
+            const sections = [
+                {
+                    kind: 'quote' as const,
+                    title: 'Comment by u/kemitche',
+                    body: "You're close. Let's take a look at the permalink to this comment as an example. If a comment ID is included, then the page or API response will be focused on that comment, its parents, and its children.",
+                    url: commentUrl,
+                },
+                {
+                    kind: 'quote' as const,
+                    title: 'How are reddit urls constructed?',
+                    body: 'Parent post',
+                    url: 'https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/',
+                },
+            ];
+            for (const language of ['en', 'EN', 'en-US', 'en_GB']) {
+                calls.length = 0;
+                const result = await applyRequestedTranslation(
+                    {
+                        success: true,
+                        source: 'first-party',
+                        data: {
+                            title: 'r/redditdev \u2022 How are reddit urls constructed?',
+                            description: '',
+                            url: commentUrl,
+                            siteName: 'FixEmbed \u2022 Reddit',
+                            platform: 'reddit',
+                            sections,
+                        },
+                    },
+                    translationEnv,
+                    { language },
+                );
+                assert.equal(result.data?.translation, undefined, language);
+                assert.deepEqual(result.data?.sections, sections, language);
+                assert.equal(calls.some((call) => call.text === 'Parent post'), false, language);
+            }
+        },
+    },
+    {
+        name: 'shared translation names the translated quote language, not the untouched primary language (#88)',
+        run: async () => {
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string; source_lang?: string }) => {
+                        assert.equal(input.source_lang, 'ja');
+                        return { translated_text: 'We released a new feature today and everyone can try it.' };
+                    },
+                } as unknown as Ai,
+            };
+            const result = await applyRequestedTranslation(
+                {
+                    success: true,
+                    source: 'first-party',
+                    data: {
+                        title: 'r/FixEmbed \u2022 What do you think about the new release?',
+                        description: '',
+                        url: 'https://www.reddit.com/r/FixEmbed/comments/abc123/new_release/def456/',
+                        siteName: 'FixEmbed \u2022 Reddit',
+                        platform: 'reddit',
+                        sections: [
+                            {
+                                kind: 'quote',
+                                title: 'Comment by u/someone',
+                                body: '\u4eca\u65e5\u3001\u65b0\u3057\u3044\u6a5f\u80fd\u3092\u516c\u958b\u3057\u307e\u3057\u305f\u3002\u307f\u3093\u306a\u8a66\u305b\u307e\u3059\u3002',
+                            },
+                            {
+                                kind: 'quote',
+                                title: 'What do you think about the new release?',
+                                body: 'Parent post',
+                            },
+                        ],
+                    },
+                },
+                translationEnv,
+                { language: 'en' },
+            );
+            assert.equal(result.data?.sections?.[0]?.body, 'We released a new feature today and everyone can try it.');
+            assert.equal(result.data?.sections?.[1]?.body, 'Parent post');
+            assert.equal(result.data?.title, 'r/FixEmbed \u2022 What do you think about the new release?');
+            assert.equal(result.data?.translation?.sourceLanguage, 'ja');
+            assert.equal(result.data?.translation?.sourceLanguageName, 'Japanese');
+            assert.equal(result.data?.translation?.targetLanguage, 'en');
+        },
+    },
+    {
+        name: 'shared translation drops model echoes and skips explicit same-language sources (#88)',
+        run: async () => {
+            let echoCalls = 0;
+            const echoEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { text?: string }) => {
+                        echoCalls += 1;
+                        return { translated_text: ` ${(input.text || '').toUpperCase()}! ` };
+                    },
+                } as unknown as Ai,
+            };
+            const spanish = {
+                success: true,
+                source: 'first-party' as const,
+                data: {
+                    title: 'Bluesky post',
+                    description: 'El cohete se ha trasladado a la plataforma de lanzamiento esta ma\u00f1ana.',
+                    url: 'https://bsky.app/profile/example.com/post/abc',
+                    siteName: 'FixEmbed \u2022 Bluesky',
+                    platform: 'bluesky' as const,
+                },
+            };
+            const echoed = await applyRequestedTranslation(spanish, echoEnv, { language: 'en' });
+            assert.ok(echoCalls > 0);
+            assert.equal(echoed.data?.translation, undefined);
+            assert.equal(echoed.data?.description, spanish.data.description);
+
+            let called = false;
+            const neverEnv: Env = {
+                ...env,
+                AI: {
+                    run: async () => {
+                        called = true;
+                        return { translated_text: 'should not run' };
+                    },
+                } as unknown as Ai,
+            };
+            const regional = await applyRequestedTranslation(
+                { ...spanish, data: { ...spanish.data, sourceLanguage: 'es-MX' } },
+                neverEnv,
+                { language: 'ES' },
+            );
+            assert.equal(called, false);
+            assert.equal(regional.data?.translation, undefined);
+        },
+    },
+    {
         name: 'shared Hindi translation preserves line breaks links hashtags and mentions',
         run: async () => {
             const translatedInputs: string[] = [];
