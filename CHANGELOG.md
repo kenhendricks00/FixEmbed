@@ -1,5 +1,13 @@
 ## Unreleased
 
+#### **Faster premium checks (#99)**
+- Servers without saved FixEmbed settings, which is most free servers, no longer ask Discord for their Premium status on every message. The answer is now cached for 10 minutes for every server, Premium or not, the same as servers with saved settings.
+- Subscribing, renewing, or cancelling still updates the cached status right away, now for every server.
+- The Premium check now gives up after 2.5 seconds, so a slow or rate limited Discord response can no longer hold up a card. If the check fails, FixEmbed uses the last known status for up to an hour after it expires. With no recent status, that one message is handled as free and the next message checks again, so a paying server is never stuck on free.
+- A failed check never changes saved settings. Premium settings like card colors, footer branding and exclusions stay as they are and come back on the next successful check.
+- The status cache holds up to 10,000 servers and drops the least recently used first.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **Reddit timing logs (#98)**
 - The Worker now turns on Workers Logs, so its console output is kept for 7 days and can be searched in the Cloudflare dashboard.
 - Each Reddit comment request now logs one `reddit_fetch` line per Reddit call: the subreddit check, the JSON API, the old.reddit page, the old.reddit body read, and the subreddit icon lookups. Each line has the stage, the HTTP status, the time in milliseconds, and whether it timed out.

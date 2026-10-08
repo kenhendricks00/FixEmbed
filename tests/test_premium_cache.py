@@ -72,9 +72,15 @@ class PremiumCacheHelperTests(unittest.TestCase):
 
         main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         self.assertIn("from premium_cache import", main_source)
-        self.assertIn("get_cached_premium", main_source)
-        self.assertIn("set_cached_premium", main_source)
-        self.assertIn("any_entitlement_grants_premium", main_source)
+        # main.py reaches get_cached_premium / set_cached_premium /
+        # any_entitlement_grants_premium through these premium_cache helpers (#99).
+        self.assertIn("resolve_guild_premium(", main_source)
+        self.assertIn("record_guild_premium(", main_source)
+        cache_source = Path(__file__).resolve().parents[1].joinpath("premium_cache.py").read_text(encoding="utf-8")
+        resolver = cache_source.split("async def resolve_guild_premium", 1)[1]
+        self.assertIn("get_cached_premium(", resolver)
+        self.assertIn("any_entitlement_grants_premium(", resolver)
+        self.assertIn("set_cached_premium(", cache_source.split("def record_guild_premium", 1)[1])
         self.assertIn("entitlement_is_active(entitlement)", main_source)
         self.assertNotIn("any(not e.is_expired() for e in entitlements)", main_source)
         self.assertNotIn('bot_settings[guild_id]["is_premium"] = True', main_source)
