@@ -48,7 +48,7 @@ import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_vid
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import { applyRequestedTranslation } from '../src/utils/translation.ts';
 import { chineseScriptOf, chineseTarget, convertChineseScript } from '../src/utils/chinese_script.ts';
-import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown, stripUnsafeText } from '../src/utils/markdown.ts';
+import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown, stripUnsafeText, truncateMarkdown } from '../src/utils/markdown.ts';
 import {
     cleanUrl,
     createTimeoutBudget,
@@ -4147,7 +4147,8 @@ const tests: TestCase[] = [
             assert.equal(commentSection?.title, 'Comment by [deleted]');
             assert.equal(commentSection?.authorName, '[deleted]');
             assert.equal(commentSection?.authorUrl, undefined);
-            assert.match(commentSection?.body || '', /^non-null\n\nInteresting choice of words\./);
+            // The quoted `>non-null` keeps its quote marker (#96).
+            assert.match(commentSection?.body || '', /^> non-null\n\nInteresting choice of words\./);
             assert.match(commentSection?.body || '', /Google "jury null"/);
             assert.doesNotMatch(JSON.stringify(response.data), /%5Bdeleted%5D|u\/\[deleted\]/);
         },
@@ -10124,22 +10125,120 @@ const tests: TestCase[] = [
                 convert('<p>code:</p>\n\n<pre><code>def f(x_y):\n    return x_y * 2\n</code></pre>\n\n<p>after_it</p>'),
                 'code:\n\n```\ndef f(x_y):\n    return x_y * 2\n```\n\nafter\\_it',
             );
-            // Masked links keep their target; autolinks stay bare; Reddit-relative links keep text.
+            // Masked links keep their target; autolinks stay bare; Reddit-relative links
+            // point at reddit.com (#96). Link text has no escapes: Discord shows them there.
             assert.equal(
                 convert('<p><a href="https://example.com/a_b">the_docs</a> <a href="https://x.com/a_b">https://x.com/a_b</a> <a href="/u/some_user">/u/some_user</a></p>'),
-                '[the\\_docs](https://example.com/a_b) https://x.com/a_b /u/some\\_user',
+                '[the_docs](https://example.com/a_b) https://x.com/a_b [/u/some_user](https://www.reddit.com/u/some_user)',
             );
             // Entities decode exactly once, before escaping; a decoded `>` at a line start is escaped.
             assert.equal(
                 convert('<p>&gt; quoted &amp;gt; a &amp;amp; b &lt;c&gt; &quot;q&quot; &#39;s&#39; x&nbsp;y</p>'),
                 '\\> quoted &gt; a &amp; b <c> "q" \'s\' x y',
             );
-            // Blockquotes and paragraphs flatten the same way they did before #87.
+            // Blockquotes keep their quote marker, like the JSON API's `>` (#96).
             assert.equal(
                 convert('<blockquote>\n<p>non-null</p>\n</blockquote>\n\n<p>Interesting choice of words.</p>\n'),
-                'non-null\n\nInteresting choice of words.',
+                '> non-null\n\nInteresting choice of words.',
             );
             assert.equal(convert('<p>[deleted]</p>\n'), '[deleted]');
+        },
+    },
+    {
+        name: 'redditHtmlToDiscordMarkdown handles the #96 edge cases',
+        run: () => {
+            const convert = redditHtmlToDiscordMarkdown;
+            // `(` and `)` in a link target are encoded; encodeURIComponent skips them.
+            assert.equal(
+                convert('<p><a href="https://en.wikipedia.org/wiki/Foo_(bar)">Foo</a></p>'),
+                '[Foo](https://en.wikipedia.org/wiki/Foo_%28bar%29)',
+            );
+            // A typed `[x](url)` stays text; `[deleted]` is untouched for the gone check.
+            assert.equal(
+                convert('<p>[x](https://e.com/a) and [deleted]</p>'),
+                '[x\\](https://e.com/a) and [deleted]',
+            );
+            // Relative /r/ and /u/ links keep their target.
+            assert.equal(
+                convert('<p><a href="/r/rust">r/rust</a> and <a href="//old.reddit.com/u/x">u/x</a></p>'),
+                '[r/rust](https://www.reddit.com/r/rust) and [u/x](https://old.reddit.com/u/x)',
+            );
+            // Blank lines inside a code block survive.
+            assert.equal(
+                convert('<p>before</p>\n<pre><code>a\n\n\nb\n</code></pre>\n<p>after</p>'),
+                'before\n\n```\na\n\n\nb\n```\n\nafter',
+            );
+            // A run of two or more backticks in inline code can't end the span.
+            assert.equal(convert('<p><code>a``b</code></p>'), '``a`​`b``');
+            assert.equal(convert('<p><code>```</code></p>'), '`` `​`​` ``');
+            // A link whose only content is code keeps the code.
+            assert.equal(
+                convert('<p><a href="https://e.com/x"><code>cmd_run</code></a></p>'),
+                '[`cmd_run`](https://e.com/x)',
+            );
+            // Link text follows Discord's label rules (#103): fullwidth mentions,
+            // fullwidth unpaired brackets, and plain text plus the link for a URL.
+            assert.equal(
+                convert('<p><a href="https://e.com/a">ping @everyone [OC] ]x</a></p>'),
+                '[ping ＠everyone [OC] ］x](https://e.com/a)',
+            );
+            assert.equal(
+                convert('<p><a href="https://e.com/a">see https://other.com/x</a></p>'),
+                'see https://other.com/x (<https://e.com/a>)',
+            );
+            // Quotes over several paragraphs.
+            assert.equal(
+                convert('<blockquote><p>a</p><p>b_c</p></blockquote><p>d</p>'),
+                '> a\n>\n> b\\_c\n\nd',
+            );
+            // A body of only invisible characters is no body.
+            assert.equal(convert('<p>&#x200B;</p>'), '');
+            assert.equal(convert('<p>&#x200B; &#8203;</p>\n<p> </p>'), '');
+        },
+    },
+    {
+        name: 'truncateMarkdown never leaves a code block open (#96)',
+        run: () => {
+            assert.equal(truncateMarkdown('short', 3000), 'short');
+            assert.equal(truncateMarkdown('abcdefghij', 8), 'abcde...');
+            const text = `intro\n\`\`\`\n${'y'.repeat(60)}\n\`\`\`\nafter`;
+            const cut = truncateMarkdown(text, 40);
+            assert.ok(cut.length <= 40, cut);
+            assert.equal((cut.match(/```/g) || []).length % 2, 0, cut);
+            assert.ok(cut.endsWith('...\n```'), cut);
+            // A cut through the fence itself drops the partial backticks.
+            const fence = truncateMarkdown(`${'a'.repeat(10)}\`\`\`code`, 15);
+            assert.equal((fence.match(/```/g) || []).length % 2, 0, fence);
+            assert.ok(!/`+\.\.\.$/.test(fence), fence);
+        },
+    },
+    {
+        name: 'redditHandler shows a zero-width-space-only comment as a bodyless card (#96)',
+        run: async () => {
+            const markup = REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML.replace(
+                /(<div class="md">)[\s\S]*?(<\/div>)/,
+                '$1<p>&#x200B;</p>\n$2',
+            );
+            assert.notEqual(markup, REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML);
+            const crawler = await runRedditBudgetScenario({
+                crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(markup)),
+            });
+            assert.equal(crawler.response.success, true);
+            assert.equal(crawler.response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+            assert.equal(crawler.response.data?.sections?.[0]?.body, '');
+
+            const json = await runRedditBudgetScenario({
+                json: () => redditRealCommentJson({
+                    id: 'o2o5rsi',
+                    author: 'someone',
+                    body: '​',
+                    score: 3,
+                    created_utc: 1769790000,
+                    permalink: '/r/news/comments/1qr7zs5/luigi_mangione_will_not_face_death_penalty_judge/o2o5rsi/',
+                }),
+            });
+            assert.equal(json.response.success, true);
+            assert.equal(json.response.data?.sections?.[0]?.body, '');
         },
     },
     {
