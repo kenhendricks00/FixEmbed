@@ -46,6 +46,7 @@ import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
 import { applyRequestedTranslation } from '../src/utils/translation.ts';
+import { escapeDiscordMarkdown, redditHtmlToDiscordMarkdown } from '../src/utils/markdown.ts';
 import {
     cleanUrl,
     createTimeoutBudget,
@@ -55,6 +56,24 @@ import {
     parseTwitterUrl,
     truncateText,
 } from '../src/utils/fetch.ts';
+
+/**
+ * f9ncp3g (r/redditdev "How are reddit urls constructed?", u/kemitche): the
+ * comment desk smoked for #87. REDDIT_F9NCP3G_MARKDOWN is the body Reddit's API
+ * returns (archived copy); the HTML is that body as old.reddit renders it in a
+ * comment's `.md` block.
+ */
+const REDDIT_F9NCP3G_MARKDOWN = "You're close. Let's take a look at the permalink to this comment as an example:\n\nhttps://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/\n\ne62riz is the *post* ID, not a \"root comment\" (there's no such thing as a root comment; a post can have any number of top-level comments, as you've probably seen from browsing around the site)\n\n'how\\_are\\_reddit\\_urls\\_constructed' is a title slug. In terms of API usage and linking, it's irrelevant - primarily it serves to improve the readability of the URL. When fetching data, you can replace it with any text (you'll often see `_` used as a placeholder when constructing URLs from an existing ID).\n\nf9ncp3g is a particular comment's ID. If that part of the URL is omitted, you get to the main view of the post; if a comment ID *is* included, then the page or API response will be focused on that comment, its parents, and its children.";
+const REDDIT_F9NCP3G_MD_HTML = `<div class="md"><p>You&#39;re close. Let&#39;s take a look at the permalink to this comment as an example:</p>
+
+<p><a href="https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/">https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/</a></p>
+
+<p>e62riz is the <em>post</em> ID, not a &quot;root comment&quot; (there&#39;s no such thing as a root comment; a post can have any number of top-level comments, as you&#39;ve probably seen from browsing around the site)</p>
+
+<p>&#39;how_are_reddit_urls_constructed&#39; is a title slug. In terms of API usage and linking, it&#39;s irrelevant - primarily it serves to improve the readability of the URL. When fetching data, you can replace it with any text (you&#39;ll often see <code>_</code> used as a placeholder when constructing URLs from an existing ID).</p>
+
+<p>f9ncp3g is a particular comment&#39;s ID. If that part of the URL is omitted, you get to the main view of the post; if a comment ID <em>is</em> included, then the page or API response will be focused on that comment, its parents, and its children.</p>
+</div>`;
 
 type TestCase = {
     name: string;
@@ -9245,6 +9264,103 @@ const tests: TestCase[] = [
             assert.match(statusHtml, /Current latency/);
             assert.match(statusHtml, /first-party rendering checks/i);
             assert.doesNotMatch(statusHtml, /Uptime 24h|Uptime 7d|Uptime 30d/);
+        },
+    },
+    {
+        name: 'redditHtmlToDiscordMarkdown turns the f9ncp3g crawler HTML back into the markdown Reddit JSON returns (#87)',
+        run: () => {
+            assert.equal(redditHtmlToDiscordMarkdown(REDDIT_F9NCP3G_MD_HTML), REDDIT_F9NCP3G_MARKDOWN);
+        },
+    },
+    {
+        name: 'redditHandler keeps underscores and inline code in crawler comment bodies (#87)',
+        run: async () => {
+            const { response, requested } = await runRedditCommentScenario({
+                json: new Response('blocked', { status: 403, statusText: 'Forbidden' }),
+                crawler: new Response(
+                    redditCrawlerCommentHtml(
+                        `<div class="thing comment" id="thing_t1_live456" data-author="kemitche"
+                            data-permalink="/r/programming/comments/abc123/parent_discussion_thread/live456/">`,
+                        REDDIT_F9NCP3G_MD_HTML,
+                    ),
+                    { status: 200, headers: { 'Content-Type': 'text/html' } },
+                ),
+            });
+            assert.ok(requested.some((url) => url.startsWith('https://old.reddit.com/')));
+            assert.equal(response.success, true);
+            const body = response.data?.sections?.find(
+                (section) => section.title?.startsWith('Comment by '),
+            )?.body || '';
+            assert.equal(body, REDDIT_F9NCP3G_MARKDOWN);
+            // Escaped once: renders as how_are_reddit_urls_constructed, no italics.
+            assert.match(body, /'how\\_are\\_reddit\\_urls\\_constructed'/);
+            assert.doesNotMatch(body, /\\\\_/);
+            // Inline code keeps its content instead of rendering "see  used".
+            assert.match(body, /you'll often see `_` used/);
+            // The bare URL keeps its real underscores so the link still works.
+            assert.match(
+                body,
+                /\nhttps:\/\/www\.reddit\.com\/r\/redditdev\/comments\/e62riz\/how_are_reddit_urls_constructed\/f9ncp3g\/\n/,
+            );
+            assert.match(body, /the \*post\* ID/);
+        },
+    },
+    {
+        name: 'redditHtmlToDiscordMarkdown escapes user text once and keeps Reddit formatting (#87)',
+        run: () => {
+            const convert = redditHtmlToDiscordMarkdown;
+            // Literal markdown characters typed by the author stay literal.
+            assert.equal(
+                convert('<div class="md"><p>2 * 3 * 4 = 24, snake_case_name, ~tilde~ and a|b \\ back</p></div>'),
+                '2 \\* 3 \\* 4 = 24, snake\\_case\\_name, \\~tilde\\~ and a\\|b \\\\ back',
+            );
+            // Block markers at the start of a line are escaped; mid-line ones are not.
+            assert.equal(
+                convert('<p># not a heading</p>\n<p>- not a list</p>\n<p>&gt; not a quote</p>\n<p>1. not ordered, a - b #c</p>'),
+                '\\# not a heading\n\n\\- not a list\n\n\\> not a quote\n\n1\\. not ordered, a - b #c',
+            );
+            // Reddit's own formatting becomes Discord markdown, not escaped text.
+            assert.equal(
+                convert('<p><strong>bold_one</strong> <em>it_alic</em> <del>gone</del> <span class="md-spoiler-text">secret</span></p>'),
+                '**bold\\_one** *it\\_alic* ~~gone~~ ||secret||',
+            );
+            // Inline code: content kept verbatim, backticks inside use a longer fence.
+            assert.equal(
+                convert('<p>run <code>my_var * 2</code> or <code>a`b</code></p>'),
+                'run `my_var * 2` or ``a`b``',
+            );
+            // Code blocks keep indentation and markdown characters.
+            assert.equal(
+                convert('<p>code:</p>\n\n<pre><code>def f(x_y):\n    return x_y * 2\n</code></pre>\n\n<p>after_it</p>'),
+                'code:\n\n```\ndef f(x_y):\n    return x_y * 2\n```\n\nafter\\_it',
+            );
+            // Masked links keep their target; autolinks stay bare; Reddit-relative links keep text.
+            assert.equal(
+                convert('<p><a href="https://example.com/a_b">the_docs</a> <a href="https://x.com/a_b">https://x.com/a_b</a> <a href="/u/some_user">/u/some_user</a></p>'),
+                '[the\\_docs](https://example.com/a_b) https://x.com/a_b /u/some\\_user',
+            );
+            // Entities decode exactly once, before escaping; a decoded `>` at a line start is escaped.
+            assert.equal(
+                convert('<p>&gt; quoted &amp;gt; a &amp;amp; b &lt;c&gt; &quot;q&quot; &#39;s&#39; x&nbsp;y</p>'),
+                '\\> quoted &gt; a &amp; b <c> "q" \'s\' x y',
+            );
+            // Blockquotes and paragraphs flatten the same way they did before #87.
+            assert.equal(
+                convert('<blockquote>\n<p>non-null</p>\n</blockquote>\n\n<p>Interesting choice of words.</p>\n'),
+                'non-null\n\nInteresting choice of words.',
+            );
+            assert.equal(convert('<p>[deleted]</p>\n'), '[deleted]');
+        },
+    },
+    {
+        name: 'escapeDiscordMarkdown leaves URLs alone and only escapes block markers at line starts (#87)',
+        run: () => {
+            assert.equal(
+                escapeDiscordMarkdown('see https://example.com/some_path?q=a*b and some_word'),
+                'see https://example.com/some_path?q=a*b and some\\_word',
+            );
+            assert.equal(escapeDiscordMarkdown('# title', false), '# title');
+            assert.equal(escapeDiscordMarkdown('mid\n# title\n-# small'), 'mid\n\\# title\n\\-# small');
         },
     },
 ];

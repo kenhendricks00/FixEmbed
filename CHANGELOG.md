@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Reddit text keeps underscores and inline code (#87)**
+- When Reddit's API is blocked and a comment or post body comes from Reddit's HTML page instead, the Worker now turns that HTML back into Discord markdown instead of stripping the tags. Literal `_`, `*`, `~`, `|` and backslashes in the text are escaped once, so `how_are_reddit_urls_constructed` keeps its underscores and the rest of the paragraph no longer turns italic.
+- Inline code keeps its content ("you'll often see `_` used" no longer renders as "see  used"), code blocks keep their indentation, and Reddit's own bold, italics, strikethrough, spoilers and links carry over as Discord formatting.
+- Lines that start with `#`, `>`, `-`, `+` or `1.` in the text are escaped so they stay text, and URLs are left untouched so their underscores keep working.
+- The result matches what Reddit's JSON API returns for the same comment, so the bot shows both paths the same way. The bot's quote block, bold subreddit label and links are not escaped a second time.
+
 #### **Block mentions from embedded content (#93)**
 - FixEmbed can no longer ping anyone through text it copies from other sites or users. An `@everyone`, `@here`, `<@user>` or `<@&role>` inside a Reddit comment, a post title, a caption, an author name, or a link's text now shows as plain text and notifies nobody.
 - The bot client now defaults to no mentions, so every message it posts is silent unless a send opts in.

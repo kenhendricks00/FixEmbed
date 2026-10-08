@@ -6,6 +6,7 @@ import type { EmbedData, Env, HandlerResponse, PlatformHandler } from '../types.
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
+import { redditHtmlToDiscordMarkdown } from '../utils/markdown.ts';
 
 interface RedditPost {
     title: string;
@@ -370,20 +371,7 @@ function redditPostBodyFromHtml(html: string, postId?: string): string {
         )?.[1];
     if (!body) return '';
 
-    return decodeRedditHtml(
-        body
-            .replace(/<h([1-6])\b[^>]*>/gi, (_, level: string) => `${'#'.repeat(Number(level))} `)
-            .replace(/<\/(?:h[1-6]|p|blockquote|pre)>/gi, '\n\n')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<li\b[^>]*>/gi, '- ')
-            .replace(/<\/li>/gi, '\n')
-            .replace(/<[^>]+>/g, ''),
-    )
-        .replace(/\u00a0/g, ' ')
-        .replace(/[ \t]+\n/g, '\n')
-        .replace(/\n[ \t]+/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+    return redditHtmlToDiscordMarkdown(body);
 }
 
 async function redditVideoFromHtml(
@@ -916,18 +904,7 @@ async function recoverRedditCommentFromCrawlerPage(
     const rawBody = commentHtml.match(
         /<div\b(?=[^>]*\bclass=["'][^"']*\bmd\b[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     )?.[1];
-    // Strip tags first, then decode once: an escaped `&lt;b&gt;` in the comment is text, not markup.
-    const body = rawBody
-        ? decodeHtmlEntitiesOnce(
-            rawBody
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/<\/p>/gi, '\n\n')
-                .replace(/<[^>]+>/g, ''),
-        )
-            .replace(/\u00a0/g, ' ')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim()
-        : '';
+    const body = rawBody ? redditHtmlToDiscordMarkdown(rawBody) : '';
 
     // Gone only when Reddit says so: the comment is rendered with old.reddit's
     // `deleted` class, or its body is [deleted]/[removed]. A missing data-author
