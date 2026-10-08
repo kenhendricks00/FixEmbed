@@ -192,6 +192,7 @@ class ManifestTests(unittest.TestCase):
         )
         self.assertIn("translation", by_id["twitter-translation"].requires)
         self.assertIn("tombstone", by_id["twitter-tombstone"].section_kinds)
+        self.assertEqual(by_id["twitter-tombstone"].media_type, "image")
 
 
 class ContractEvaluationTests(unittest.TestCase):
@@ -345,6 +346,55 @@ class ContractEvaluationTests(unittest.TestCase):
         self.assertEqual(result.failure_codes, ())
 
 
+    def test_translation_requirement_matches_worker_translation_contract(self):
+        case = parse_manifest(
+            valid_manifest(
+                requires=["title", "translation"],
+                mediaType=None,
+                sectionKinds=[],
+                options={"lang": "es"},
+            )
+        )[0]
+        translated = {
+            **self.payload,
+            "data": {
+                **self.payload["data"],
+                "description": "El cohete se ha trasladado a la plataforma.",
+                "translation": {
+                    "sourceLanguage": "en",
+                    "sourceLanguageName": "English",
+                    "targetLanguage": "es",
+                    "originalUrl": "https://x.com/example/status/123",
+                },
+            },
+        }
+
+        passed = evaluate_payload(case, translated, duration_ms=25)
+        self.assertNotIn("missing-translation", passed.failure_codes)
+
+        wrong_target = {
+            **translated,
+            "data": {
+                **translated["data"],
+                "translation": {**translated["data"]["translation"], "targetLanguage": "fr"},
+            },
+        }
+        legacy_text_only = {
+            **self.payload,
+            "data": {
+                **self.payload["data"],
+                "description": "Original text\n\nTranslation (EN): translated text",
+            },
+        }
+        no_text = {
+            **translated,
+            "data": {**translated["data"], "description": "  "},
+        }
+        for payload in (wrong_target, legacy_text_only, no_text):
+            result = evaluate_payload(case, payload, duration_ms=25)
+            self.assertIn("missing-translation", result.failure_codes)
+
+
 class ComponentsV2EvaluationTests(unittest.TestCase):
     def setUp(self):
         self.payload = {
@@ -383,6 +433,36 @@ class ComponentsV2EvaluationTests(unittest.TestCase):
         )
 
         self.assertEqual(codes, ())
+
+    def test_translation_is_rendered_as_the_translated_from_footer(self):
+        requires = frozenset({"title", "author", "timestamp", "stats", "media", "translation"})
+        translated = {
+            **self.payload,
+            "translation": {
+                "sourceLanguage": "en",
+                "sourceLanguageName": "English",
+                "targetLanguage": "es",
+                "originalUrl": "https://x.com/example/status/123",
+            },
+        }
+
+        rendered = evaluate_components_v2(
+            "twitter",
+            translated,
+            requires=requires,
+            media_type="carousel",
+            section_kinds=frozenset({"quote"}),
+        )
+        untranslated = evaluate_components_v2(
+            "twitter",
+            self.payload,
+            requires=requires,
+            media_type="carousel",
+            section_kinds=frozenset({"quote"}),
+        )
+
+        self.assertNotIn("card-missing-translation", rendered)
+        self.assertIn("card-missing-translation", untranslated)
 
     def test_serialized_validator_returns_only_bounded_layout_codes(self):
         codes = validate_serialized_card(

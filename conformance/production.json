@@ -64,9 +64,9 @@
     {
       "id": "twitter-tombstone",
       "platform": "twitter",
-      "url": "https://x.com/carrionkid/status/1902059299591090335",
+      "url": "https://x.com/annakres77/status/1791437300339032271",
       "requires": ["title", "author", "timestamp", "stats", "media"],
-      "mediaType": "video",
+      "mediaType": "image",
       "sectionKinds": ["tombstone"],
       "allowFallback": false,
       "latencyBudgetMs": 2000,
