@@ -30,6 +30,12 @@ export interface RedditCommentIds {
     commentId: string;
 }
 
+/** A `/r/{sub}/s/{id}` share link that failed to resolve (#108). */
+export interface RedditShareIds {
+    subreddit: string;
+    shareId: string;
+}
+
 interface RedditFetchRecord {
     stage: RedditFetchStage;
     status: number | null;
@@ -61,7 +67,10 @@ function errorName(error: unknown): string {
     return 'Error';
 }
 
-function idFields(ids: RedditCommentIds) {
+function idFields(ids: RedditCommentIds | RedditShareIds) {
+    if ('shareId' in ids) {
+        return { subreddit: ids.subreddit, share_id: ids.shareId };
+    }
     return {
         subreddit: ids.subreddit,
         post_id: ids.postId,
@@ -117,7 +126,7 @@ export class RedditFetchTrace {
 
     /** Write the buffered fetch lines and the summary line. */
     flush(
-        ids: RedditCommentIds,
+        ids: RedditCommentIds | RedditShareIds,
         outcome: RedditCommentOutcome,
         cache: RedditEmbedCacheState,
     ): void {
