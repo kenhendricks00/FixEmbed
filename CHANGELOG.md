@@ -12,6 +12,7 @@
 - Each Reddit call for a comment link now has its own limit: 3 seconds for the link check and for Reddit's API, 4 seconds for the old.reddit page and 4 seconds to read it, and 2 seconds for each subreddit icon lookup.
 - The whole comment request now has 8 seconds in total, well inside the bot's 15 second wait. Later calls only get the time that is left, and the icon lookups are skipped when less than a quarter second remains, so the card keeps Reddit's default icon.
 - If the old.reddit page times out or Reddit answers with a server error (5xx), it is tried once more, but only when at least 1 second is left. A 403, 404, 429 or any other answer is never retried.
+- old.reddit is now retried at most once per comment, even when a timeout is followed by a server error.
 - Timeouts and errors still mean "Reddit is temporarily unavailable" and Discord keeps Reddit's own preview. Only Reddit saying the comment is gone shows "Comment unavailable", the same as before.
 - The `reddit_fetch` log line for the old.reddit page now has an `attempt` field (1, or 2 for the retry), so Workers Logs show how often the retry fires.
 - Reddit posts, share links before they resolve, and every other platform keep their current timeouts. The embed cache and the other log lines are unchanged.
