@@ -31,11 +31,19 @@ PREMIUM_CACHE_MAX_ENTRIES = 10000
 
 
 class PremiumStatusCache(OrderedDict):
-    """Per-guild Premium cache entries, bounded and evicted least recently used."""
+    """Per-guild Premium cache entries, bounded and evicted least recently used.
+
+    ``generations`` counts entitlement events per guild (#101). It lives beside
+    the LRU entries, not inside them, so evicting a guild's entry can never
+    reset its generation while a lookup for that guild is still in flight. It
+    only gains a key when a guild gets an entitlement event, so it holds one
+    int per guild that subscribed, renewed or cancelled since the bot started.
+    """
 
     def __init__(self, max_entries: int = PREMIUM_CACHE_MAX_ENTRIES):
         super().__init__()
         self.max_entries = int(max_entries)
+        self.generations: dict[Any, int] = {}
 
 
 def get_cached_premium(
@@ -102,6 +110,31 @@ def _touch(cache: MutableMapping[Any, Any], guild_id: Any) -> None:
         move_to_end(guild_id)
 
 
+def premium_generation(cache: Mapping[Any, Any], guild_id: Any) -> int:
+    """How many entitlement events this guild has had (0 when none).
+
+    Plain mappings without a ``generations`` attribute report 0 always, so they
+    get no stale-lookup protection; the bot's cache is a PremiumStatusCache.
+    """
+    generations = getattr(cache, "generations", None)
+    if generations is None:
+        return 0
+    return generations.get(guild_id, 0)
+
+
+def _bump_premium_generation(cache: Mapping[Any, Any], guild_id: Any) -> None:
+    generations = getattr(cache, "generations", None)
+    if generations is not None:
+        generations[guild_id] = generations.get(guild_id, 0) + 1
+
+
+def _enforce_premium_cache_bound(cache: MutableMapping[Any, Any]) -> None:
+    max_entries = getattr(cache, "max_entries", None)
+    if max_entries is not None:
+        while len(cache) > max(int(max_entries), 1):
+            cache.popitem(last=False)
+
+
 def record_guild_premium(
     cache: MutableMapping[Any, MutableMapping[str, Any]],
     guild_id: Any,
@@ -112,14 +145,14 @@ def record_guild_premium(
     """Store Premium status for any guild, with or without a settings row.
 
     Entitlement create/update/delete events call this so a subscription change
-    replaces the cached value right away for every guild.
+    replaces the cached value right away for every guild. The guild's generation
+    is bumped before the write, so any lookup already in flight for this guild
+    drops its older answer instead of overwriting this one (#101).
     """
+    _bump_premium_generation(cache, guild_id)
     set_cached_premium(cache.setdefault(guild_id, {}), is_premium, now=now)
     _touch(cache, guild_id)
-    max_entries = getattr(cache, "max_entries", None)
-    if max_entries is not None:
-        while len(cache) > max(int(max_entries), 1):
-            cache.popitem(last=False)
+    _enforce_premium_cache_bound(cache)
 
 
 async def resolve_guild_premium(
@@ -145,6 +178,14 @@ async def resolve_guild_premium(
       no usable cached value the guild is treated as free for this call only and
       nothing is cached, so a paying guild is never pinned to free.
     - Every fallback answer is in memory only; this function never persists.
+    - The guild's generation is read before the lookup starts. If an
+      entitlement event bumped it while the lookup was in flight, the lookup's
+      answer is older than the event's, so it is not written. The event's
+      cached value is returned instead (or the lookup's answer if that entry
+      has since been evicted). This holds when ``fetch_entitlements`` returned
+      None too, so that call is served the event's value, not False. A lookup
+      never bumps the generation itself, so a timeout or error leaves it
+      unchanged (#101).
     """
     entry = cache.get(guild_id)
     cached = get_cached_premium(entry, now=now, ttl_seconds=ttl_seconds)
@@ -152,10 +193,12 @@ async def resolve_guild_premium(
         _touch(cache, guild_id)
         return cached
     stale_limit = ttl_seconds + stale_grace_seconds
+    generation = premium_generation(cache, guild_id)
     try:
         entitlements = await asyncio.wait_for(fetch_entitlements(), timeout=timeout)
     except asyncio.TimeoutError:
-        fallback = last_cached_premium(entry, now=now, max_age_seconds=stale_limit)
+        # Re-read the entry: an entitlement event may have landed meanwhile.
+        fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
         logging.warning(
             "Premium entitlement check for guild %s timed out after %ss; using %s",
             guild_id,
@@ -164,11 +207,28 @@ async def resolve_guild_premium(
         )
         return bool(fallback)
     except Exception as e:
-        fallback = last_cached_premium(entry, now=now, max_age_seconds=stale_limit)
-        logging.error(f"Error checking premium status: {e}")
+        fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
+        logging.error(
+            "Premium entitlement check for guild %s failed: %s; using %s",
+            guild_id,
+            e,
+            "last cached value" if fallback is not None else "free for this message",
+        )
         return bool(fallback)
+    raced = premium_generation(cache, guild_id) != generation
+    if raced:
+        # An entitlement event landed mid-lookup; its value is fresher.
+        newer = get_cached_premium(cache.get(guild_id), now=now, ttl_seconds=ttl_seconds)
+        if newer is not None:
+            return newer
     if entitlements is None:
         return False
     is_premium = any_entitlement_grants_premium(entitlements)
-    record_guild_premium(cache, guild_id, is_premium, now=now)
+    if raced:
+        # The event's entry was evicted; don't re-add the guild with the older answer.
+        return is_premium
+    # Same write as record_guild_premium, minus the generation bump.
+    set_cached_premium(cache.setdefault(guild_id, {}), is_premium, now=now)
+    _touch(cache, guild_id)
+    _enforce_premium_cache_bound(cache)
     return is_premium

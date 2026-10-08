@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Premium shows active right after purchase (#101)**
+- A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
+- Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
+- This works both ways: a cancellation is not undone by an older check that still saw the subscription.
+- A Premium check that times out or fails still changes nothing in the cache, and the error log now names the server it was checking.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Deleted Reddit comments show as gone (#106)**
 - A link to a Reddit comment that was deleted or removed and has no replies now shows the "Comment unavailable" card. Before, FixEmbed posted nothing, as with comments paut4ly (r/discordapp) and pauldso (r/learnpython).
 - For these comments old.reddit answers 200 with the post but an empty thread, so the page itself never says the comment is gone. When the page names the comment as its target and the thread is empty, the Worker now looks the comment up once on old.reddit's `api/info.json`.
