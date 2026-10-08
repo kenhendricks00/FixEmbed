@@ -15,6 +15,7 @@ import type {
 import { fetchWithTimeout, parseTwitterUrl, truncateText } from '../utils/fetch.ts';
 import { formatStats, getBrandedSiteName, platformColors } from '../utils/embed.ts';
 import { languageName, normalizeLanguage } from '../utils/translation.ts';
+import { chineseTarget, convertChineseScript, type ChineseTarget } from '../utils/chinese_script.ts';
 import {
     fetchTwitterGraphQL,
     normalizeTwitterPoll,
@@ -118,6 +119,7 @@ async function fetchFxTwitterTweet(
 function fxTranslation(
     tweet: FxTwitterTweet | undefined,
     requestedLanguage: string,
+    chinese?: ChineseTarget,
 ): { text: string; sourceLanguage: string; targetLanguage: string } | undefined {
     const text = tweet?.translation?.text?.trim();
     const sourceLanguage = tweet?.translation?.source_lang?.trim().toLowerCase();
@@ -130,7 +132,20 @@ function fxTranslation(
     ) {
         return undefined;
     }
+    // FxTwitter's zh is Simplified; a Traditional target gets it converted (#97).
+    if (chinese?.script === 'Hant') {
+        return {
+            text: convertChineseScript(text, chinese),
+            sourceLanguage,
+            targetLanguage: chinese.region ? `zh-${chinese.region}` : 'zh-Hant',
+        };
+    }
     return { text, sourceLanguage, targetLanguage };
+}
+
+/** The Chinese script a request asks for, when it asks for Chinese. */
+function requestedChineseTarget(options: HandlerOptions): ChineseTarget | undefined {
+    return requestedTranslationLanguage(options) === 'zh' ? chineseTarget(options.language) : undefined;
 }
 
 type TwitterVerificationUser = {
@@ -347,8 +362,9 @@ async function fetchFxTwitterFallback(
         const canonicalUrl = `https://x.com/${author.screen_name}/status/${tweetId}`;
         const galleryMode = options.mode === 'gallery';
         const originalText = truncateText(tweet.text?.trim() || '', 3000);
-        const platformTranslation = language ? fxTranslation(tweet, language) : undefined;
-        const quoteTranslation = language ? fxTranslation(tweet.quote, language) : undefined;
+        const chinese = requestedChineseTarget(options);
+        const platformTranslation = language ? fxTranslation(tweet, language, chinese) : undefined;
+        const quoteTranslation = language ? fxTranslation(tweet.quote, language, chinese) : undefined;
         const translationSource = platformTranslation || quoteTranslation;
         const translation = translationSource
             ? {
@@ -615,8 +631,9 @@ export const twitterHandler: PlatformHandler = {
                 && options.mode !== 'gallery'
                 ? await fetchFxTwitterTweet(parsed.username, parsed.tweetId, requestedLanguage)
                 : undefined;
+            const chinese = requestedChineseTarget(options);
             const primaryTranslation = requestedLanguage
-                ? fxTranslation(translatedTweet, requestedLanguage)
+                ? fxTranslation(translatedTweet, requestedLanguage, chinese)
                 : undefined;
             const quoteIdsMatch = Boolean(
                 translatedTweet?.quote?.id
@@ -624,7 +641,7 @@ export const twitterHandler: PlatformHandler = {
                 && translatedTweet.quote.id === tweet.quote.id_str,
             );
             const quoteTranslation = requestedLanguage && quoteIdsMatch
-                ? fxTranslation(translatedTweet?.quote, requestedLanguage)
+                ? fxTranslation(translatedTweet?.quote, requestedLanguage, chinese)
                 : undefined;
             const quoteSection = sections?.find((section) => section.kind === 'quote');
             if (quoteSection && quoteTranslation) {
@@ -642,7 +659,7 @@ export const twitterHandler: PlatformHandler = {
                 ? {
                     sourceLanguage: translationSource.sourceLanguage,
                     sourceLanguageName: languageName(translationSource.sourceLanguage),
-                    targetLanguage: requestedLanguage,
+                    targetLanguage: translationSource.targetLanguage,
                     originalUrl: canonicalUrl,
                 }
                 : undefined;
