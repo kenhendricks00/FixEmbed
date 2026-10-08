@@ -24,11 +24,32 @@ const NAMED_ENTITIES: Record<string, string> = {
 };
 
 /**
+ * Characters that must never reach a Discord card (#90): C0 controls other than
+ * tab and newline, DEL, C1 controls, and the bidi embedding, override and
+ * isolate marks (U+202A to U+202E, U+2066 to U+2069). An override such as
+ * `&#x202E;` flips the rest of the card's text, and U+0000 is the converter's
+ * own placeholder marker. Line separators and LRM/RLM stay: they don't reorder
+ * text past their own line.
+ */
+const UNSAFE_TEXT_CHARACTERS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‪-‮⁦-⁩]/g;
+
+/**
  * Decode one layer of HTML entities in a text node. Reddit's double-encoded
  * `&amp;gt;` is the author's literal `&gt;`, so it stays `&gt;` (same rule as
- * the crawler's exactly-once decoding in #84).
+ * the crawler's exactly-once decoding in #84). Control and bidi characters are
+ * dropped afterwards, whether they were written literally or as a numeric
+ * entity (#90). This is the only HTML text decoder; the crawler uses it too.
  */
 export function decodeHtmlText(value: string): string {
+    return stripUnsafeText(decodeEntitiesOnce(value));
+}
+
+/** Drop control and bidi characters from text bound for a card (#90). */
+export function stripUnsafeText(value: string): string {
+    return value.replace(UNSAFE_TEXT_CHARACTERS, '');
+}
+
+function decodeEntitiesOnce(value: string): string {
     return value.replace(
         /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g,
         (entity, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {

@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Reddit text can't flip or hide parts of a card (#90)**
+- A Reddit comment could contain invisible control characters, either typed in or written as codes like `&#x202E;` that the old.reddit fallback decodes. A right-to-left override such as U+202E reversed the rest of the comment on the card, so `gnp.exe` could read as `exe.png`.
+- Comment text and post titles on Reddit comment cards now drop these characters, whichever way Reddit sends them: control characters other than tab and newline, and the bidi embedding, override and isolate marks (U+202A to U+202E, U+2066 to U+2069).
+- Normal right-to-left text, emoji and the left-to-right and right-to-left marks are unchanged.
+- The two copies of the old.reddit entity decoder are now one (part of #96).
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Premium shows active right after purchase (#101)**
 - A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
 - Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
