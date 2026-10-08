@@ -9,6 +9,7 @@ import {
 } from '../src/handlers/twitter_graphql.ts';
 import { instagramHandler } from '../src/handlers/instagram.ts';
 import { decodeHtmlEntitiesOnce, redditHandler } from '../src/handlers/reddit.ts';
+import { RedditFetchTrace, responseStatus, timeRedditFetch } from '../src/utils/reddit_timing.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
 import { bilibiliHandler } from '../src/handlers/bilibili.ts';
@@ -194,6 +195,27 @@ function assertRedditCommentTransient(
     // Must not trip generateErrorHTML's comment-unavailable tombstone branch.
     assert.doesNotMatch(response.error || '', /comment not found or unavailable/i);
     assert.doesNotMatch(response.error || '', /comment unavailable/i);
+}
+
+/** Run `body` with console.log spied and return the #98 Reddit timing lines it wrote. */
+async function captureRedditTimingLogs(body: () => Promise<void>): Promise<Array<Record<string, unknown>>> {
+    const originalLog = console.log;
+    const lines: Array<Record<string, unknown>> = [];
+    console.log = (...args: unknown[]) => {
+        const first = args[0] as { event?: unknown } | undefined;
+        if (typeof first === 'object' && first !== null
+            && (first.event === 'reddit_fetch' || first.event === 'reddit_comment_timing')) {
+            lines.push(first as Record<string, unknown>);
+            return;
+        }
+        originalLog(...args);
+    };
+    try {
+        await body();
+    } finally {
+        console.log = originalLog;
+    }
+    return lines;
 }
 
 const redditCrawlerCommentHtml = (commentTag: string, body: string) => `
@@ -9361,6 +9383,326 @@ const tests: TestCase[] = [
             );
             assert.equal(escapeDiscordMarkdown('# title', false), '# title');
             assert.equal(escapeDiscordMarkdown('mid\n# title\n-# small'), 'mid\n\\# title\n\\-# small');
+        },
+    },
+    {
+        name: 'RedditFetchTrace returns or rethrows exactly what the fetch does and records stage timing (#98)',
+        run: async () => {
+            let clock = 1_000;
+            const trace = new RedditFetchTrace(() => clock);
+            const ok = new Response('ok', { status: 200 });
+            const returned = await trace.time('probe', async () => {
+                clock += 120;
+                return ok;
+            }, (response) => response.status);
+            assert.equal(returned, ok);
+
+            const blocked = new Error('HTTP 403: Blocked');
+            await assert.rejects(trace.time('json', async () => {
+                clock += 30;
+                throw blocked;
+            }), (error) => error === blocked);
+
+            const aborted = new DOMException('The operation was aborted.', 'AbortError');
+            await assert.rejects(trace.time('old_reddit', async () => {
+                clock += 10_000;
+                throw aborted;
+            }), (error) => error === aborted);
+
+            const body = await trace.time('old_reddit_body', async () => {
+                clock += 5;
+                return '<html></html>';
+            });
+            assert.equal(body, '<html></html>');
+            const notFound = await timeRedditFetch(trace, 'icon', async () => {
+                clock += 7;
+                return new Response(null, { status: 404 });
+            }, responseStatus);
+            assert.equal(notFound.status, 404);
+            // No trace: the fetch still runs and nothing is recorded.
+            assert.equal(await timeRedditFetch(undefined, 'icon', async () => 'plain'), 'plain');
+
+            const logged = await captureRedditTimingLogs(async () => {
+                clock += 3;
+                trace.flush({ subreddit: 'news', postId: '1qr7zs5', commentId: 'o2o5rsi' }, 'temporary', 'miss');
+            });
+            assert.deepEqual(logged, [
+                { event: 'reddit_fetch', stage: 'probe', status: 200, ok: true, ms: 120, timed_out: false, subreddit: 'news', post_id: '1qr7zs5', comment_id: 'o2o5rsi' },
+                { event: 'reddit_fetch', stage: 'json', status: 403, ok: false, ms: 30, timed_out: false, error: 'Error', subreddit: 'news', post_id: '1qr7zs5', comment_id: 'o2o5rsi' },
+                { event: 'reddit_fetch', stage: 'old_reddit', status: null, ok: false, ms: 10_000, timed_out: true, error: 'AbortError', subreddit: 'news', post_id: '1qr7zs5', comment_id: 'o2o5rsi' },
+                { event: 'reddit_fetch', stage: 'old_reddit_body', status: null, ok: true, ms: 5, timed_out: false, subreddit: 'news', post_id: '1qr7zs5', comment_id: 'o2o5rsi' },
+                { event: 'reddit_fetch', stage: 'icon', status: 404, ok: false, ms: 7, timed_out: false, subreddit: 'news', post_id: '1qr7zs5', comment_id: 'o2o5rsi' },
+                {
+                    event: 'reddit_comment_timing',
+                    outcome: 'temporary',
+                    cache: 'miss',
+                    total_ms: 10_165,
+                    fetches: 5,
+                    slowest_stage: 'old_reddit',
+                    slowest_ms: 10_000,
+                    subreddit: 'news',
+                    post_id: '1qr7zs5',
+                    comment_id: 'o2o5rsi',
+                },
+            ]);
+        },
+    },
+    {
+        name: 'redditHandler comment path logs each Reddit fetch and a summary without changing results (#98)',
+        run: async () => {
+            const forbidden = () => new Response('blocked', { status: 403, statusText: 'Forbidden' });
+            const deletedAccountPage = () => redditRealHtmlResponse(redditRealCrawlerPage(
+                REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML,
+                REDDIT_REAL_DELETED_COMMENT_HTML,
+            ));
+            const scenarios: Array<{
+                label: string;
+                url: string;
+                json: () => Response;
+                crawler?: () => Response;
+                check: (response: HandlerResponse) => void;
+                outcome: string;
+                stages: Array<[string, number | null, boolean]>;
+            }> = [
+                {
+                    label: 'crawler card (o2o5rsi, JSON 403)',
+                    url: `${REDDIT_REAL_THREAD_URL}o2o5rsi/`,
+                    json: forbidden,
+                    crawler: deletedAccountPage,
+                    check: (response) => {
+                        assert.equal(response.success, true);
+                        assert.equal(response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+                        assert.equal(response.data?.sections?.some((section) => section.kind === 'tombstone'), false);
+                    },
+                    outcome: 'card',
+                    stages: [
+                        ['probe', 200, true],
+                        ['json', 403, false],
+                        ['old_reddit', 200, true],
+                        ['old_reddit_body', null, true],
+                        ['icon', null, true],
+                        ['icon_fallback', null, true],
+                    ],
+                },
+                {
+                    label: 'crawler tombstone (o2m8ovr, JSON 403)',
+                    url: `${REDDIT_REAL_THREAD_URL}o2m8ovr/`,
+                    json: forbidden,
+                    crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_COMMENT_HTML)),
+                    check: assertRedditCommentTombstone,
+                    outcome: 'gone',
+                    stages: [
+                        ['probe', 200, true],
+                        ['json', 403, false],
+                        ['old_reddit', 200, true],
+                        ['old_reddit_body', null, true],
+                    ],
+                },
+                {
+                    label: 'JSON 404 tombstone',
+                    url: REDDIT_OUTAGE_COMMENT_URL,
+                    json: () => new Response('gone', { status: 404, statusText: 'Not Found' }),
+                    check: assertRedditCommentTombstone,
+                    outcome: 'gone',
+                    stages: [['probe', 200, true], ['json', 404, false]],
+                },
+                {
+                    label: 'JSON 403 and crawler 503 stay temporary',
+                    url: REDDIT_OUTAGE_COMMENT_URL,
+                    json: forbidden,
+                    crawler: () => new Response('busy', { status: 503 }),
+                    check: (response) => assertRedditCommentTransient(response),
+                    outcome: 'temporary',
+                    stages: [['probe', 200, true], ['json', 403, false], ['old_reddit', 503, false]],
+                },
+                {
+                    label: 'JSON 429 and crawler timeout stay temporary',
+                    url: REDDIT_OUTAGE_COMMENT_URL,
+                    json: () => new Response('slow down', { status: 429, statusText: 'Too Many Requests' }),
+                    crawler: () => {
+                        throw new DOMException('The operation was aborted.', 'AbortError');
+                    },
+                    check: (response) => assertRedditCommentTransient(response),
+                    outcome: 'temporary',
+                    stages: [['probe', 200, true], ['json', 429, false], ['old_reddit', null, false]],
+                },
+            ];
+
+            for (const scenario of scenarios) {
+                let result: Awaited<ReturnType<typeof runRedditCommentScenario>> | undefined;
+                const logged = await captureRedditTimingLogs(async () => {
+                    result = await runRedditCommentScenario({
+                        url: scenario.url,
+                        json: scenario.json,
+                        crawler: scenario.crawler,
+                    });
+                });
+                assert.ok(result, scenario.label);
+                scenario.check(result.response);
+
+                const fetchLines = logged.filter((line) => line.event === 'reddit_fetch');
+                assert.deepEqual(
+                    fetchLines.map((line) => [line.stage, line.status, line.ok]),
+                    scenario.stages,
+                    scenario.label,
+                );
+                // One line per upstream request the handler made, plus the body read.
+                assert.equal(
+                    fetchLines.filter((line) => line.stage !== 'old_reddit_body').length,
+                    result.requested.length,
+                    scenario.label,
+                );
+                for (const line of fetchLines) {
+                    assert.equal(typeof line.ms, 'number', scenario.label);
+                    assert.ok((line.ms as number) >= 0, scenario.label);
+                    assert.equal(line.timed_out, line.error === 'AbortError', scenario.label);
+                }
+                const summaries = logged.filter((line) => line.event === 'reddit_comment_timing');
+                assert.equal(summaries.length, 1, scenario.label);
+                assert.equal(summaries[0].outcome, scenario.outcome, scenario.label);
+                assert.equal(summaries[0].cache, 'none', scenario.label);
+                assert.equal(summaries[0].fetches, fetchLines.length, scenario.label);
+                assert.equal(logged.at(-1), summaries[0], scenario.label);
+                const ids = parseRedditUrl(scenario.url);
+                assert.equal(summaries[0].post_id, ids?.postId, scenario.label);
+                assert.equal(summaries[0].comment_id, ids?.commentId, scenario.label);
+
+                // A console.log that throws cannot change the result either.
+                const originalLog = console.log;
+                console.log = () => {
+                    throw new Error('log sink down');
+                };
+                let silent: Awaited<ReturnType<typeof runRedditCommentScenario>>;
+                try {
+                    silent = await runRedditCommentScenario({
+                        url: scenario.url,
+                        json: scenario.json,
+                        crawler: scenario.crawler,
+                    });
+                } finally {
+                    console.log = originalLog;
+                }
+                assert.deepEqual(silent.response, result.response, scenario.label);
+                assert.deepEqual(silent.requested, result.requested, scenario.label);
+            }
+        },
+    },
+    {
+        name: 'redditHandler writes no #98 timing lines for Reddit posts',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const postUrl = 'https://www.reddit.com/r/programming/comments/abc123/parent_discussion_thread/';
+            try {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url === postUrl) return new Response(null, { status: 200 });
+                    if (url.includes('.json')) {
+                        return Response.json([{ data: { children: [{ kind: 't3', data: {
+                            subreddit: 'programming', title: 'Parent discussion thread', author: 'someone',
+                            permalink: '/r/programming/comments/abc123/parent_discussion_thread/',
+                            url: postUrl, selftext: 'body', num_comments: 1, score: 2, created_utc: 1769805460,
+                            thumbnail: 'self',
+                        } }] } }, { data: { children: [] } }]);
+                    }
+                    if (url.includes('/about')) return Response.json({ data: {} });
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+                let response: HandlerResponse | undefined;
+                const logged = await captureRedditTimingLogs(async () => {
+                    response = await redditHandler.handle(postUrl, {} as Env);
+                });
+                assert.equal(response?.success, true);
+                assert.equal(response?.data?.title, 'r/programming \u2022 Parent discussion thread');
+                assert.deepEqual(logged, []);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: '/api/embed tags the Reddit comment timing summary with the embed cache state (#98)',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const pendingWrites: Promise<unknown>[] = [];
+            const cacheKey = (key: Request | string) => typeof key === 'string' ? key : key.url;
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+            const commentUrl = `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request | string) {
+                                return entries.get(cacheKey(key))?.clone();
+                            },
+                            async put(key: Request | string, response: Response) {
+                                entries.set(cacheKey(key), response.clone());
+                            },
+                        };
+                    },
+                },
+            });
+            globalThis.fetch = (async (input: RequestInfo | URL) => {
+                const url = String(input);
+                if (url === commentUrl) return new Response(null, { status: 200 });
+                if (url.includes('.json')) return new Response('blocked', { status: 403, statusText: 'Forbidden' });
+                if (url.startsWith('https://old.reddit.com/')) {
+                    return redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML));
+                }
+                if (url.includes('/about')) return Response.json({ data: {} });
+                throw new Error(`Unexpected fetch: ${url}`);
+            }) as typeof fetch;
+
+            try {
+                const path = `/api/embed?url=${encodeURIComponent(commentUrl)}`;
+                const summaryOf = (lines: Array<Record<string, unknown>>) => {
+                    const summaries = lines.filter((line) => line.event === 'reddit_comment_timing');
+                    assert.equal(summaries.length, 1);
+                    return summaries[0];
+                };
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+
+                let first: Response | undefined;
+                const missLines = await captureRedditTimingLogs(async () => {
+                    first = await app.request(path, {}, cacheEnv, executionContext);
+                });
+                await Promise.all(pendingWrites.splice(0));
+                assert.equal(first?.status, 200);
+                assert.equal(first?.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(summaryOf(missLines).cache, 'miss');
+                assert.equal(summaryOf(missLines).outcome, 'card');
+                assert.ok((summaryOf(missLines).fetches as number) > 0);
+
+                let second: Response | undefined;
+                const hitLines = await captureRedditTimingLogs(async () => {
+                    second = await app.request(path, {}, cacheEnv, executionContext);
+                });
+                assert.equal(second?.headers.get('X-FixEmbed-Cache'), 'HIT');
+                assert.deepEqual(await second?.json(), await first?.json());
+                assert.deepEqual(hitLines.filter((line) => line.event === 'reddit_fetch'), []);
+                assert.equal(summaryOf(hitLines).cache, 'hit');
+                assert.equal(summaryOf(hitLines).outcome, 'cached');
+                assert.equal(summaryOf(hitLines).fetches, 0);
+                assert.equal(summaryOf(hitLines).comment_id, 'o2o5rsi');
+
+                const offLines = await captureRedditTimingLogs(async () => {
+                    const off = await app.request(path, {}, env, executionContext);
+                    assert.equal(off.status, 200);
+                });
+                assert.equal(summaryOf(offLines).cache, 'off');
+            } finally {
+                globalThis.fetch = originalFetch;
+                if (originalCaches) {
+                    Object.defineProperty(globalThis, 'caches', originalCaches);
+                } else {
+                    delete (globalThis as { caches?: unknown }).caches;
+                }
+            }
         },
     },
 ];

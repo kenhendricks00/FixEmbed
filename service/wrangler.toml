@@ -20,6 +20,10 @@ TOPGG_BOT_ID = "1173820242305224764"
 FIXEMBED_GUILD_ID = "1195810157112852540"
 FIXEMBED_VOTER_ROLE_ID = "1195810157112852544"
 
+# Workers Logs: keep console output (including the #98 Reddit timing lines) for 7 days.
+[observability]
+enabled = true
+
 [dev]
 port = 8787
 

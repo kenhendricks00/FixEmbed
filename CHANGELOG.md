@@ -1,5 +1,14 @@
 ## Unreleased
 
+#### **Reddit timing logs (#98)**
+- The Worker now turns on Workers Logs, so its console output is kept for 7 days and can be searched in the Cloudflare dashboard.
+- Each Reddit comment request now logs one `reddit_fetch` line per Reddit call: the subreddit check, the JSON API, the old.reddit page, the old.reddit body read, and the subreddit icon lookups. Each line has the stage, the HTTP status, the time in milliseconds, and whether it timed out.
+- One `reddit_comment_timing` summary line follows with the total time, the slowest stage, the outcome (card, gone, or temporary), and whether the answer came from the embed cache. Cache hits log only the summary.
+- The new lines carry only the subreddit, post id, and comment id. No URLs, cookies, or comment text.
+- Logging only. Timeouts, fallbacks, and the deleted versus temporarily unavailable results are unchanged, and a logging failure cannot change a card.
+- This explains slow cards but does not speed them up. Discord timestamps from a test showed one slow comment card took 9.6s end to end, and the Worker spent 9.3s of that, so the next step is to find which Reddit call was slow.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Reddit text keeps underscores and inline code (#87)**
 - When Reddit's API is blocked and a comment or post body comes from Reddit's HTML page instead, the Worker now turns that HTML back into Discord markdown instead of stripping the tags. Literal `_`, `*`, `~`, `|` and backslashes in the text are escaped once, so `how_are_reddit_urls_constructed` keeps its underscores and the rest of the paragraph no longer turns italic.
 - Inline code keeps its content ("you'll often see `_` used" no longer renders as "see  used"), code blocks keep their indentation, and Reddit's own bold, italics, strikethrough, spoilers and links carry over as Discord formatting.
