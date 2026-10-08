@@ -57,7 +57,7 @@ from premium_activation import (
     checklist_settings_targets,
     format_checklist_row,
 )
-from message_context import format_tagged_users
+from message_context import format_tagged_users, no_mentions, sender_allowed_mentions
 from command_components import render_command_layout, render_settings_layout
 from install_links import build_install_controls
 from onboarding import send_onboarding_dm
@@ -283,6 +283,9 @@ client = commands.AutoShardedBot(
     command_prefix=commands.when_mentioned,
     intents=intents,
     shard_count=10,
+    # Cards and link text carry third-party content (comment bodies, titles,
+    # captions, author names). Nothing the bot posts may ping by default.
+    allowed_mentions=no_mentions(),
 )
 
 # In-memory storage for channel states and settings
@@ -311,7 +314,7 @@ async def rate_limited_send(
     content=None,
     embed=None,
     files=None,
-    allowed_mentions=None,
+    allowed_mentions=no_mentions(),
     view=None,
     fallback_content=None,
 ):
@@ -977,11 +980,11 @@ async def send_components_v2_links(interaction, links):
                 logging.info(
                     "Reddit comment metadata unavailable; sending plain link (#71)"
                 )
-            await interaction.followup.send(fallback_url)
+            await interaction.followup.send(fallback_url, allowed_mentions=no_mentions())
             continue
 
         try:
-            send_options = {"view": delivery.view}
+            send_options = {"view": delivery.view, "allowed_mentions": no_mentions()}
             if delivery.files:
                 send_options["files"] = list(delivery.files)
             await interaction.followup.send(**send_options)
@@ -991,7 +994,9 @@ async def send_components_v2_links(interaction, links):
                 item.service,
                 type(error).__name__,
             )
-            await interaction.followup.send(delivery.fallback_url)
+            await interaction.followup.send(
+                delivery.fallback_url, allowed_mentions=no_mentions()
+            )
 
 @client.tree.command(
     name='activate',
@@ -2683,18 +2688,17 @@ async def on_message(message):
                     tagged_users = format_tagged_users(message.mentions, message.author.id)
                     if tagged_users:
                         formatted_links.append(tagged_users)
-                    allowed_mentions = discord.AllowedMentions(
-                        users=[message.author] if mention_users and not premium else [],
-                        roles=False,
-                        everyone=False,
-                        replied_user=False,
+                    # Only the "Sent by" line may ping, and only the poster.
+                    sender_mentions = sender_allowed_mentions(
+                        message.author,
+                        ping_author=bool(mention_users and not premium),
                     )
                     for chunk in chunk_lines(formatted_links):
                         delivery_outcomes.append(
                             await rate_limited_send(
                                 message.channel,
                                 content=chunk,
-                                allowed_mentions=allowed_mentions,
+                                allowed_mentions=sender_mentions,
                             )
                         )
                     for delivery in component_layouts:
@@ -2704,7 +2708,7 @@ async def on_message(message):
                                 view=delivery.view,
                                 files=delivery.files,
                                 fallback_content=delivery.fallback_url,
-                                allowed_mentions=allowed_mentions,
+                                allowed_mentions=no_mentions(),
                             )
                         )
                     if should_apply_source_message_action(
@@ -2721,7 +2725,11 @@ async def on_message(message):
                     delivery_outcomes = []
                     for chunk in chunk_lines(formatted_links):
                         delivery_outcomes.append(
-                            await rate_limited_send(message.channel, content=chunk)
+                            await rate_limited_send(
+                                message.channel,
+                                content=chunk,
+                                allowed_mentions=no_mentions(),
+                            )
                         )
                     for delivery in component_layouts:
                         delivery_outcomes.append(
@@ -2730,6 +2738,7 @@ async def on_message(message):
                                 view=delivery.view,
                                 files=delivery.files,
                                 fallback_content=delivery.fallback_url,
+                                allowed_mentions=no_mentions(),
                             )
                         )
                     if should_apply_source_message_action(
@@ -2744,13 +2753,18 @@ async def on_message(message):
                         )
                 else:
                     for chunk in chunk_lines(formatted_links):
-                        await rate_limited_send(message.channel, content=chunk)
+                        await rate_limited_send(
+                            message.channel,
+                            content=chunk,
+                            allowed_mentions=no_mentions(),
+                        )
                     for delivery in component_layouts:
                         await rate_limited_send(
                             message.channel,
                             view=delivery.view,
                             files=delivery.files,
                             fallback_content=delivery.fallback_url,
+                            allowed_mentions=no_mentions(),
                         )
 
         except discord.Forbidden as error:

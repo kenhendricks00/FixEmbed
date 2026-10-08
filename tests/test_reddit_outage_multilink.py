@@ -14,7 +14,7 @@ import discord
 
 import delivery_policy
 import link_utils
-from message_context import format_tagged_users
+from message_context import format_tagged_users, no_mentions, sender_allowed_mentions
 from reddit_embed import keeps_native_reddit_og_on_failure
 
 
@@ -134,6 +134,8 @@ class OnMessageRedditOutageTests(unittest.IsolatedAsyncioTestCase):
             "rate_limited_send": rate_limited_send,
             "chunk_lines": link_utils.chunk_lines,
             "format_tagged_users": format_tagged_users,
+            "no_mentions": no_mentions,
+            "sender_allowed_mentions": sender_allowed_mentions,
             "discord": discord,
         }
         self.on_message = _load_on_message(namespace)

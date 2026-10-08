@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Block mentions from embedded content (#93)**
+- FixEmbed can no longer ping anyone through text it copies from other sites or users. An `@everyone`, `@here`, `<@user>` or `<@&role>` inside a Reddit comment, a post title, a caption, an author name, or a link's text now shows as plain text and notifies nobody.
+- The bot client now defaults to no mentions, so every message it posts is silent unless a send opts in.
+- Cards and link text in reply, suppress, and delete modes, plus `/fix` and the Fix Embed message command, now send with no mentions, including the plain-link fallback.
+- In delete mode, the "Sent by" line can still ping the person who posted the link when Mention Users is on, as before. Tagged users stay listed without being pinged, and the card itself never pings, even the poster.
+- Ships with a bot restart. No Worker deploy needed.
+
 #### **Reddit deleted accounts and deleted comments (#84)**
 - A comment whose author deleted their Reddit account but whose text is still there now renders the full comment card with the author shown as `[deleted]`, instead of a false "Comment unavailable". This applies to both the JSON path and the old.reddit fallback.
 - `[deleted]` authors no longer get a `u/[deleted]` label or a broken reddit.com/user link, for the comment author and for a deleted parent post author.
