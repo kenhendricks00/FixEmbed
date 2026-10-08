@@ -4,28 +4,43 @@ Desk's #95 smoke (Test #0001, Oct 8) showed the title of
 https://www.reddit.com/r/discordapp/comments/1ib8uq6/ as raw
 ``[How do i stop ... @everyone? ...](https://www.reddit.com/...)``: Discord drops
 a masked link whose label holds a mention. The same card showed the comment's
-``<@&1234567>`` as an @unknown-role pill (#96). Fixes #103.
+``<@&1234567>`` as an @unknown-role pill (#96).
 
-Labels escape lens's list (``[``, ``]``, ``)``, backslash) and break mentions.
+#104 and #105 broke the mention with a zero-width space and backslash-escaped
+the label, and the title still rendered raw (#103). Posting each variant in
+#embedded-testing on Oct 8 showed what Discord does with a label:
+
+- ``@<ZWSP>everyone``: refused, raw markdown. ``＠everyone`` (U+FF20): a link.
+- ``\\)``, ``\\[``, ``\\*``, ``\\\\``: a link, but the backslash shows.
+- ``[OC] ... [2 of 3]`` and ``(parens)``: a link, unchanged.
+- ``https://example.org/x`` or ``https：//...`` in the label: refused.
+  ``example.org/x``: a link.
 """
 
+import random
 import re
+import unicodedata
 import unittest
 
 from bilibili_embed import build_bilibili_layout
 from deviantart_embed import build_deviantart_layout
-from markdown_safety import masked_link_label, neutralize_mentions
+from markdown_safety import (
+    is_linkable_label,
+    masked_link,
+    masked_link_label,
+    neutralize_mentions,
+)
 from platform_embed import PlatformCardSpec, build_platform_layout
 from reddit_embed import build_reddit_layout
 from twitter_embed import build_twitter_layout
 
 
 ZWSP = "\u200b"
+FW_AT = "\uff20"
+FW_HASH = "\uff03"
 # No word boundary: Discord also reads ``@everyones`` and ``x@here`` as mentions.
 MENTION = re.compile(r"@(everyone|here)|<[@#](?!\u200b)")
-# A ``[``, ``]`` or ``)`` after an even run of backslashes, or a trailing
-# unpaired backslash, would end or break the masked-link label.
-LIVE_LABEL_SPECIAL = re.compile(r"(?<!\\)(?:\\\\)*(?:[\[\])]|\\$)")
+LABEL_MENTION = re.compile(r"@\u200b?(everyone|here)|<[@#]")
 
 POST_TITLE = (
     "How do i stop regular members from using @everyone? "
@@ -36,8 +51,8 @@ POST_URL = (
     "how_do_i_stop_regular_members_from_using_everyone/"
 )
 SAFE_POST_TITLE = (
-    f"How do i stop regular members from using @{ZWSP}everyone? "
-    "the permission is disabled (see image\\) but they do it anyway?"
+    f"How do i stop regular members from using {FW_AT}everyone? "
+    "the permission is disabled (see image) but they do it anyway?"
 )
 
 # Worker payload for comment m9h3a1i, as returned by
@@ -102,31 +117,60 @@ def _masked_label(line, url):
 
 
 def _assert_valid_label(test, label):
+    """Checks the Discord findings directly, not only ``is_linkable_label``."""
     test.assertIsNotNone(label)
-    test.assertIsNone(MENTION.search(label), label)
-    test.assertIsNone(LIVE_LABEL_SPECIAL.search(label), label)
+    test.assertTrue(is_linkable_label(label), label)
+    test.assertIsNone(LABEL_MENTION.search(label), label)
+    test.assertNotIn("//", unicodedata.normalize("NFKC", label))
+    test.assertNotIn("\n", label)
+    # Every ASCII bracket is part of a simple pair that is not ``[x](``.
+    test.assertIsNone(re.search(r"[\[\]]", re.sub(r"\[[^\[\]]*\](?!\()", "", label)), label)
+    test.assertIsNone(re.search(r"\\(?=[\[\]]|$)", label), label)
 
 
 class MaskedLinkLabelTests(unittest.TestCase):
-    def test_1ib8uq6_title_breaks_the_mention_and_keeps_the_text(self):
+    def test_1ib8uq6_title_breaks_the_mention_with_a_fullwidth_at(self):
         label = masked_link_label(POST_TITLE)
         self.assertEqual(label, SAFE_POST_TITLE)
-        self.assertEqual(label.replace(ZWSP, "").replace("\\)", ")"), POST_TITLE)
+        self.assertEqual(label.replace(FW_AT, "@"), POST_TITLE)
+        self.assertNotIn(ZWSP, label)
+        self.assertNotIn("\\", label)
         _assert_valid_label(self, label)
 
-    def test_brackets_parens_and_backslashes_are_escaped(self):
-        self.assertEqual(
-            masked_link_label("[Serious] what is [x](y)? a\\b"),
-            r"\[Serious\] what is \[x\](y\)? a\\b",
-        )
-        self.assertEqual(masked_link_label("ends in \\"), "ends in \\\\")
-        _assert_valid_label(self, masked_link_label("odd ] ) [ \\"))
+    def test_labels_are_never_backslash_escaped(self):
+        # Test F and I: Discord shows the backslash of ``\)``, ``\[``, ``\*``.
+        for title in (
+            "the permission is disabled (see image) but",
+            "a *star* and _under_ and C:\\path",
+            "[OC] My art (wip) [2 of 3] done",
+        ):
+            self.assertEqual(masked_link_label(title), title)
+            _assert_valid_label(self, masked_link_label(title))
+
+    def test_unpaired_and_nested_brackets_turn_fullwidth(self):
+        for title, expected in (
+            ("odd ] ) [", "odd \uff3d ) \uff3b"),
+            ("[x](y) z", "\uff3bx\uff3d(y) z"),
+            ("[a [b] c]", "\uff3ba [b] c\uff3d"),
+            ("[Serious] what is [x](y)?", "[Serious] what is \uff3bx\uff3d(y)?"),
+        ):
+            self.assertEqual(masked_link_label(title), expected)
+            _assert_valid_label(self, masked_link_label(title))
+
+    def test_backslash_that_would_swallow_a_bracket_becomes_fullwidth(self):
+        for title, expected in (
+            ("ends in \\", "ends in \uff3c"),
+            ("a\\[b] c", "a\uff3c[b] c"),
+            ("[a\\] b", "[a\uff3c] b"),
+        ):
+            self.assertEqual(masked_link_label(title), expected)
+            _assert_valid_label(self, masked_link_label(title))
 
     def test_every_mention_form_is_broken(self):
         label = masked_link_label("@everyone @here <@1> <@!1> <@&2> <#3>")
         self.assertEqual(
             label,
-            f"@{ZWSP}everyone @{ZWSP}here <@{ZWSP}1> <@{ZWSP}!1> <@{ZWSP}&2> <#{ZWSP}3>",
+            f"{FW_AT}everyone {FW_AT}here <{FW_AT}1> <{FW_AT}!1> <{FW_AT}&2> <{FW_HASH}3>",
         )
         _assert_valid_label(self, label)
 
@@ -135,6 +179,7 @@ class MaskedLinkLabelTests(unittest.TestCase):
             "World Cup 2026: Hydration breaks not popular, Fifa will review",
             "PSA - Do not recommend unsafe utilities (",
             "email me at someone@example.com, @heroes and @every one are fine",
+            "read more on example.org/x today",
             "\u65e5\u672c\u8a9e\u306e\u30bf\u30a4\u30c8\u30eb \U0001f389 <3",
             "",
         ):
@@ -145,32 +190,35 @@ class MaskedLinkLabelTests(unittest.TestCase):
         # lens nit 1 on #104: backticks in link text don't stop Discord from
         # seeing the mention and dropping the masked link.
         for title, expected in (
-            ("Why `@everyone` fails", f"Why `@{ZWSP}everyone` fails"),
-            ("``<@&1234567>`` vs `@here`", f"``<@{ZWSP}&1234567>`` vs `@{ZWSP}here`"),
-            ("```<#1> <@2>```", f"```<#{ZWSP}1> <@{ZWSP}2>```"),
-            ("see https://medium.com/@here/post", f"see https://medium.com/@{ZWSP}here/post"),
+            ("Why `@everyone` fails", f"Why `{FW_AT}everyone` fails"),
+            ("``<@&1234567>`` vs `@here`", f"``<{FW_AT}&1234567>`` vs `{FW_AT}here`"),
+            ("```<#1> <@2>```", f"```<{FW_HASH}1> <{FW_AT}2>```"),
         ):
             label = masked_link_label(title)
             self.assertEqual(label, expected)
             self.assertEqual(masked_link_label(label), label)
             _assert_valid_label(self, label)
-        self.assertEqual(
-            masked_link_label("`a]` @here", escaped=True),
-            f"`a\\]` @{ZWSP}here",
-        )
 
     def test_broadcast_mentions_break_whatever_follows_or_precedes(self):
         # lens nit 2 on #104: ``\b`` let ``@everyone_x`` through.
-        for text, expected in (
-            ("@everyone_x", f"@{ZWSP}everyone_x"),
-            ("@everyones @everyoneelse", f"@{ZWSP}everyones @{ZWSP}everyoneelse"),
-            ("@hereby @heresy @here2", f"@{ZWSP}hereby @{ZWSP}heresy @{ZWSP}here2"),
-            ("foo@here ops@here.com", f"foo@{ZWSP}here ops@{ZWSP}here.com"),
-            ("@@everyone", f"@@{ZWSP}everyone"),
+        for text, label, body in (
+            ("@everyone_x", f"{FW_AT}everyone_x", f"@{ZWSP}everyone_x"),
+            (
+                "@everyones @everyoneelse",
+                f"{FW_AT}everyones {FW_AT}everyoneelse",
+                f"@{ZWSP}everyones @{ZWSP}everyoneelse",
+            ),
+            (
+                "@hereby @heresy @here2",
+                f"{FW_AT}hereby {FW_AT}heresy {FW_AT}here2",
+                f"@{ZWSP}hereby @{ZWSP}heresy @{ZWSP}here2",
+            ),
+            ("foo@here ops@here.com", f"foo{FW_AT}here ops{FW_AT}here.com", f"foo@{ZWSP}here ops@{ZWSP}here.com"),
+            ("@@everyone", f"@{FW_AT}everyone", f"@@{ZWSP}everyone"),
         ):
-            self.assertEqual(masked_link_label(text), expected)
-            self.assertEqual(neutralize_mentions(text), expected)
-            self.assertEqual(neutralize_mentions(expected), expected)
+            self.assertEqual(masked_link_label(text), label)
+            self.assertEqual(neutralize_mentions(text), body)
+            self.assertEqual(neutralize_mentions(body), body)
             _assert_valid_label(self, masked_link_label(text))
 
     def test_other_at_text_is_left_alone(self):
@@ -182,25 +230,76 @@ class MaskedLinkLabelTests(unittest.TestCase):
             self.assertEqual(masked_link_label(text), text)
             self.assertEqual(neutralize_mentions(text), text)
 
-    def test_already_escaped_text_is_not_escaped_again(self):
-        for text in (
-            r"how\_are \*reddit\* \[urls\] \(built\) a\\b",
-            f"@{ZWSP}everyone <@{ZWSP}&1>",
-        ):
-            self.assertEqual(masked_link_label(text, escaped=True), text)
-        once = masked_link_label("[a] (b) c\\ @here <@1>")
-        self.assertEqual(masked_link_label(once, escaped=True), once)
+    def test_labels_are_idempotent_and_upgrade_zero_width_breaks(self):
+        once = masked_link_label("[a] (b) c\\ @here <@1> ] [")
+        self.assertEqual(masked_link_label(once), once)
+        self.assertEqual(
+            masked_link_label(f"@{ZWSP}everyone <@{ZWSP}&1> <#{ZWSP}2>"),
+            f"{FW_AT}everyone <{FW_AT}&1> <{FW_HASH}2>",
+        )
         self.assertEqual(
             neutralize_mentions(neutralize_mentions("<#1> @here")),
             f"<#{ZWSP}1> @{ZWSP}here",
         )
 
-    def test_escaped_text_still_escapes_what_is_live(self):
-        # ``\\[`` is an escaped backslash followed by a live bracket.
+    def test_escaped_text_drops_its_escapes_inside_a_label(self):
         self.assertEqual(
-            masked_link_label("a\\\\[b] (c) d\\", escaped=True),
-            "a\\\\\\[b\\] (c\\) d\\\\",
+            masked_link_label(r"how\_are \*reddit\* \[urls\] \(built\) a\\b @here", escaped=True),
+            f"how_are *reddit* [urls] (built) a\\b {FW_AT}here",
         )
+        self.assertEqual(masked_link_label("`a]` @here", escaped=True), f"`a\uff3d` {FW_AT}here")
+
+    def test_line_breaks_become_spaces(self):
+        self.assertEqual(masked_link_label("  first\nsecond\r\n third  "), "first second third")
+
+    def test_adversarial_labels_always_satisfy_the_discord_rules(self):
+        rng = random.Random(103)
+        alphabet = list("[]()\\@#<>&!:/ abeehnoryvx`*_\n\u200b") + ["everyone", "here", "\uff1a"]
+        for _ in range(3000):
+            text = "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 24)))
+            label = masked_link_label(text)
+            self.assertEqual(masked_link_label(label), label, repr(text))
+            if not label.strip():
+                continue
+            if "//" in unicodedata.normalize("NFKC", label):
+                self.assertFalse(is_linkable_label(label), repr(text))
+            else:
+                _assert_valid_label(self, label)
+
+
+class MaskedLinkTests(unittest.TestCase):
+    def test_link_when_the_label_is_safe(self):
+        self.assertEqual(
+            masked_link(POST_TITLE, POST_URL),
+            f"[{SAFE_POST_TITLE}]({POST_URL})",
+        )
+
+    def test_url_in_the_label_falls_back_to_plain_text_and_the_link(self):
+        # Test J and M: Discord refuses ``https://`` in a label, even with a
+        # fullwidth colon. Test L: a bare domain is fine.
+        url = "https://www.reddit.com/r/x/comments/1/"
+        self.assertEqual(
+            masked_link("see https://example.org/x for @everyone", url),
+            f"see https://example.org/x for @{ZWSP}everyone (<{url}>)",
+        )
+        self.assertEqual(
+            masked_link("see https\uff1a//example.org/x", url),
+            f"see https\uff1a//example.org/x (<{url}>)",
+        )
+        self.assertEqual(
+            masked_link("read more on example.org/x today", url),
+            f"[read more on example.org/x today]({url})",
+        )
+
+    def test_escaped_text_keeps_its_escapes_in_the_plain_fallback(self):
+        url = "https://www.deviantart.com/a/art/b-1"
+        self.assertEqual(
+            masked_link(r"\[x\](https://e.com) \*hi\*", url, escaped=True),
+            f"\\[x\\](https://e.com) \\*hi\\* (<{url}>)",
+        )
+
+    def test_no_url_means_plain_text(self):
+        self.assertEqual(masked_link("@here [x]", ""), f"@{ZWSP}here [x]")
 
 
 class NeutralizeMentionsTests(unittest.TestCase):
@@ -231,6 +330,7 @@ class RedditCardTests(unittest.TestCase):
         self.assertEqual(title_line, f"### [{SAFE_POST_TITLE}]({POST_URL})")
         _assert_valid_label(self, _masked_label(title_line, POST_URL))
         self.assertNotIn("@everyone", header)
+        self.assertNotIn("\\", header)
 
     def test_1ib8uq6_comment_body_mentions_are_plain_text(self):
         quote = _texts(build_reddit_layout(COMMENT_PAYLOAD))[1]
@@ -245,7 +345,7 @@ class RedditCardTests(unittest.TestCase):
             quote,
         )
 
-    def test_bracketed_post_title_and_section_title_escape_their_brackets(self):
+    def test_bracketed_post_title_and_section_title_keep_their_brackets(self):
         article = "https://example.com/story"
         payload = {
             "title": "r/news \u2022 [Serious] Is this real? @here",
@@ -265,16 +365,11 @@ class RedditCardTests(unittest.TestCase):
         }
         texts = _texts(build_reddit_layout(payload))
         header_lines = texts[0].splitlines()
-        self.assertEqual(
-            header_lines[1],
-            f"### [\\[Serious\\] Is this real? @{ZWSP}here]({article})",
-        )
-        _assert_valid_label(
-            self, _masked_label(header_lines[1], article)
-        )
+        self.assertEqual(header_lines[1], f"### [[Serious] Is this real? {FW_AT}here]({article})")
+        _assert_valid_label(self, _masked_label(header_lines[1], article))
         self.assertEqual(header_lines[2], f"body says <@{ZWSP}123> and how\\_are")
         self.assertIn(
-            f"### [Crosspost \\[OC\\] (2\\) from @{ZWSP}everyone]"
+            f"### [Crosspost [OC] (2) from {FW_AT}everyone]"
             "(https://www.reddit.com/r/pics/comments/def456/)\n"
             f"<#{ZWSP}1> ping",
             texts,
@@ -301,6 +396,18 @@ class RedditCardTests(unittest.TestCase):
             "Literal how\\_are and \\*stars\\* stay escaped once.",
         )
 
+    def test_title_with_a_url_falls_back_instead_of_raw_markdown(self):
+        article = "https://example.com/story"
+        payload = {
+            "title": "r/news \u2022 Mirror at https://archive.ph/abc",
+            "url": "https://www.reddit.com/r/news/comments/abc123/x/",
+            "authorName": "u/poster",
+            "authorUrl": "https://www.reddit.com/user/poster/",
+            "sections": [{"kind": "link-card", "title": "Open linked article", "url": article}],
+        }
+        header_lines = _texts(build_reddit_layout(payload))[0].splitlines()
+        self.assertEqual(header_lines[1], f"### Mirror at https://archive.ph/abc (<{article}>)")
+
 
 class OtherBuilderLabelTests(unittest.TestCase):
     def test_platform_card_title_with_mention_keeps_its_link(self):
@@ -314,10 +421,10 @@ class OtherBuilderLabelTests(unittest.TestCase):
         }
         header = _texts(build_platform_layout(payload, spec))[0]
         title_line = header.splitlines()[1]
-        self.assertEqual(title_line, f"### [\\[art\\] (wip\\) for @{ZWSP}everyone]({url})")
+        self.assertEqual(title_line, f"### [[art] (wip) for {FW_AT}everyone]({url})")
         _assert_valid_label(self, _masked_label(title_line, url))
 
-    def test_deviantart_escaped_title_is_not_escaped_twice(self):
+    def test_deviantart_escaped_title_shows_no_backslashes_in_its_link(self):
         url = "https://www.deviantart.com/team/art/example-123"
         payload = {
             "title": "snake_case (v2) @here",
@@ -327,7 +434,7 @@ class OtherBuilderLabelTests(unittest.TestCase):
         }
         header = _texts(build_deviantart_layout(payload))[0]
         title_line = header.splitlines()[1]
-        self.assertEqual(title_line, f"### [snake\\_case (v2\\) @{ZWSP}here]({url})")
+        self.assertEqual(title_line, f"### [snake_case (v2) {FW_AT}here]({url})")
         _assert_valid_label(self, _masked_label(title_line, url))
 
     def test_bilibili_title_and_author_labels(self):
@@ -339,8 +446,8 @@ class OtherBuilderLabelTests(unittest.TestCase):
             "authorUrl": "https://space.bilibili.com/1",
         }
         header = _texts(build_bilibili_layout(payload))[0]
-        self.assertIn(f"**[<@{ZWSP}&1> uploader](https://space.bilibili.com/1)**", header)
-        self.assertIn(f"**[\u3010\u5b98\u65b9\u3011\\[MV\\] @{ZWSP}here]({url})**", header)
+        self.assertIn(f"**[<{FW_AT}&1> uploader](https://space.bilibili.com/1)**", header)
+        self.assertIn(f"**[\u3010\u5b98\u65b9\u3011[MV] {FW_AT}here]({url})**", header)
 
     def test_twitter_handle_named_here_keeps_its_link(self):
         payload = {
@@ -352,7 +459,7 @@ class OtherBuilderLabelTests(unittest.TestCase):
             "authorUrl": "https://x.com/here",
         }
         header = "\n".join(_texts(build_twitter_layout(payload)))
-        self.assertIn(f"([@{ZWSP}here](https://x.com/here))", header)
+        self.assertIn(f"([{FW_AT}here](https://x.com/here))", header)
 
 
 if __name__ == "__main__":
