@@ -4,7 +4,7 @@
  */
 
 import type { EmbedData, Env, HandlerResponse, PlatformHandler, VideoEmbed } from '../types.ts';
-import { decodeHtmlEntities, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
+import { createTimeoutBudget, decodeHtmlEntities, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { getBrandedSiteName, platformColors } from '../utils/embed.ts';
 
 type TikTokOEmbed = {
@@ -272,6 +272,80 @@ async function fetchTikTokProfileAvatar(handle: string): Promise<string | undefi
     if (text(profile?.uniqueId).toLowerCase() !== handle.toLowerCase()) return undefined;
     return trustedTikTokMedia(profile?.avatarLarger)
         || trustedTikTokMedia(profile?.avatarMedium);
+}
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_AVATAR_REDIRECTS = 3;
+// One wall-clock budget for the whole redirect chain, not per hop.
+const RELAY_AVATAR_BUDGET_MS = 2_500;
+
+function isRelayAvatar(value: string | undefined): value is string {
+    if (!value) return false;
+    try {
+        const host = new URL(value).hostname.toLowerCase();
+        return host === 'tnktok.com' || host.endsWith('.tnktok.com');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The FxTikTok relay answers profile pictures with a redirect to a signed TikTok
+ * CDN URL. When the relay serves a stale signature the final image is a 403, so
+ * Discord renders a broken thumbnail. Walk the trusted redirect chain once and
+ * keep the relay avatar only when it ends in a real image.
+ */
+async function relayAvatarReachable(url: string): Promise<boolean> {
+    let current = url;
+    const deadline = Date.now() + RELAY_AVATAR_BUDGET_MS;
+    const remaining = createTimeoutBudget(RELAY_AVATAR_BUDGET_MS);
+    for (let hop = 0; hop <= MAX_AVATAR_REDIRECTS; hop += 1) {
+        if (!trustedTikTokMedia(current)) return false;
+        if (Date.now() >= deadline) return false;
+        let response: Response;
+        try {
+            response = await fetchWithTimeout(current, {
+                redirect: 'manual',
+                headers: {
+                    'Accept': 'image/*',
+                    'Range': 'bytes=0-0',
+                    'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+                },
+            }, remaining());
+        } catch {
+            return false;
+        }
+        const location = response.headers.get('Location');
+        const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+        try {
+            await response.body?.cancel();
+        } catch {
+            // The probe only needs headers.
+        }
+        if (REDIRECT_STATUSES.has(response.status)) {
+            if (!location) return false;
+            try {
+                current = new URL(location, current).toString();
+            } catch {
+                return false;
+            }
+            continue;
+        }
+        return (response.status === 200 || response.status === 206) && contentType.startsWith('image/');
+    }
+    return false;
+}
+
+async function keepReachableAvatar(data: EmbedData, tryProfile: boolean): Promise<void> {
+    if (!isRelayAvatar(data.authorAvatar)) return;
+    if (await relayAvatarReachable(data.authorAvatar)) return;
+    data.authorAvatar = undefined;
+    if (!tryProfile) return;
+    try {
+        data.authorAvatar = await fetchTikTokProfileAvatar(text(data.authorHandle).replace(/^@/, ''));
+    } catch {
+        // A card without an avatar beats a broken thumbnail.
+    }
 }
 
 function positiveDimension(value: unknown, fallback: number): number {
@@ -564,6 +638,8 @@ export const tiktokHandler: PlatformHandler = {
                             data.image = fallbackData.image;
                             data.images = undefined;
                         }
+                        // The profile page was already tried when the post had no avatar.
+                        await keepReachableAvatar(data, false);
                         return { success: true, source: 'fallback', data };
                     }
                     return { success: true, source: 'first-party', data };
@@ -571,7 +647,10 @@ export const tiktokHandler: PlatformHandler = {
             }
 
             const fallback = await fetchFxTikTokFallback(parsed, oEmbed);
-            if (fallback) return fallback;
+            if (fallback) {
+                if (fallback.data) await keepReachableAvatar(fallback.data, true);
+                return fallback;
+            }
 
             const description = truncateText(text(oEmbed?.title), 3_000);
             const image = trustedTikTokMedia(oEmbed?.thumbnail_url);

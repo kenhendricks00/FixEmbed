@@ -4,6 +4,10 @@
 - The production canary's translation check now reads the Worker's `translation` metadata (target language matches the requested `lang`, translated description present) and looks for the bot's "Translated from …" footer, instead of the retired `Translation (XX):` description text.
 - The `twitter-tombstone` canary now uses a post whose quoted post really is unavailable. The old fixture's quoted post is live again, so the Worker correctly rendered a normal quote there; the parser was not at fault.
 
+#### **TikTok avatar and Bilibili author canary fixes (#75)**
+- TikTok cards that fall back to the FxTikTok relay avatar now check that the relay's signed CDN redirect really ends in an image before using it. A stale or broken avatar is swapped for the first-party profile avatar when TikTok serves it, or left off instead of rendering a broken thumbnail.
+- Bilibili emergency fallback cards retry the BiliFix oEmbed once on a timeout, 429, or 5xx, so one slow answer no longer drops the uploader name from the card.
+
 #### **Premium activation checklist**
 - Active-subscriber `/premium` now shows a configured-vs-available checklist for card color, footer branding, card style, exclusions, analytics, and bot/webhook auto-fix.
 - Each configurable checklist row deep-links into the matching `/settings` page (or Embed Color modal) via a select control; bot/webhook auto-fix is called out as automatic with no toggle.
