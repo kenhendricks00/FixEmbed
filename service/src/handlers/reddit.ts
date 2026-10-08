@@ -116,6 +116,43 @@ function decodeRedditHtml(value: string): string {
         .trim();
 }
 
+const HTML_NAMED_ENTITIES: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: '\u00a0',
+};
+
+/**
+ * Decode HTML entities in old.reddit text exactly once, in a single pass, so
+ * `&amp;gt;` stays the literal text `&gt;`. Handles the named entities old.reddit
+ * emits plus decimal and hex numeric entities. Invalid code points stay as written.
+ */
+export function decodeHtmlEntitiesOnce(value: string): string {
+    return value.replace(
+        /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g,
+        (entity, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
+            if (name !== undefined) {
+                return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
+                    ? HTML_NAMED_ENTITIES[name]
+                    : entity;
+            }
+            const codePoint = decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex!, 16);
+            if (
+                !Number.isFinite(codePoint)
+                || codePoint === 0
+                || codePoint > 0x10ffff
+                || (codePoint >= 0xd800 && codePoint <= 0xdfff)
+            ) {
+                return entity;
+            }
+            return String.fromCodePoint(codePoint);
+        },
+    );
+}
+
 function safeDecodeURIComponent(value: string): string {
     try {
         return decodeURIComponent(value);
@@ -578,13 +615,30 @@ function findRedditComment(
     return undefined;
 }
 
+/**
+ * Only the body says whether a comment is gone. A deleted account keeps its
+ * comment body and only loses the author (`[deleted]`), so the author is not a
+ * deletion signal.
+ */
+function isRedditGoneCommentBody(body: string | undefined): boolean {
+    const normalized = String(body || '').trim().toLowerCase();
+    return !normalized || normalized === '[deleted]' || normalized === '[removed]';
+}
+
 function isUnavailableRedditComment(comment: RedditComment | undefined): boolean {
     if (!comment) return true;
-    const author = String(comment.author || '').trim().toLowerCase();
-    const body = String(comment.body || '').trim().toLowerCase();
-    if (!body || body === '[deleted]' || body === '[removed]') return true;
-    if (!author || author === '[deleted]' || author === '[removed]') return true;
-    return false;
+    return isRedditGoneCommentBody(comment.body);
+}
+
+/** Reddit user identity for cards. Deleted accounts get a plain `[deleted]` label and no profile link. */
+function redditUserIdentity(author: string | undefined): { name: string; url?: string } | undefined {
+    const username = String(author || '').trim().replace(/^u\//i, '');
+    if (!username) return undefined;
+    if (/^\[(?:deleted|removed)\]$/i.test(username)) return { name: '[deleted]' };
+    return {
+        name: `u/${username}`,
+        url: `https://www.reddit.com/user/${encodeURIComponent(username)}/`,
+    };
 }
 
 function commentPermalink(
@@ -624,8 +678,8 @@ function buildRedditCommentCard(options: {
     parentSpoiler?: boolean;
     authorAvatar?: string;
 }): EmbedData {
-    const commentAuthor = options.commentAuthor.replace(/^u\//i, '');
-    const parentAuthor = options.parentAuthor?.replace(/^u\//i, '').trim();
+    const commentAuthor = redditUserIdentity(options.commentAuthor) || { name: '[deleted]' };
+    const parentAuthor = redditUserIdentity(options.parentAuthor);
     const displayTitle = options.parentTitle.trim() || 'Reddit post';
     const commentUrl = commentPermalink(
         options.subreddit,
@@ -654,10 +708,8 @@ function buildRedditCommentCard(options: {
         description: '',
         url: commentUrl,
         siteName: getBrandedSiteName('reddit'),
-        authorName: parentAuthor ? `u/${parentAuthor}` : undefined,
-        authorUrl: parentAuthor
-            ? `https://www.reddit.com/user/${encodeURIComponent(parentAuthor)}/`
-            : undefined,
+        authorName: parentAuthor?.name,
+        authorUrl: parentAuthor?.url,
         authorAvatar: options.authorAvatar,
         timestamp: options.commentTimestamp,
         color: platformColors.reddit,
@@ -669,10 +721,10 @@ function buildRedditCommentCard(options: {
         sections: [
             {
                 kind: 'quote' as const,
-                title: `Comment by u/${commentAuthor}`,
+                title: `Comment by ${commentAuthor.name}`,
                 body: truncateText(options.commentBody, 3000),
-                authorName: `u/${commentAuthor}`,
-                authorUrl: `https://www.reddit.com/user/${encodeURIComponent(commentAuthor)}/`,
+                authorName: commentAuthor.name,
+                authorUrl: commentAuthor.url,
                 url: commentUrl,
             },
             {
@@ -680,10 +732,8 @@ function buildRedditCommentCard(options: {
                 title: displayTitle,
                 body: 'Parent post',
                 url: options.parentUrl,
-                authorName: parentAuthor ? `u/${parentAuthor}` : undefined,
-                authorUrl: parentAuthor
-                    ? `https://www.reddit.com/user/${encodeURIComponent(parentAuthor)}/`
-                    : undefined,
+                authorName: parentAuthor?.name,
+                authorUrl: parentAuthor?.url,
             },
         ],
     };
@@ -771,6 +821,71 @@ function transientRedditCommentFailure(url: string): HandlerResponse {
     };
 }
 
+/** Last path segment of an old.reddit comment permalink (the comment id). */
+function redditCommentIdFromPermalink(permalink: string): string | undefined {
+    if (!permalink) return undefined;
+    try {
+        const segments = new URL(permalink, 'https://www.reddit.com').pathname
+            .split('/')
+            .filter(Boolean);
+        return segments[segments.length - 1]?.toLowerCase();
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Find the target comment's opening tag in an old.reddit page.
+ * Live comments carry `id="thing_t1_<id>"`. Deleted or removed comments have no
+ * id at all, only a `deleted comment` class and a data-permalink, so they are
+ * matched by the permalink's own comment id. Another deleted comment on the same
+ * page never matches.
+ */
+function findRedditCrawlerCommentTag(
+    html: string,
+    commentId: string,
+): { tag: string; index: number; deleted: boolean } | undefined {
+    const needle = commentId.toLowerCase();
+    const escapedCommentId = commentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const byId = html.match(
+        new RegExp(`<div\\b(?=[^>]*\\bid=["']thing_t1_${escapedCommentId}["'])[^>]*>`, 'i'),
+    );
+    if (byId?.index !== undefined) {
+        const classes = htmlAttribute(byId[0], 'class').toLowerCase().split(/\s+/);
+        return {
+            tag: byId[0],
+            index: byId.index,
+            deleted: classes.includes('deleted') && classes.includes('comment'),
+        };
+    }
+
+    for (const match of html.matchAll(/<div\b[^>]*\bdata-permalink=["'][^"']*["'][^>]*>/gi)) {
+        const tag = match[0];
+        const classes = htmlAttribute(tag, 'class').toLowerCase().split(/\s+/);
+        if (!classes.includes('thing') || !classes.includes('comment') || !classes.includes('deleted')) {
+            continue;
+        }
+        if (redditCommentIdFromPermalink(htmlAttribute(tag, 'data-permalink')) !== needle) continue;
+        return { tag, index: match.index ?? html.indexOf(tag), deleted: true };
+    }
+    return undefined;
+}
+
+/**
+ * The comment's own markup: from its tag up to its replies (`<div class="child">`),
+ * so a reply's body is never read as the target's body.
+ */
+function redditCrawlerCommentOwnHtml(html: string, index: number, commentTag: string): string {
+    const scope = html.slice(index, index + 12_000);
+    for (const match of scope.slice(commentTag.length).matchAll(/<div\b[^>]*>/gi)) {
+        const classes = htmlAttribute(match[0], 'class').split(/\s+/);
+        if (classes.includes('child')) {
+            return scope.slice(0, commentTag.length + (match.index ?? 0));
+        }
+    }
+    return scope;
+}
+
 async function recoverRedditCommentFromCrawlerPage(
     subreddit: string,
     postId: string,
@@ -789,23 +904,21 @@ async function recoverRedditCommentFromCrawlerPage(
     const html = await readBoundedText(response, MAX_ARTICLE_HTML_BYTES);
     if (!html) return { kind: 'unknown', reason: 'crawler empty html' };
 
-    const escapedCommentId = commentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const commentTag = html.match(
-        new RegExp(`<div\\b(?=[^>]*\\bid=["']thing_t1_${escapedCommentId}["'])[^>]*>`, 'i'),
-    )?.[0];
-    if (!commentTag) return { kind: 'unknown', reason: 'crawler comment tag not found' };
+    const located = findRedditCrawlerCommentTag(html, commentId);
+    if (!located) return { kind: 'unknown', reason: 'crawler comment tag not found' };
+    const { tag: commentTag, deleted: markedDeleted } = located;
 
     const author = htmlAttribute(commentTag, 'data-author');
     const permalink = htmlAttribute(commentTag, 'data-permalink');
     const timestampMs = Number(htmlAttribute(commentTag, 'data-timestamp'));
-    const commentStart = html.indexOf(commentTag);
-    const commentHtml = html.slice(commentStart, commentStart + 12_000);
+    const commentHtml = redditCrawlerCommentOwnHtml(html, located.index, commentTag);
     const score = commentScoreFromCrawlerHtml(commentTag, commentHtml);
     const rawBody = commentHtml.match(
         /<div\b(?=[^>]*\bclass=["'][^"']*\bmd\b[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     )?.[1];
+    // Strip tags first, then decode once: an escaped `&lt;b&gt;` in the comment is text, not markup.
     const body = rawBody
-        ? decodeRedditHtml(
+        ? decodeHtmlEntitiesOnce(
             rawBody
                 .replace(/<br\s*\/?>/gi, '\n')
                 .replace(/<\/p>/gi, '\n\n')
@@ -816,18 +929,13 @@ async function recoverRedditCommentFromCrawlerPage(
             .trim()
         : '';
 
-    // old.reddit drops data-author on deleted comments and renders [deleted]/[removed]
-    // as the body. Only those explicit markers mean gone; an author with an
-    // unparseable body is a markup problem, not a deletion.
-    const markedGone = isUnavailableRedditComment({
-        id: commentId,
-        author: author || '[deleted]',
-        body: body || (author ? 'unparsed' : '[deleted]'),
-        score: score ?? 0,
-        permalink: permalink || '',
-        created_utc: 0,
-    });
-    if (markedGone) return { kind: 'gone', permalink: permalink || undefined };
+    // Gone only when Reddit says so: the comment is rendered with old.reddit's
+    // `deleted` class, or its body is [deleted]/[removed]. A missing data-author
+    // alone is a deleted account whose comment is still readable.
+    if (markedDeleted || (body && isRedditGoneCommentBody(body))) {
+        return { kind: 'gone', permalink: permalink || undefined };
+    }
+    // No parseable body on a comment Reddit did not mark deleted is a markup problem.
     if (!body) return { kind: 'unknown', reason: 'crawler comment body not found' };
 
     const escapedPostId = postId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -865,7 +973,7 @@ async function recoverRedditCommentFromCrawlerPage(
                 subreddit,
                 postId,
                 commentId,
-                commentAuthor: author,
+                commentAuthor: author || '[deleted]',
                 commentBody: body,
                 commentPermalinkPath: permalink,
                 commentScore: score,
