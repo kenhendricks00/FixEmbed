@@ -10365,6 +10365,99 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'redditHandler caps a share-link resolve at 3s inside the comment budget (#108)',
+        run: async () => {
+            const shareUrl = 'https://www.reddit.com/r/news/s/AbC123xyz';
+            const commentUrl = `${REDDIT_REAL_THREAD_URL}o2o5rsi/`;
+            const redirectAfter = (ms: number): RedditBudgetReply => (_init, clock) => {
+                clock.advance(ms);
+                return new Response(null, { status: 302, headers: { Location: commentUrl } });
+            };
+
+            // A resolve that never answers stops at the 3s probe cap, not the old 10s
+            // default, and is temporary: Reddit said nothing about the target.
+            const hung = await runRedditBudgetScenario({
+                url: shareUrl,
+                probe: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(hung.response, shareUrl);
+            assert.deepEqual(hung.delays, [REDDIT_COMMENT_TIMEOUTS.probeMs]);
+            assert.equal(hung.elapsed, REDDIT_COMMENT_TIMEOUTS.probeMs);
+            assert.deepEqual(hung.requested, [shareUrl]);
+            assert.deepEqual(redditFetchLines(hung.logged), [{
+                event: 'reddit_fetch',
+                stage: 'probe',
+                status: null,
+                ok: false,
+                ms: 3_000,
+                timed_out: true,
+                error: 'AbortError',
+                subreddit: 'news',
+                share_id: 'AbC123xyz',
+            }]);
+            const hungSummary = redditTimingSummary(hung.logged);
+            assert.deepEqual(
+                [hungSummary.outcome, hungSummary.total_ms, hungSummary.share_id, hungSummary.comment_id],
+                ['temporary', 3_000, 'AbC123xyz', undefined],
+            );
+
+            // A slow resolve followed by a normal comment fetch: the card is built and
+            // the resolve shows up on the comment's timing lines.
+            const slowResolve = await runRedditBudgetScenario({
+                url: shareUrl,
+                probe: redirectAfter(2_900),
+                crawler: () => redditRealHtmlResponse(redditRealCrawlerPage(REDDIT_REAL_DELETED_ACCOUNT_COMMENT_HTML)),
+            });
+            assert.equal(slowResolve.response.success, true);
+            assert.equal(slowResolve.response.data?.sections?.[0]?.title, 'Comment by [deleted]');
+            assert.equal(slowResolve.delays[0], REDDIT_COMMENT_TIMEOUTS.probeMs);
+            assert.deepEqual(
+                redditFetchLines(slowResolve.logged).slice(0, 2).map((line) => [line.stage, line.status, line.ms]),
+                [['probe', 302, 2_900], ['json', 403, 30]],
+            );
+            const slowSummary = redditTimingSummary(slowResolve.logged);
+            assert.deepEqual(
+                [slowSummary.outcome, slowSummary.comment_id, slowSummary.share_id],
+                ['card', 'o2o5rsi', undefined],
+            );
+            assert.ok(Number(slowSummary.total_ms) >= 2_930);
+
+            // The resolve counts against the 8s budget, so a slow resolve followed by
+            // a hung comment fetch still ends at 8s instead of 10s + 8s.
+            const slowThenHung = await runRedditBudgetScenario({
+                url: shareUrl,
+                probe: redirectAfter(2_900),
+                json: (init, clock) => clock.hang(init),
+                crawler: (init, clock) => clock.hang(init),
+            });
+            assertRedditCommentTransient(slowThenHung.response, shareUrl);
+            assert.deepEqual(slowThenHung.delays, [3_000, 3_000, 2_100]);
+            assert.equal(slowThenHung.elapsed, REDDIT_COMMENT_TIMEOUTS.budgetMs);
+            assert.equal(redditTimingSummary(slowThenHung.logged).outcome, 'temporary');
+        },
+    },
+    {
+        name: 'redditHandler logs share links that fail to resolve without a timeout (#108)',
+        run: async () => {
+            const shareUrl = 'https://www.reddit.com/r/capybara/s/XQjKj3quL6';
+            const noLocation = await runRedditBudgetScenario({ url: shareUrl });
+            assert.equal(noLocation.response.success, false);
+            assert.equal(noLocation.response.error, 'Could not resolve Reddit share link');
+            assert.deepEqual(
+                redditFetchLines(noLocation.logged).map((line) => [line.stage, line.status, line.timed_out, line.share_id]),
+                [['probe', 200, false, 'XQjKj3quL6']],
+            );
+            assert.equal(redditTimingSummary(noLocation.logged).outcome, 'error');
+
+            const offSite = await runRedditBudgetScenario({
+                url: shareUrl,
+                probe: () => new Response(null, { status: 302, headers: { Location: 'https://example.com/x' } }),
+            });
+            assert.equal(offSite.response.error, 'Invalid Reddit share redirect');
+            assert.equal(redditTimingSummary(offSite.logged).share_id, 'XQjKj3quL6');
+        },
+    },
+    {
         name: 'redditHandler falls back to old.reddit when the JSON API hits its 3s cap (#98)',
         run: async () => {
             const result = await runRedditBudgetScenario({

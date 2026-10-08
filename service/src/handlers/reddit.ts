@@ -17,6 +17,7 @@ import {
     type RedditCommentIds,
     type RedditCommentOutcome,
     type RedditFetchStage,
+    type RedditShareIds,
 } from '../utils/reddit_timing.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
@@ -119,12 +120,13 @@ const MAX_REDDIT_VIDEO_HEIGHT = 720;
  * with no retry, and every Reddit call used to get fetchWithTimeout's default 10s,
  * so one slow call could cost ~10s. Each call now has its own cap, and all of them
  * share one budget so a retry or a later stage can never push the request past it.
- * Posts, share links and other platforms keep the default.
+ * A `/s/` share link starts the budget at its resolve probe, since it may lead to a
+ * comment (#108). Posts and other platforms keep the default.
  */
 export const REDDIT_COMMENT_TIMEOUTS = {
-    /** Whole comment request, from the canonical-path probe to the last icon lookup. */
+    /** Whole comment request, from the canonical-path or share-link probe to the last icon lookup. */
     budgetMs: 8_000,
-    /** Canonical-path probe (`probe`). */
+    /** Canonical-path or share-link probe (`probe`). */
     probeMs: 3_000,
     /** Reddit's JSON API, headers and body (`json`). */
     jsonMs: 3_000,
@@ -1454,15 +1456,16 @@ export const redditHandler: PlatformHandler = {
 
     async handle(url: string, env: Env, options?: HandlerOptions): Promise<HandlerResponse> {
         const trace = new RedditFetchTrace();
-        const timing: { ids?: RedditCommentIds } = {};
+        const timing: RedditTimingIds = {};
         let result: HandlerResponse | undefined;
         try {
             result = await handleReddit(url, env, trace, timing);
             return result;
         } finally {
-            if (timing.ids) {
+            const ids = timing.ids ?? timing.share;
+            if (ids) {
                 try {
-                    trace.flush(timing.ids, redditCommentOutcome(result), options?.embedCache ?? 'none');
+                    trace.flush(ids, redditCommentOutcome(result), options?.embedCache ?? 'none');
                 } catch {
                     // Timing logs (#98) must never change what the handler returns.
                 }
@@ -1470,6 +1473,12 @@ export const redditHandler: PlatformHandler = {
         }
     },
 };
+
+/**
+ * Which ids the #98 timing lines carry: the comment once a link resolves to one,
+ * or the share link itself when its resolve fails (#108).
+ */
+type RedditTimingIds = { ids?: RedditCommentIds; share?: RedditShareIds };
 
 /** Classify a comment-path result for the #98 timing summary. */
 function redditCommentOutcome(result: HandlerResponse | undefined): RedditCommentOutcome {
@@ -1484,11 +1493,12 @@ async function handleReddit(
     url: string,
     env: Env,
     trace: RedditFetchTrace,
-    timing: { ids?: RedditCommentIds },
+    timing: RedditTimingIds,
 ): Promise<HandlerResponse> {
     let resolvedUrl = url;
-    // Comment permalinks run on one shared time budget (#98). Share links and
-    // posts keep the default timeouts until a share link resolves to a comment.
+    // Comment permalinks run on one shared time budget (#98). A share link starts
+    // it at the resolve probe, so the resolve counts against the comment it leads
+    // to (#108). Posts never read the budget and keep the default timeouts.
     let commentBudget: RedditCommentBudget | undefined = parseRedditUrl(url)?.commentId
         ? createTimeoutBudget(REDDIT_COMMENT_TIMEOUTS.budgetMs)
         : undefined;
@@ -1503,6 +1513,19 @@ async function handleReddit(
             && hostname === 'reddit.com'
             && /^\/r\/[^/]+\/comments\/[^/]+/i.test(candidate.pathname);
 
+        if (isShareUrl) {
+            commentBudget ??= createTimeoutBudget(REDDIT_COMMENT_TIMEOUTS.budgetMs);
+        }
+        // A share link that fails to resolve still gets its timing lines (#108).
+        const shareFailed = (response: HandlerResponse): HandlerResponse => {
+            const [, subreddit = '', shareId = ''] = candidate.pathname.match(/^\/r\/([^/]+)\/s\/([^/]+)/i) ?? [];
+            timing.share = {
+                subreddit: safeDecodeURIComponent(subreddit),
+                shareId: safeDecodeURIComponent(shareId),
+            };
+            return response;
+        };
+
         if (isShareUrl || isCommentsUrl) {
             try {
                 const response = await trace.time('probe', () => fetchWithTimeout(url, {
@@ -1515,29 +1538,35 @@ async function handleReddit(
                 const location = response.headers.get('location');
                 if (!location) {
                     if (isShareUrl) {
-                        return { success: false, error: 'Could not resolve Reddit share link', redirect: url };
+                        return shareFailed({ success: false, error: 'Could not resolve Reddit share link', redirect: url });
                     }
                 } else {
                     const destination = new URL(location, url);
                     const destinationHost = destination.hostname.toLowerCase().replace(/^www\./, '');
                     if (destination.protocol !== 'https:' || destinationHost !== 'reddit.com') {
-                        return {
+                        const invalid: HandlerResponse = {
                             success: false,
                             error: isShareUrl ? 'Invalid Reddit share redirect' : 'Invalid Reddit comment redirect',
                             redirect: url,
                         };
+                        return isShareUrl ? shareFailed(invalid) : invalid;
                     }
                     resolvedUrl = destination.toString();
                 }
             } catch (resolveError) {
                 if (isShareUrl) {
-                    return {
+                    // A resolve timeout says nothing about the target, so it is
+                    // temporary like the comment path's timeouts (#108).
+                    if (isRedditTimeoutError(resolveError)) {
+                        return shareFailed(transientRedditCommentFailure(url));
+                    }
+                    return shareFailed({
                         success: false,
                         error: resolveError instanceof Error
                             ? resolveError.message
                             : 'Could not resolve Reddit share link',
                         redirect: url,
-                    };
+                    });
                 }
                 // Comment/post permalinks can still be fetched from the original URL if
                 // the canonical redirect probe is blocked or unavailable.
