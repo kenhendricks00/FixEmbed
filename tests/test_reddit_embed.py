@@ -1,4 +1,7 @@
 import unittest
+from types import SimpleNamespace
+
+import discord
 
 from reddit_embed import build_reddit_layout
 
@@ -328,6 +331,135 @@ class RedditEmbedTests(unittest.TestCase):
             )
         )
 
+    def test_keeps_native_reddit_og_on_failure_only_for_reddit_comment_permalinks(self):
+        from reddit_embed import keeps_native_reddit_og_on_failure
+
+        comment_urls = (
+            "https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/",
+            "https://www.reddit.com/r/programming/comments/abc123/comment/def4567/",
+            "https://old.reddit.com/r/programming/comments/abc123/title/?comment=def4567",
+        )
+        for url in comment_urls:
+            with self.subTest(url=url):
+                self.assertTrue(keeps_native_reddit_og_on_failure("Reddit", url))
+
+        self.assertFalse(
+            keeps_native_reddit_og_on_failure(
+                "Reddit",
+                "https://www.reddit.com/r/programming/comments/abc123/example_post/",
+            )
+        )
+        self.assertFalse(
+            keeps_native_reddit_og_on_failure(
+                "Twitter",
+                "https://www.reddit.com/r/redditdev/comments/e62riz/how_are_reddit_urls_constructed/f9ncp3g/",
+            )
+        )
+        self.assertFalse(
+            keeps_native_reddit_og_on_failure(
+                "Twitter",
+                "https://x.com/someone/status/1234567890",
+            )
+        )
+
+
+class RedditTombstoneDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    """A real deletion is a success:true tombstone card, so it goes through normal delivery."""
+
+    TOMBSTONE_PAYLOAD = {
+        "title": "r/shrimptank \u2022 Comment unavailable",
+        "description": "This Reddit comment was deleted or is no longer available.",
+        "url": "https://www.reddit.com/r/shrimptank/comments/1bqy1n9/_/damfr71/",
+        "sections": [
+            {
+                "kind": "tombstone",
+                "title": "Comment unavailable",
+                "body": "This Reddit comment was deleted or is no longer available.",
+            }
+        ],
+    }
+
+    def _tombstone_card_text(self):
+        container = build_reddit_layout(
+            self.TOMBSTONE_PAYLOAD,
+            "https://fixembed.app/embed?url=ama-comment",
+        ).to_components()[0]
+        return "\n".join(
+            component.get("content", "")
+            for component in container["components"]
+            if component.get("type") == 10
+        )
+
+    async def _deliver(self, *, can_manage_messages, suppress_error=None):
+        from delivery_policy import (
+            apply_source_message_action,
+            resolve_delivery_mode,
+            should_apply_source_message_action,
+        )
+
+        calls = []
+        recoveries = []
+
+        async def delete_message():
+            calls.append("delete")
+
+        async def suppress_message():
+            calls.append("suppress")
+            if suppress_error is not None:
+                raise suppress_error
+
+        decision = resolve_delivery_mode(
+            "suppress",
+            legacy_delete_original=False,
+            can_manage_messages=can_manage_messages,
+        )
+        mode = decision.effective_mode
+        if mode == "reply" or should_apply_source_message_action(mode, ("direct",)):
+            await apply_source_message_action(
+                mode,
+                delete_message=delete_message,
+                suppress_message=suppress_message,
+                forbidden_errors=(discord.Forbidden,),
+                on_permission_recovery=recoveries.append,
+            )
+        return decision, calls, recoveries
+
+    async def test_tombstone_card_suppresses_source_with_manage_messages(self):
+        self.assertIn("### Comment unavailable", self._tombstone_card_text())
+
+        decision, calls, recoveries = await self._deliver(can_manage_messages=True)
+
+        self.assertEqual(decision.effective_mode, "suppress")
+        self.assertIsNone(decision.downgrade_reason)
+        self.assertEqual(calls, ["suppress"])
+        self.assertEqual(recoveries, [])
+
+    async def test_tombstone_card_replies_without_manage_messages(self):
+        self.assertIn("### Comment unavailable", self._tombstone_card_text())
+
+        decision, calls, recoveries = await self._deliver(can_manage_messages=False)
+
+        self.assertEqual(decision.configured_mode, "suppress")
+        self.assertEqual(decision.effective_mode, "reply")
+        self.assertEqual(decision.downgrade_reason, "missing_manage_messages")
+        self.assertNotIn("suppress", calls)
+        self.assertEqual(calls, [])
+        self.assertEqual(recoveries, [])
+
+    async def test_tombstone_card_recovers_when_manage_messages_is_revoked_mid_send(self):
+        forbidden = discord.Forbidden(
+            SimpleNamespace(status=403, reason="Forbidden"),
+            "Missing Permissions",
+        )
+
+        decision, calls, recoveries = await self._deliver(
+            can_manage_messages=True,
+            suppress_error=forbidden,
+        )
+
+        self.assertEqual(decision.effective_mode, "suppress")
+        self.assertEqual(calls, ["suppress"])
+        self.assertEqual(recoveries, ["missing_manage_messages"])
 
 
 if __name__ == "__main__":

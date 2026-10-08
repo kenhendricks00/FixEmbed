@@ -738,11 +738,44 @@ function commentScoreFromCrawlerHtml(commentTag: string, commentHtml: string): n
     return undefined;
 }
 
+/**
+ * Outcome of the old.reddit crawler fallback for a comment permalink.
+ * - `card`: the comment is live and rendered.
+ * - `gone`: Reddit itself says the comment is gone (404, or a deleted/removed tag).
+ * - `unknown`: Reddit did not answer clearly (non-404 error, missing tag, empty page),
+ *   so the caller must not claim the comment was deleted.
+ */
+type RedditCommentCrawlerResult =
+    | { kind: 'card'; response: HandlerResponse }
+    | { kind: 'gone'; permalink?: string }
+    | { kind: 'unknown'; reason: string };
+
+const REDDIT_TRANSIENT_ERROR = 'Reddit is temporarily unavailable';
+
+/** Read the HTTP status from fetchJSON's `HTTP <status>: ...` error, if present. */
+export function redditHttpStatusFromError(error: unknown): number | undefined {
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    const match = message.match(/^HTTP (\d{3})\b/);
+    return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Reddit could not tell us whether the comment exists (rate limit, 5xx, block,
+ * timeout, bad payload). Fail without a tombstone so Discord keeps Reddit's OG.
+ */
+function transientRedditCommentFailure(url: string): HandlerResponse {
+    return {
+        success: false,
+        error: REDDIT_TRANSIENT_ERROR,
+        redirect: url,
+    };
+}
+
 async function recoverRedditCommentFromCrawlerPage(
     subreddit: string,
     postId: string,
     commentId: string,
-): Promise<HandlerResponse | null> {
+): Promise<RedditCommentCrawlerResult> {
     const pageUrl = `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${encodeURIComponent(postId)}/_/${encodeURIComponent(commentId)}/`;
     const response = await fetchWithTimeout(pageUrl, {
         headers: {
@@ -750,16 +783,17 @@ async function recoverRedditCommentFromCrawlerPage(
             'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
         },
     });
-    if (!response.ok) return null;
+    if (response.status === 404) return { kind: 'gone' };
+    if (!response.ok) return { kind: 'unknown', reason: `crawler HTTP ${response.status}` };
 
     const html = await readBoundedText(response, MAX_ARTICLE_HTML_BYTES);
-    if (!html) return null;
+    if (!html) return { kind: 'unknown', reason: 'crawler empty html' };
 
     const escapedCommentId = commentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const commentTag = html.match(
         new RegExp(`<div\\b(?=[^>]*\\bid=["']thing_t1_${escapedCommentId}["'])[^>]*>`, 'i'),
     )?.[0];
-    if (!commentTag) return null;
+    if (!commentTag) return { kind: 'unknown', reason: 'crawler comment tag not found' };
 
     const author = htmlAttribute(commentTag, 'data-author');
     const permalink = htmlAttribute(commentTag, 'data-permalink');
@@ -782,16 +816,19 @@ async function recoverRedditCommentFromCrawlerPage(
             .trim()
         : '';
 
-    if (isUnavailableRedditComment({
+    // old.reddit drops data-author on deleted comments and renders [deleted]/[removed]
+    // as the body. Only those explicit markers mean gone; an author with an
+    // unparseable body is a markup problem, not a deletion.
+    const markedGone = isUnavailableRedditComment({
         id: commentId,
         author: author || '[deleted]',
-        body: body || '[deleted]',
+        body: body || (author ? 'unparsed' : '[deleted]'),
         score: score ?? 0,
         permalink: permalink || '',
         created_utc: 0,
-    })) {
-        return null;
-    }
+    });
+    if (markedGone) return { kind: 'gone', permalink: permalink || undefined };
+    if (!body) return { kind: 'unknown', reason: 'crawler comment body not found' };
 
     const escapedPostId = postId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const postTag = html.match(
@@ -820,25 +857,28 @@ async function recoverRedditCommentFromCrawlerPage(
     );
 
     return {
-        success: true,
-        source: 'first-party',
-        data: buildRedditCommentCard({
-            subreddit,
-            postId,
-            commentId,
-            commentAuthor: author,
-            commentBody: body,
-            commentPermalinkPath: permalink,
-            commentScore: score,
-            commentTimestamp: Number.isFinite(timestampMs) && timestampMs > 0
-                ? new Date(timestampMs).toISOString()
-                : undefined,
-            parentTitle: displayTitle,
-            parentUrl,
-            parentAuthor: parentAuthor || undefined,
-            parentCommentCount,
-            authorAvatar,
-        }),
+        kind: 'card',
+        response: {
+            success: true,
+            source: 'first-party',
+            data: buildRedditCommentCard({
+                subreddit,
+                postId,
+                commentId,
+                commentAuthor: author,
+                commentBody: body,
+                commentPermalinkPath: permalink,
+                commentScore: score,
+                commentTimestamp: Number.isFinite(timestampMs) && timestampMs > 0
+                    ? new Date(timestampMs).toISOString()
+                    : undefined,
+                parentTitle: displayTitle,
+                parentUrl,
+                parentAuthor: parentAuthor || undefined,
+                parentCommentCount,
+                authorAvatar,
+            }),
+        },
     };
 }
 
@@ -1182,16 +1222,10 @@ export const redditHandler: PlatformHandler = {
 
             if (!response || !response[0]?.data?.children?.[0]) {
                 if (commentId) {
-                    return unavailableRedditCommentResponse(
-                        safeDecodeURIComponent(parsed.subreddit),
-                        safeDecodeURIComponent(parsed.postId),
-                        safeDecodeURIComponent(commentId),
-                    );
+                    // An empty or malformed listing is a shape problem, not proof the
+                    // comment is gone. Let the catch try the crawler page instead.
+                    throw new Error('Reddit returned an empty comment listing');
                 }
-                return {
-                    success: false,
-                    error: 'Post not found',
-                };
                 return {
                     success: false,
                     error: 'Post not found',
@@ -1201,6 +1235,9 @@ export const redditHandler: PlatformHandler = {
             const postChild = response[0].data.children[0];
             // Listing[0] is the link/post; older fixtures omit kind, so only reject explicit non-posts.
             if (postChild.kind && postChild.kind !== 't3') {
+                if (commentId) {
+                    throw new Error('Reddit returned an unexpected comment listing shape');
+                }
                 return { success: false, error: 'Post not found' };
             }
             const post = postChild.data as RedditPost;
@@ -1358,22 +1395,35 @@ export const redditHandler: PlatformHandler = {
             };
         } catch (error) {
             if (parsed.commentId) {
+                const subreddit = safeDecodeURIComponent(parsed.subreddit);
+                const postId = safeDecodeURIComponent(parsed.postId);
+                const commentId = safeDecodeURIComponent(parsed.commentId);
+                // Only a 404 from the JSON API is Reddit saying the comment is gone.
+                if (redditHttpStatusFromError(error) === 404) {
+                    return unavailableRedditCommentResponse(subreddit, postId, commentId);
+                }
+                console.error('Reddit comment handler error:', error);
                 try {
-                    const recoveredComment = await recoverRedditCommentFromCrawlerPage(
-                        safeDecodeURIComponent(parsed.subreddit),
-                        safeDecodeURIComponent(parsed.postId),
-                        safeDecodeURIComponent(parsed.commentId),
+                    const recovered = await recoverRedditCommentFromCrawlerPage(
+                        subreddit,
+                        postId,
+                        commentId,
                     );
-                    if (recoveredComment) return recoveredComment;
+                    if (recovered.kind === 'card') return recovered.response;
+                    if (recovered.kind === 'gone') {
+                        return unavailableRedditCommentResponse(
+                            subreddit,
+                            postId,
+                            commentId,
+                            recovered.permalink,
+                        );
+                    }
+                    console.warn('Reddit comment status unknown:', recovered.reason);
                 } catch (recoveryError) {
                     console.error('Reddit comment recovery error:', recoveryError);
                 }
-                console.error('Reddit comment handler error:', error);
-                return unavailableRedditCommentResponse(
-                    safeDecodeURIComponent(parsed.subreddit),
-                    safeDecodeURIComponent(parsed.postId),
-                    safeDecodeURIComponent(parsed.commentId),
-                );
+                // 429/5xx/403/timeouts/bad payloads: do not claim the comment was deleted.
+                return transientRedditCommentFailure(url);
             }
 
             try {
