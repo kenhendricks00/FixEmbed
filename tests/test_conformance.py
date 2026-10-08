@@ -390,7 +390,14 @@ class ContractEvaluationTests(unittest.TestCase):
             **translated,
             "data": {**translated["data"], "description": "  "},
         }
-        for payload in (wrong_target, legacy_text_only, no_text):
+        same_language = {
+            **translated,
+            "data": {
+                **translated["data"],
+                "translation": {**translated["data"]["translation"], "sourceLanguage": "ES"},
+            },
+        }
+        for payload in (wrong_target, legacy_text_only, no_text, same_language):
             result = evaluate_payload(case, payload, duration_ms=25)
             self.assertIn("missing-translation", result.failure_codes)
 

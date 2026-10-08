@@ -18,6 +18,7 @@ import uuid
 import aiohttp
 
 from card_conformance import evaluate_components_v2, rendered_media_targets
+from embed_footer import is_same_language_translation
 from media_conformance import (
     MEDIA_PROBE_HEADERS,
     MediaFetchResponse,
@@ -307,6 +308,8 @@ def _has_translation(data: Mapping[str, Any], target_lang: Optional[str]) -> boo
     if target_lang and target != target_lang.strip().casefold():
         return False
     if not str(translation.get("sourceLanguage") or "").strip():
+        return False
+    if is_same_language_translation(translation):
         return False
     return _has_text(data, "description")
 

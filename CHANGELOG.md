@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **No "Translated from" footer on untranslated text (#88)**
+- Reddit comment cards no longer send the generated "Parent post" label to the translator. Language detection read it as French, the model echoed back "Parent Post", and the card claimed "Translated from English" on an English comment.
+- Translation output that only differs from the original in case, spacing or punctuation is no longer counted as a translation.
+- The footer now names the language that was actually translated. A translated quote under an untranslated post shows the quote's language, not the post's.
+- No translation metadata is sent when the source and target language match. Language codes are compared without case or region, so `en`, `EN`, `en-US` and `en_GB` are all English.
+- The bot also hides the footer when the source and target language match, and the canary no longer counts a same-language result as a translation. Real translations still show "Translated from …".
+
 #### **Reddit deleted accounts and deleted comments (#84)**
 - A comment whose author deleted their Reddit account but whose text is still there now renders the full comment card with the author shown as `[deleted]`, instead of a false "Comment unavailable". This applies to both the JSON path and the old.reddit fallback.
 - `[deleted]` authors no longer get a `u/[deleted]` label or a broken reddit.com/user link, for the comment author and for a deleted parent post author.

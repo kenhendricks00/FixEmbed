@@ -22,10 +22,24 @@ def escape_component_text(value: str) -> str:
     return escape_markdown(value.strip()).replace("@", "@\u200b")
 
 
+def normalize_language_code(value: Any) -> str:
+    """Primary language subtag, casefolded: ``en``, ``EN``, ``en-US`` -> ``en``."""
+    return str(value or "").strip().replace("_", "-").split("-", 1)[0].casefold()
+
+
+def is_same_language_translation(translation: Mapping[str, Any]) -> bool:
+    """True when the source and target languages match, so nothing was translated."""
+    source = normalize_language_code(translation.get("sourceLanguage"))
+    target = normalize_language_code(translation.get("targetLanguage"))
+    return bool(source) and source == target
+
+
 def translated_source_name(payload: Mapping[str, Any]) -> Optional[str]:
     """Return the bounded source-language label attached by the Worker."""
     translation = payload.get("translation")
     if not isinstance(translation, Mapping):
+        return None
+    if is_same_language_translation(translation):
         return None
     source_name = escape_component_text(
         str(translation.get("sourceLanguageName") or "")
