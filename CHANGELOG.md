@@ -5,6 +5,22 @@
 - The time now comes from the comment's own header on old.reddit, the same time old.reddit shows as "8 months ago". If the comment was edited, the original posting time is used, not the edit time.
 - Cards built from Reddit's API are unchanged.
 
+#### **Reddit text can't flip or hide parts of a card (#90)**
+- A Reddit comment could contain invisible control characters, either typed in or written as codes like `&#x202E;` that the old.reddit fallback decodes. A right-to-left override such as U+202E reversed the rest of the comment on the card, so `gnp.exe` could read as `exe.png`.
+- Comment text and post titles on Reddit comment cards now drop these characters, whichever way Reddit sends them: control characters other than tab and newline, and the bidi embedding, override and isolate marks (U+202A to U+202E, U+2066 to U+2069).
+- Normal right-to-left text, emoji and the left-to-right and right-to-left marks are unchanged.
+- The two copies of the old.reddit entity decoder are now one (part of #96).
+
+#### **Titles with @everyone are clickable links again (#103)**
+- A Reddit title such as "How do i stop regular members from using @everyone? ... (see image) ..." still showed as raw `[title](https://...)` markdown on two of three comment cards after #104 and #105.
+- Posting each version in #embedded-testing showed why: Discord ignores a zero-width space inside `@everyone` and still refuses the link, and it shows every backslash in link text instead of reading it as an escape, so `(see image\)` leaked a `\`.
+- Mentions in link text now use a fullwidth `＠` (and `＃` for channels), which Discord keeps as a link: `＠everyone`, `<＠&123>`, `<＃123>`. Mentions in comment and post text still show as plain text, the same as before.
+- Link text is no longer backslash-escaped. `[OC]`-style brackets and parentheses show exactly as written. Only a bracket that would end the link early, or a backslash right before one, turns into its fullwidth form.
+- A title that contains a URL can't be link text at all (Discord refuses it, even as `https：//`), so it now shows as plain text followed by the link instead of raw markdown.
+- DeviantArt and Pixiv names no longer show `\_` inside links.
+- Covers every card that links a title or name: Reddit, Twitter, Bluesky, Threads, Instagram, YouTube, Pixiv, Pinterest, Bilibili, DeviantArt, TikTok, Tumblr and Twitch.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Reddit share links stay inside the comment time limit (#108)**
 - A Reddit share link (`/r/.../s/...`) could still wait up to 10 seconds just to find out where it points, before the 8 second comment limit from #98 even started. A share link to a comment could take about 18 seconds in the worst case, past the bot's 15 second wait.
 - Finding where a share link points now has a 3 second limit, and that time counts toward the same 8 seconds as the comment it leads to.

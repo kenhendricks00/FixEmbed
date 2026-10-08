@@ -11,7 +11,7 @@ import discord
 from component_emojis import format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
-from markdown_safety import masked_link_label
+from markdown_safety import masked_link
 from timestamp_utils import parse_post_timestamp
 
 
@@ -42,10 +42,10 @@ def build_bluesky_layout(
     author_avatar = str(payload.get("authorAvatar") or "").strip()
     source_url = str(payload.get("url") or "").strip()
     if handle and name.casefold() != handle.casefold():
-        handle_text = f"[{masked_link_label('@' + handle)}]({author_url})" if author_url else f"@{handle}"
+        handle_text = masked_link('@' + handle, author_url) if author_url else f"@{handle}"
         identity = f"**{name}** ({handle_text})"
     elif handle:
-        identity = f"**[{masked_link_label('@' + handle)}]({author_url})**" if author_url else f"**@{handle}**"
+        identity = f"**{masked_link('@' + handle, author_url)}**" if author_url else f"**@{handle}**"
     else:
         identity = f"**{name}**"
 

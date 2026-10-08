@@ -12,7 +12,7 @@ import discord
 from component_emojis import application_emoji, format_component_stats
 from embed_footer import FooterBranding, build_component_footer, translated_source_name
 from card_preferences import CardPreferences, apply_caption_preferences
-from markdown_safety import masked_link_label, neutralize_mentions
+from markdown_safety import masked_link, neutralize_mentions
 from timestamp_utils import parse_post_timestamp
 
 
@@ -35,7 +35,7 @@ def _section_text(section: Mapping[str, Any]) -> str:
     url = str(section.get("url") or "").strip()
     body = neutralize_mentions(str(section.get("body") or "").strip())
     heading = (
-        f"### [{masked_link_label(title)}]({url})"
+        f"### {masked_link(title, url)}"
         if url
         else f"### {neutralize_mentions(title)}"
     )
@@ -173,7 +173,7 @@ def _blockquote_comment(section: Mapping[str, Any]) -> str:
         body = f"{body[:2997].rstrip()}…"
 
     if author and author_url:
-        author_text = f"[{masked_link_label(author)}]({author_url})"
+        author_text = masked_link(author, author_url)
     else:
         author_text = neutralize_mentions(author) or "unknown"
     heading = f"> {application_emoji('quote')} Comment by {author_text}:"
@@ -229,7 +229,7 @@ def build_reddit_layout(
     )
 
     author_text = (
-        f"[{masked_link_label(author)}]({author_url})"
+        masked_link(author, author_url)
         if author_url
         else neutralize_mentions(author)
     )
@@ -248,14 +248,14 @@ def build_reddit_layout(
             or "Reddit post"
         )
         title_text = (
-            f"### [{masked_link_label(display_title)}]({parent_post_url})"
+            f"### {masked_link(display_title, parent_post_url)}"
             if parent_post_url
             else f"### {neutralize_mentions(display_title)}"
         )
         header_description = ""
     else:
         title_text = (
-            f"### [{masked_link_label(post_title)}]({linked_article_url})"
+            f"### {masked_link(post_title, linked_article_url)}"
             if linked_article_url
             else f"### {neutralize_mentions(post_title)}"
         )
