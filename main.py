@@ -90,6 +90,7 @@ from delivery_policy import (
 )
 from premium_cache import (
     PREMIUM_CHECK_TIMEOUT_SECONDS,
+    PremiumStatusCache,
     record_guild_premium,
     resolve_guild_premium,
 )
@@ -410,8 +411,8 @@ def get_guild_lang(guild_id):
     return bot_settings.get(guild_id, {}).get("language", "en")
 
 # Premium status per guild id, for every guild whether or not it has a
-# bot_settings row. Entries use the premium_cache TTL helpers.
-premium_status_cache = {}
+# bot_settings row. Entries use the premium_cache TTL helpers; bounded LRU.
+premium_status_cache = PremiumStatusCache()
 
 async def is_guild_premium(guild_id):
     """Check if a guild has an active premium subscription."""
