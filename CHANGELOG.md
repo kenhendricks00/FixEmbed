@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Twitter canary contract update (#72)**
+- The production canary's translation check now reads the Worker's `translation` metadata (target language matches the requested `lang`, translated description present) and looks for the bot's "Translated from …" footer, instead of the retired `Translation (XX):` description text.
+- The `twitter-tombstone` canary now uses a post whose quoted post really is unavailable. The old fixture's quoted post is live again, so the Worker correctly rendered a normal quote there; the parser was not at fault.
+
 #### **Premium activation checklist**
 - Active-subscriber `/premium` now shows a configured-vs-available checklist for card color, footer branding, card style, exclusions, analytics, and bot/webhook auto-fix.
 - Each configurable checklist row deep-links into the matching `/settings` page (or Embed Color modal) via a select control; bot/webhook auto-fix is called out as automatic with no toggle.
