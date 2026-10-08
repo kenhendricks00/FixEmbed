@@ -21,7 +21,8 @@ from twitter_embed import build_twitter_layout
 
 
 ZWSP = "\u200b"
-MENTION = re.compile(r"@(everyone|here)\b|<[@#](?!\u200b)")
+# No word boundary: Discord also reads ``@everyones`` and ``x@here`` as mentions.
+MENTION = re.compile(r"@(everyone|here)|<[@#](?!\u200b)")
 # A ``[``, ``]`` or ``)`` after an even run of backslashes, or a trailing
 # unpaired backslash, would end or break the masked-link label.
 LIVE_LABEL_SPECIAL = re.compile(r"(?<!\\)(?:\\\\)*(?:[\[\])]|\\$)")
@@ -133,12 +134,53 @@ class MaskedLinkLabelTests(unittest.TestCase):
         for title in (
             "World Cup 2026: Hydration breaks not popular, Fifa will review",
             "PSA - Do not recommend unsafe utilities (",
-            "email me at someone@example.com, @heresy and @everyoneelse are fine",
+            "email me at someone@example.com, @heroes and @every one are fine",
             "\u65e5\u672c\u8a9e\u306e\u30bf\u30a4\u30c8\u30eb \U0001f389 <3",
             "",
         ):
             self.assertEqual(masked_link_label(title), title)
             self.assertEqual(neutralize_mentions(title), title)
+
+    def test_mentions_inside_code_spans_in_a_label_are_broken(self):
+        # lens nit 1 on #104: backticks in link text don't stop Discord from
+        # seeing the mention and dropping the masked link.
+        for title, expected in (
+            ("Why `@everyone` fails", f"Why `@{ZWSP}everyone` fails"),
+            ("``<@&1234567>`` vs `@here`", f"``<@{ZWSP}&1234567>`` vs `@{ZWSP}here`"),
+            ("```<#1> <@2>```", f"```<#{ZWSP}1> <@{ZWSP}2>```"),
+            ("see https://medium.com/@here/post", f"see https://medium.com/@{ZWSP}here/post"),
+        ):
+            label = masked_link_label(title)
+            self.assertEqual(label, expected)
+            self.assertEqual(masked_link_label(label), label)
+            _assert_valid_label(self, label)
+        self.assertEqual(
+            masked_link_label("`a]` @here", escaped=True),
+            f"`a\\]` @{ZWSP}here",
+        )
+
+    def test_broadcast_mentions_break_whatever_follows_or_precedes(self):
+        # lens nit 2 on #104: ``\b`` let ``@everyone_x`` through.
+        for text, expected in (
+            ("@everyone_x", f"@{ZWSP}everyone_x"),
+            ("@everyones @everyoneelse", f"@{ZWSP}everyones @{ZWSP}everyoneelse"),
+            ("@hereby @heresy @here2", f"@{ZWSP}hereby @{ZWSP}heresy @{ZWSP}here2"),
+            ("foo@here ops@here.com", f"foo@{ZWSP}here ops@{ZWSP}here.com"),
+            ("@@everyone", f"@@{ZWSP}everyone"),
+        ):
+            self.assertEqual(masked_link_label(text), expected)
+            self.assertEqual(neutralize_mentions(text), expected)
+            self.assertEqual(neutralize_mentions(expected), expected)
+            _assert_valid_label(self, masked_link_label(text))
+
+    def test_other_at_text_is_left_alone(self):
+        for text in (
+            "someone@example.com",
+            "@heroes @hero @every one @Everyone",
+            "@her e",
+        ):
+            self.assertEqual(masked_link_label(text), text)
+            self.assertEqual(neutralize_mentions(text), text)
 
     def test_already_escaped_text_is_not_escaped_again(self):
         for text in (
@@ -176,6 +218,10 @@ class NeutralizeMentionsTests(unittest.TestCase):
             "run `<@123>` then\n```\n@everyone <#1>\n```\n"
             f"https://medium.com/@here/post <@{ZWSP}1>",
         )
+
+    def test_code_in_bodies_still_keeps_its_bytes_after_label_change(self):
+        body = "`@everyone_x` and @everyone_x"
+        self.assertEqual(neutralize_mentions(body), f"`@everyone_x` and @{ZWSP}everyone_x")
 
 
 class RedditCardTests(unittest.TestCase):
