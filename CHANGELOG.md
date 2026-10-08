@@ -1,5 +1,13 @@
 ## Unreleased
 
+#### **Reddit share links stay inside the comment time limit (#108)**
+- A Reddit share link (`/r/.../s/...`) could still wait up to 10 seconds just to find out where it points, before the 8 second comment limit from #98 even started. A share link to a comment could take about 18 seconds in the worst case, past the bot's 15 second wait.
+- Finding where a share link points now has a 3 second limit, and that time counts toward the same 8 seconds as the comment it leads to.
+- If that step times out, the link counts as "Reddit is temporarily unavailable", the same as other Reddit timeouts. It never shows as "Comment unavailable".
+- A share link that fails to resolve now logs its `reddit_fetch` and `reddit_comment_timing` lines with a `share_id` field, so timeouts show up in Workers Logs with `timed_out`. A share link that resolves to a comment logs under that comment, as before.
+- Share links to posts and every other platform keep their current timeouts.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Premium shows active right after purchase (#101)**
 - A server that just subscribed could still show as free for up to 10 minutes. A Premium check that started before the purchase could finish after it and replace the new "active" status with its older "not active" answer.
 - Subscribing, renewing, or cancelling now always wins over a Premium check that was already running. The older answer is dropped instead of saved, so /premium and the settings screens show the new status right away.
