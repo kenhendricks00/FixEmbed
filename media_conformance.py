@@ -111,31 +111,56 @@ async def _probe_media_target(
     fetch_media: Callable[[str, float], Awaitable[MediaFetchResponse]],
     timeout_seconds: float,
 ) -> tuple[str, ...]:
+    """Probe one target, retrying once when the failure looks transient (#76).
+
+    A carousel probes several CDN images at once, so a single timeout, dropped
+    connection, 429 or 5xx used to fail a healthy multi-image post. Those get
+    one more try; a 403, 404, wrong content type or rejected host never do.
+    """
+    codes, transient = await _probe_media_target_once(
+        platform, target, fetch_media=fetch_media, timeout_seconds=timeout_seconds
+    )
+    if codes and transient:
+        codes, _ = await _probe_media_target_once(
+            platform, target, fetch_media=fetch_media, timeout_seconds=timeout_seconds
+        )
+    return codes
+
+
+async def _probe_media_target_once(
+    platform: str,
+    target: MediaTarget,
+    *,
+    fetch_media: Callable[[str, float], Awaitable[MediaFetchResponse]],
+    timeout_seconds: float,
+) -> tuple[tuple[str, ...], bool]:
+    """Codes for one probe, and whether a failure is worth one retry."""
     current_url = target.url
     for redirect_count in range(MAX_MEDIA_REDIRECTS + 1):
         if not _media_host_allowed(platform, current_url):
-            return (_media_failure_code(target, "host-rejected"),)
+            return (_media_failure_code(target, "host-rejected"),), False
         try:
             response = await fetch_media(current_url, timeout_seconds)
         except asyncio.TimeoutError:
-            return (_media_failure_code(target, "timeout"),)
+            return (_media_failure_code(target, "timeout"),), True
         except (aiohttp.ClientError, OSError):
-            return (_media_failure_code(target, "probe-failed"),)
+            return (_media_failure_code(target, "probe-failed"),), True
         except Exception:
-            return (_media_failure_code(target, "probe-failed"),)
+            return (_media_failure_code(target, "probe-failed"),), True
 
         if response.status_code in {301, 302, 303, 307, 308}:
             if not response.location:
-                return (_media_failure_code(target, "http-failed"),)
+                return (_media_failure_code(target, "http-failed"),), False
             if redirect_count == MAX_MEDIA_REDIRECTS:
-                return (_media_failure_code(target, "redirect-limit"),)
+                return (_media_failure_code(target, "redirect-limit"),), False
             try:
                 current_url = urljoin(current_url, response.location)
             except (TypeError, ValueError):
-                return (_media_failure_code(target, "host-rejected"),)
+                return (_media_failure_code(target, "host-rejected"),), False
             continue
         if response.status_code not in {200, 206}:
-            return (_media_failure_code(target, "http-failed"),)
+            transient = response.status_code == 429 or response.status_code >= 500
+            return (_media_failure_code(target, "http-failed"),), transient
 
         content_type = response.content_type.split(";", 1)[0].strip().casefold()
         valid_type = content_type.startswith("image/")
@@ -150,9 +175,9 @@ async def _probe_media_target(
                 # a generic binary content type even though Discord can play them.
                 valid_type = True
         if not valid_type:
-            return (_media_failure_code(target, "type-invalid"),)
-        return ()
-    return (_media_failure_code(target, "redirect-limit"),)
+            return (_media_failure_code(target, "type-invalid"),), False
+        return (), False
+    return (_media_failure_code(target, "redirect-limit"),), False
 
 
 async def probe_media_targets(

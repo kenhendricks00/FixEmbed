@@ -640,6 +640,69 @@ class ComponentsV2EvaluationTests(unittest.TestCase):
         self.assertNotIn("private", json.dumps(codes))
 
 
+class MediaRetryTests(unittest.IsolatedAsyncioTestCase):
+    """#76: one transient CDN blip must not fail a healthy multi-image post."""
+
+    async def probe(self, replies, count=1):
+        requested = []
+
+        async def fetch_media(url, _timeout_seconds):
+            requested.append(url)
+            reply = replies(url, requested.count(url))
+            if isinstance(reply, BaseException):
+                raise reply
+            return reply
+
+        targets = tuple(
+            MediaTarget("media", f"https://pbs.twimg.com/media/{index}.jpg") for index in range(count)
+        )
+        codes = await probe_media_targets(
+            "twitter", targets, fetch_media=fetch_media, timeout_seconds=5
+        )
+        return codes, requested
+
+    async def test_carousel_with_one_transient_timeout_passes(self):
+        ok = MediaFetchResponse(206, "image/jpeg", None)
+
+        def replies(url, attempt):
+            if url.endswith("/2.jpg") and attempt == 1:
+                return asyncio.TimeoutError()
+            return ok
+
+        codes, requested = await self.probe(replies, count=4)
+        self.assertEqual(codes, ())
+        self.assertEqual(len(requested), 5)
+
+    async def test_5xx_429_and_dropped_connections_get_one_retry(self):
+        for first in (
+            MediaFetchResponse(503, "text/html", None),
+            MediaFetchResponse(429, "text/html", None),
+            OSError("connection reset"),
+        ):
+            with self.subTest(first=repr(first)):
+                codes, requested = await self.probe(
+                    lambda _url, attempt: first if attempt == 1 else MediaFetchResponse(200, "image/png", None)
+                )
+                self.assertEqual(codes, ())
+                self.assertEqual(len(requested), 2)
+
+    async def test_real_failures_are_not_retried(self):
+        for reply, code in (
+            (MediaFetchResponse(404, "text/html", None), "media-http-failed"),
+            (MediaFetchResponse(403, "text/html", None), "media-http-failed"),
+            (MediaFetchResponse(200, "text/html", None), "media-type-invalid"),
+        ):
+            with self.subTest(code=code, status=reply.status_code):
+                codes, requested = await self.probe(lambda _url, _attempt: reply)
+                self.assertEqual(codes, (code,))
+                self.assertEqual(len(requested), 1)
+
+    async def test_a_persistent_failure_still_fails_after_one_retry(self):
+        codes, requested = await self.probe(lambda _url, _attempt: asyncio.TimeoutError())
+        self.assertEqual(codes, ("media-timeout",))
+        self.assertEqual(len(requested), 2)
+
+
 class MediaReachabilityTests(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_unapproved_hosts_without_fetching_them(self):
         requested = []
@@ -943,7 +1006,8 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         )
         serialized = json.dumps(report.to_dict())
 
-        self.assertEqual(media_requests, [private_media_url])
+        # A 5xx gets one retry (#76) before it counts as a failure.
+        self.assertEqual(media_requests, [private_media_url, private_media_url])
         self.assertEqual(report.results[0].failure_codes, ("media-http-failed",))
         self.assertNotIn("private-canary", serialized)
         self.assertNotIn("pbs.twimg.com", serialized)
