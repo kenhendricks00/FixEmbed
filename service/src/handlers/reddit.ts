@@ -21,7 +21,13 @@ import {
 } from '../utils/reddit_timing.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
-import { decodeHtmlText, redditHtmlToDiscordMarkdown, stripUnsafeText } from '../utils/markdown.ts';
+import {
+    decodeHtmlText,
+    isInvisibleText,
+    redditHtmlToDiscordMarkdown,
+    stripUnsafeText,
+    truncateMarkdown,
+} from '../utils/markdown.ts';
 
 interface RedditPost {
     title: string;
@@ -741,6 +747,16 @@ function commentPermalink(
 }
 
 
+/**
+ * Comment text for the card: control/bidi characters dropped (#90), an
+ * invisible-only body (`&#x200B;`) treated as none, and a cut that never leaves
+ * a code block open (#96).
+ */
+function commentCardBody(body: string): string {
+    const clean = stripUnsafeText(body);
+    return isInvisibleText(clean) ? '' : truncateMarkdown(clean, 3000);
+}
+
 function buildRedditCommentCard(options: {
     subreddit: string;
     postId: string;
@@ -807,7 +823,7 @@ function buildRedditCommentCard(options: {
             {
                 kind: 'quote' as const,
                 title: `Comment by ${commentAuthor.name}`,
-                body: truncateText(stripUnsafeText(options.commentBody), 3000),
+                body: commentCardBody(options.commentBody),
                 authorName: commentAuthor.name,
                 authorUrl: commentAuthor.url,
                 url: commentUrl,
@@ -1123,8 +1139,10 @@ async function recoverRedditCommentFromCrawlerPage(
     if (markedDeleted || (body && isRedditGoneComment(author, body))) {
         return { kind: 'gone', permalink: permalink || undefined };
     }
-    // No parseable body on a comment Reddit did not mark deleted is a markup problem.
-    if (!body) return { kind: 'unknown', reason: 'crawler comment body not found' };
+    // No body markup on a comment Reddit did not mark deleted is a markup problem.
+    // Markup that renders as nothing visible (`<p>&#x200B;</p>`) is a real comment
+    // with no text, shown like any other bodyless comment (#96).
+    if (!rawBody?.trim()) return { kind: 'unknown', reason: 'crawler comment body not found' };
 
     const escapedPostId = postId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const postTag = html.match(
@@ -1233,7 +1251,7 @@ async function recoverFromRedditCrawlerPage(
         redditCookieHeader(response),
     );
     const images = hasPostBoundary ? redditGalleryImagesFromHtml(postHtml) : [];
-    const description = truncateText(
+    const description = truncateMarkdown(
         redditPostBodyFromHtml(postHtml)
             || decodeRedditHtml(articleMetaContent(html, 'description') || ''),
         3000,
@@ -1332,7 +1350,7 @@ async function recoverFromRedditEmbed(
                 const score = Number(html.match(/data-testid="upvote"[\s\S]{0,1000}?<faceplate-number\s+number="(\d+)"/i)?.[1]) || undefined;
                 const comments = Number(html.match(/View\s+([\d,]+)\s+comments?/i)?.[1].replace(/,/g, '')) || undefined;
                 const cleanTitle = decodeRedditHtml(title.replace(/<[^>]+>/g, ''));
-                const description = truncateText(
+                const description = truncateMarkdown(
                     redditPostBodyFromHtml(html, safeDecodeURIComponent(postId)),
                     3000,
                 );
@@ -1688,7 +1706,7 @@ async function handleReddit(
         }
 
         // Build description (no stats here - moved to oEmbed row)
-        const description = post.selftext ? truncateText(post.selftext, 3000) : '';
+        const description = post.selftext ? truncateMarkdown(post.selftext, 3000) : '';
 
         // Format stats for oEmbed row (consistent with Twitter/Threads/Bluesky)
         const stats = formatStats({
