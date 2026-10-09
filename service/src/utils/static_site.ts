@@ -2244,30 +2244,49 @@ export const privacyHtml = `<!DOCTYPE html>
         <div class="container">
             <div class="glass-card">
                 <h1>Privacy Policy</h1>
-                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: December 24, 2024</p>
-                
+                <p class="subtitle" style="text-align: left; margin-bottom: 2rem;">Last updated: October 9, 2026</p>
+
                 <div class="content" style="color: var(--text-secondary); line-height: 1.8;">
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Data Collection</h3>
-                    <p>FixEmbed is designed to be privacy-focused. We do not persist or store personal user data.</p>
+                    <p>This policy covers the FixEmbed Discord bot (application ID 1173820242305224764) and this website and service at fixembed.app.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">1. Message Content</h3>
+                    <p>FixEmbed uses Discord's Message Content intent to read messages in server channels where it is enabled. It reads message text only to detect links to supported sites (such as X/Twitter, Instagram, Reddit, TikTok, Bluesky and others). The rest of the message is ignored.</p>
                     <ul style="list-style-position: inside; margin-left: 1rem;">
-                        <li><strong>Ephemeral Processing:</strong> URLs sent to our service are processed in-memory to generate embeds and are not permanently stored.</li>
-                        <li><strong>Logs:</strong> Cloudflare may keep temporary technical logs for debugging and abuse prevention. These logs are rotated regularly.</li>
+                        <li>Message content is processed in memory and discarded. It is never written to FixEmbed's database, and the bot does not log message text.</li>
+                        <li>Direct messages are ignored.</li>
+                        <li>Detected links are used to fetch publicly available information about the linked post, either directly from the source site or through this service. FixEmbed then replies with a preview card.</li>
+                        <li>To avoid duplicate cards, the bot briefly remembers recently fixed links in memory for a few seconds. Finished preview cards may be cached here for a short time under hashed keys.</li>
+                        <li>Message content is not sold or shared with anyone, and it is not used to train AI or machine learning models.</li>
                     </ul>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Cookies and Tracking</h3>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">2. Data Stored</h3>
+                    <p>FixEmbed stores only the settings that server admins choose, so the bot behaves the way each server configured it:</p>
+                    <ul style="list-style-position: inside; margin-left: 1rem;">
+                        <li><strong>Server and channel settings:</strong> server (guild) IDs and channel IDs, with each server's chosen options such as enabled sites, language, display options, and per-channel on/off, site and visibility rules.</li>
+                        <li><strong>Premium exclusions:</strong> if a server's admins choose to exclude specific members or roles from automatic link fixing, FixEmbed stores those member IDs and role IDs. Members are excluded only when admins select them.</li>
+                        <li><strong>Premium analytics:</strong> daily counts per server and site of how many links were fixed. These counts include no links, message content or member information, and they are deleted after 90 days.</li>
+                        <li><strong>Reliability telemetry:</strong> aggregate counts, timings and error categories. These include no links, message content or member information.</li>
+                        <li><strong>Service logs:</strong> Cloudflare may keep temporary technical logs for debugging and abuse prevention. These logs are rotated regularly.</li>
+                    </ul>
+                    <p>FixEmbed does not store usernames, message content, links, or any other information about individual users beyond the excluded member IDs described above. Premium status comes from Discord's own entitlement system, and FixEmbed does not collect or process payment information.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">3. Cookies and Tracking</h3>
                     <p>We do not use tracking cookies or third-party analytics on our service.</p>
                     <p>When someone chooses an install button on fixembed.app, FixEmbed may count the redirect using only a fixed install-source label and the selected install context (personal or server). These bounded labels help us understand which product surfaces are useful. We do not attach cookies, user IDs, Discord IDs, message content, or source social-media URLs to these counts.</p>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">3. Data Sharing</h3>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Data Sharing</h3>
                     <p>We do not sell, trade, or transfer your information to outside parties. When you use FixEmbed, we make requests to public social media pages on your behalf to fetch metadata.</p>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">4. Third-Party Links</h3>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Third-Party Links</h3>
                     <p>Our service generates links to third-party content. We are not responsible for the privacy practices of those external sites.</p>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">5. Children's Privacy</h3>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Children's Privacy</h3>
                     <p>Our Service is not directed to children under 13. We do not knowingly collect personal information from children.</p>
 
-                    <h3 style="color: var(--text-primary); margin-top: 2rem;">6. Contact</h3>
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">7. Removing Your Data</h3>
+                    <p>Removing FixEmbed from a server stops all processing in that server. To have stored settings or excluded member IDs deleted, mention strikermonkeyxd (1121099921655865375) in the <a href="https://discord.gg/QFxTAmtZdn" style="color: var(--primary-light);">FixEmbed Support Server</a>.</p>
+
+                    <h3 style="color: var(--text-primary); margin-top: 2rem;">8. Contact</h3>
                     <p>If you have questions about this privacy policy, reach out on our <a href="https://discord.gg/QFxTAmtZdn" style="color: var(--primary-light);">Discord Support Server</a>.</p>
                 </div>
             </div>
