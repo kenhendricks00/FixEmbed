@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **Overnight canary: one CDN hiccup no longer fails a healthy carousel (#76)**
+- The production canary checks that every image on a card loads. A Twitter carousel checks about four images at once, so a single timeout, dropped connection, 429 or 5xx from X's image servers failed the whole check even though the post was fine. Re-running it passed.
+- Each image now gets one retry for those temporary errors. A 403, 404, wrong file type or unexpected host still fails right away, and an image that fails twice still fails.
+- Canary only. Users see no change, and nothing needs deploying.
+
 #### **Faster cards when Discord's subscription check is slow or down (#101)**
 - When several links arrive at once from a server whose Premium status isn't cached, FixEmbed now asks Discord once and every message uses that answer. Before, each message started its own check.
 - If Discord's check fails or takes longer than 2.5 seconds, FixEmbed waits 45 seconds before asking again for that server. Until then it uses the last answer it saved, or treats the server as free for those messages, instead of making each message wait up to 2.5 seconds again during an outage.
