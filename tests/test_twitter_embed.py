@@ -289,3 +289,49 @@ class TwitterEmbedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnavailablePostCardTests(unittest.TestCase):
+    """A deleted or protected post gets a FixEmbed card, not FxTwitter's embed."""
+
+    @staticmethod
+    def texts(layout):
+        container = layout.to_components()[0]
+        return [c.get("content", "") for c in container["components"] if c.get("type") == 10]
+
+    def test_worker_unavailable_payload_renders_a_clean_card(self):
+        url = "https://x.com/openai/status/1234567890"
+        payload = {
+            "title": "Post unavailable",
+            "description": "This post was deleted or is no longer available.",
+            "url": url,
+            "platform": "twitter",
+            "sections": [{
+                "kind": "tombstone",
+                "title": "Post unavailable",
+                "body": "This post was deleted or is no longer available.",
+            }],
+        }
+        header, footer = self.texts(build_twitter_layout(payload))
+        self.assertEqual(
+            header,
+            "**X**\n### Post unavailable\nThis post was deleted or is no longer available.",
+        )
+        self.assertIn(url, footer)
+        self.assertNotIn("fxtwitter", header + footer)
+
+    def test_a_post_with_an_unavailable_quote_is_still_a_normal_card(self):
+        payload = {
+            "authorName": "Anna",
+            "authorHandle": "annakres77",
+            "description": "look at this",
+            "url": "https://x.com/annakres77/status/1791437300339032271",
+            "sections": [{
+                "kind": "tombstone",
+                "title": "Quoted post unavailable",
+                "body": "This quoted post is unavailable.",
+            }],
+        }
+        text = "\n".join(self.texts(build_twitter_layout(payload)))
+        self.assertIn("**Anna**", text)
+        self.assertNotIn("### Post unavailable", text)

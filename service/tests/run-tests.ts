@@ -9512,6 +9512,76 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'twitterHandler shows a FixEmbed "Post unavailable" card when X says the post is gone',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const tweetUrl = 'https://x.com/openai/status/1234567890';
+            const scenario = async (
+                syndicationStatus: number,
+                fx: () => Response | Promise<Response>,
+                options: HandlerOptions = {},
+            ) => {
+                const fxRequests: string[] = [];
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.startsWith('https://api.fxtwitter.com/')) {
+                        fxRequests.push(url);
+                        return fx();
+                    }
+                    if (url.startsWith('https://cdn.syndication.twimg.com/')) {
+                        return new Response('{}', { status: syndicationStatus });
+                    }
+                    // GraphQL and guest-token calls fail, so the handler uses syndication.
+                    return new Response('unavailable', { status: 503 });
+                }) as typeof fetch;
+                return { response: await twitterHandler.handle(tweetUrl, env, options), fxRequests };
+            };
+            const fxJson = (code: number, message: string) => () => Response.json(
+                { code, message, tweet: null },
+                { status: code },
+            );
+
+            try {
+                // Deleted: X's API and FxTwitter both say it doesn't exist.
+                const gone = await scenario(404, fxJson(404, 'NOT_FOUND'));
+                assert.equal(gone.response.success, true);
+                assert.equal(gone.response.redirect, undefined);
+                assert.equal(gone.response.data?.title, 'Post unavailable');
+                assert.equal(gone.response.data?.url, tweetUrl);
+                assert.equal(gone.response.data?.platform, 'twitter');
+                assert.deepEqual(gone.response.data?.sections, [{
+                    kind: 'tombstone',
+                    title: 'Post unavailable',
+                    body: 'This post was deleted or is no longer available.',
+                }]);
+
+                // Protected account.
+                const locked = await scenario(404, fxJson(401, 'PRIVATE_TWEET'));
+                assert.equal(locked.response.data?.title, 'Post unavailable');
+                assert.match(locked.response.data?.description || '', /protected account/);
+
+                // An outage on either side keeps the FxTwitter fallback.
+                for (const [syndicationStatus, fx] of [
+                    [404, fxJson(500, 'API_FAIL')],
+                    [404, () => new Response('<!doctype html>', { status: 200 })],
+                    [404, () => { throw new Error('network'); }],
+                    [503, fxJson(404, 'NOT_FOUND')],
+                ] as const) {
+                    const result = await scenario(syndicationStatus, fx);
+                    assert.equal(result.response.success, false, `${syndicationStatus}`);
+                    assert.equal(result.response.redirect, 'https://fxtwitter.com/openai/status/1234567890');
+                }
+
+                // A translation request doesn't ask FxTwitter again after a 404.
+                const translated = await scenario(404, fxJson(404, 'NOT_FOUND'), { language: 'es' });
+                assert.equal(translated.response.data?.title, 'Post unavailable');
+                assert.deepEqual(translated.fxRequests, ['https://api.fxtwitter.com/openai/status/1234567890/es']);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'twitterHandler uses FxTwitter only when the first-party request fails',
         run: async () => {
             const originalFetch = globalThis.fetch;

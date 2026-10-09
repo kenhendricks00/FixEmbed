@@ -176,6 +176,49 @@ def _quote_section_items(
     return items
 
 
+def is_unavailable_post_payload(payload: Mapping[str, Any]) -> bool:
+    """True for the Worker's "Post unavailable" card: X says the post is gone or protected."""
+    sections = payload.get("sections") if isinstance(payload.get("sections"), list) else []
+    return not str(payload.get("authorName") or "").strip() and any(
+        isinstance(section, Mapping)
+        and section.get("kind") == "tombstone"
+        and str(section.get("title") or "").strip().casefold() == "post unavailable"
+        for section in sections
+    )
+
+
+def _build_unavailable_post_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str],
+    footer_branding: Optional[FooterBranding],
+    card_preferences: Optional[CardPreferences],
+) -> discord.ui.LayoutView:
+    """A clean FixEmbed card for a deleted or protected post, instead of the
+    FxTwitter link and FxTwitter's own "unavailable" embed."""
+    description = str(
+        payload.get("description") or "This post was deleted or is no longer available."
+    ).strip()
+    preferences = card_preferences or CardPreferences()
+    children: list[discord.ui.Item[Any]] = [
+        discord.ui.TextDisplay(f"**X**\n### Post unavailable\n{description}"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(
+            build_component_footer(
+                fixembed_emoji=f"<:fixembed:{FIXEMBED_EMOJI_ID}>",
+                platform_emoji=f"<:twitter:{TWITTER_EMOJI_ID}>",
+                platform_name="X",
+                source_url=str(payload.get("url") or "").strip(),
+                converted_url=converted_url,
+                timestamp=None,
+                branding=footer_branding,
+            )
+        ),
+    ]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*children, accent_color=preferences.accent_or(FIXEMBED_COLOR)))
+    return view
+
+
 def build_twitter_layout(
     payload: Mapping[str, Any],
     converted_url: Optional[str] = None,
@@ -183,6 +226,8 @@ def build_twitter_layout(
     card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a modern Components V2 card without uploading tweet media."""
+    if is_unavailable_post_payload(payload):
+        return _build_unavailable_post_layout(payload, converted_url, footer_branding, card_preferences)
     name = str(payload.get("authorName") or "X").strip().lstrip("@")
     handle = _clean_handle(payload.get("authorHandle"))
     author_url = str(payload.get("authorUrl") or "").strip()

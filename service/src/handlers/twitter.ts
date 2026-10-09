@@ -33,6 +33,34 @@ function fallbackResponse(username: string, tweetId: string, error: string): Han
     };
 }
 
+/**
+ * A FixEmbed-owned "Post unavailable" card for a post X says is gone or
+ * protected. Without it the bot fell back to the FxTwitter link, and Discord
+ * showed FxTwitter's own "unavailable" embed instead of a FixEmbed card.
+ */
+function unavailableTweetResponse(
+    username: string,
+    tweetId: string,
+    reason: 'gone' | 'protected',
+): HandlerResponse {
+    const description = reason === 'protected'
+        ? 'This post is from a protected account, so only its approved followers can see it.'
+        : 'This post was deleted or is no longer available.';
+    return {
+        success: true,
+        source: 'first-party',
+        data: {
+            title: 'Post unavailable',
+            description,
+            url: `https://x.com/${username}/status/${tweetId}`,
+            siteName: getBrandedSiteName('twitter'),
+            color: platformColors.twitter,
+            platform: 'twitter',
+            sections: [{ kind: 'tombstone', title: 'Post unavailable', body: description }],
+        },
+    };
+}
+
 interface FxTwitterMedia {
     type?: string;
     url?: string;
@@ -94,6 +122,19 @@ async function fetchFxTwitterTweet(
     tweetId: string,
     language?: string,
 ): Promise<FxTwitterTweet | undefined> {
+    return (await fetchFxTwitterResult(username, tweetId, language)).tweet;
+}
+
+/**
+ * The tweet, or FxTwitter's answer code when there is none: 404 means X says
+ * the post doesn't exist, 401 that it is protected. undefined means FxTwitter
+ * itself failed (timeout, 5xx, bad body), which says nothing about the post.
+ */
+async function fetchFxTwitterResult(
+    username: string,
+    tweetId: string,
+    language?: string,
+): Promise<{ tweet?: FxTwitterTweet; code?: number }> {
     const translationPath = language ? `/${language}` : '';
     const url = `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}${translationPath}`;
     try {
@@ -107,12 +148,12 @@ async function fetchFxTwitterTweet(
             },
             5000,
         );
-        if (!response.ok) return undefined;
         const body = await response.json() as { code?: number; tweet?: FxTwitterTweet | null };
-        const tweet = body.code === 200 ? body.tweet : undefined;
-        return tweet?.id === tweetId ? tweet : undefined;
+        const code = typeof body.code === 'number' ? body.code : response.status;
+        const tweet = response.ok && body.code === 200 && body.tweet?.id === tweetId ? body.tweet : undefined;
+        return tweet ? { tweet, code } : { code };
     } catch {
-        return undefined;
+        return {};
     }
 }
 
@@ -348,13 +389,22 @@ async function fetchFxTwitterFallback(
     tweetId: string,
     options: HandlerOptions,
     firstPartyError: string,
+    firstPartySaysGone = false,
 ): Promise<HandlerResponse> {
     try {
         const language = requestedTranslationLanguage(options);
-        const tweet = await fetchFxTwitterTweet(username, tweetId, language)
-            || (language ? await fetchFxTwitterTweet(username, tweetId) : undefined);
+        let result = await fetchFxTwitterResult(username, tweetId, language);
+        if (!result.tweet && language && result.code !== 404 && result.code !== 401) {
+            result = await fetchFxTwitterResult(username, tweetId);
+        }
+        const tweet = result.tweet;
         const author = tweet?.author;
         if (!tweet || !author?.screen_name || !author.name || !author.avatar_url) {
+            // Gone only when X's own API and FxTwitter agree; an outage on
+            // either side keeps the old fallback (same rule as Reddit's #71).
+            if (!tweet && firstPartySaysGone && (result.code === 404 || result.code === 401)) {
+                return unavailableTweetResponse(username, tweetId, result.code === 401 ? 'protected' : 'gone');
+            }
             return fallbackResponse(username, tweetId, firstPartyError);
         }
 
@@ -486,6 +536,7 @@ export const twitterHandler: PlatformHandler = {
                         parsed.tweetId,
                         options,
                         `Twitter API error: ${response.status}`,
+                        response.status === 404,
                     );
                 }
                 tweet = await response.json() as SyndicationTweet;
@@ -497,6 +548,7 @@ export const twitterHandler: PlatformHandler = {
                     parsed.tweetId,
                     options,
                     'Tweet not found, private, or deleted',
+                    true,
                 );
             }
 

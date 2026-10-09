@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Deleted or protected X posts get a FixEmbed "Post unavailable" card**
+- A link to an X/Twitter post that was deleted, or that comes from a protected account, fell back to an FxTwitter link, so Discord showed FxTwitter's own "unavailable" embed instead of a FixEmbed card.
+- FixEmbed now shows its own "Post unavailable" card in that case, with a short reason ("deleted or no longer available", or "from a protected account") and the usual footer link to the post.
+- The card is only shown when X's own API and FxTwitter both say the post is gone or protected. If either one is just down or slow, FixEmbed keeps its current fallback, so a working post is never shown as unavailable.
+- A post that quotes an unavailable post still gets its normal card.
+- Ships with a Worker deploy and a bot restart.
+
 #### **Faster cards when Discord's subscription check is slow or down (#101)**
 - When several links arrive at once from a server whose Premium status isn't cached, FixEmbed now asks Discord once and every message uses that answer. Before, each message started its own check.
 - If Discord's check fails or takes longer than 2.5 seconds, FixEmbed waits 45 seconds before asking again for that server. Until then it uses the last answer it saved, or treats the server as free for those messages, instead of making each message wait up to 2.5 seconds again during an outage.
