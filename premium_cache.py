@@ -26,6 +26,10 @@ PREMIUM_CHECK_TIMEOUT_SECONDS = 2.5
 # up to this long past the TTL. Older answers fall back to free for that message.
 PREMIUM_STALE_GRACE_SECONDS = 3600  # 1 hour
 
+# After a failed lookup, a guild's lookups skip Discord for this long and use
+# the last cached answer or "unconfirmed" instead (#101).
+PREMIUM_FAILURE_BACKOFF_SECONDS = 45
+
 # Upper bound on guilds held in a PremiumStatusCache; least recently used go first.
 PREMIUM_CACHE_MAX_ENTRIES = 10000
 
@@ -38,12 +42,20 @@ class PremiumStatusCache(OrderedDict):
     reset its generation while a lookup for that guild is still in flight. It
     only gains a key when a guild gets an entitlement event, so it holds one
     int per guild that subscribed, renewed or cancelled since the bot started.
+
+    ``in_flight`` holds the one running entitlements lookup per guild, so a
+    burst of messages from a guild with nothing cached makes a single Discord
+    call (#101). ``backoff_until`` holds, per guild, when the next lookup may run
+    after a failed one, so an outage costs each guild one timeout, not one per
+    message. Both drop a guild's key as soon as it no longer applies.
     """
 
     def __init__(self, max_entries: int = PREMIUM_CACHE_MAX_ENTRIES):
         super().__init__()
         self.max_entries = int(max_entries)
         self.generations: dict[Any, int] = {}
+        self.in_flight: dict[Any, asyncio.Future] = {}
+        self.backoff_until: dict[Any, float] = {}
 
 
 def get_cached_premium(
@@ -150,6 +162,8 @@ def record_guild_premium(
     drops its older answer instead of overwriting this one (#101).
     """
     _bump_premium_generation(cache, guild_id)
+    # Discord just answered for this guild, so a failure backoff no longer applies.
+    getattr(cache, "backoff_until", {}).pop(guild_id, None)
     set_cached_premium(cache.setdefault(guild_id, {}), is_premium, now=now)
     _touch(cache, guild_id)
     _enforce_premium_cache_bound(cache)
@@ -185,6 +199,7 @@ async def resolve_guild_premium_status(
     now: float | None = None,
     ttl_seconds: float = PREMIUM_CACHE_TTL_SECONDS,
     stale_grace_seconds: float = PREMIUM_STALE_GRACE_SECONDS,
+    failure_backoff_seconds: float = PREMIUM_FAILURE_BACKOFF_SECONDS,
 ) -> PremiumStatus:
     """Return a guild's Premium status, caching every answer Discord gives.
 
@@ -213,6 +228,10 @@ async def resolve_guild_premium_status(
       None too, so that call is served the event's value, not False. A lookup
       never bumps the generation itself, so a timeout or error leaves it
       unchanged (#101).
+    - Concurrent calls for one guild share a single lookup, and after a timeout
+      or error the guild's calls skip Discord for ``failure_backoff_seconds``,
+      answering from the last cached value or ``unconfirmed`` (#101). Plain
+      mappings without ``in_flight``/``backoff_until`` get neither.
     """
     entry = cache.get(guild_id)
     cached = get_cached_premium(entry, now=now, ttl_seconds=ttl_seconds)
@@ -220,10 +239,70 @@ async def resolve_guild_premium_status(
         _touch(cache, guild_id)
         return _status(cached)
     stale_limit = ttl_seconds + stale_grace_seconds
+    clock = time.monotonic() if now is None else now
+    backoff = getattr(cache, "backoff_until", None)
+    if backoff is not None and backoff.get(guild_id, float("-inf")) > clock:
+        fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
+        return "unconfirmed" if fallback is None else _status(fallback)
+
+    lookup = lambda: _lookup_guild_premium(  # noqa: E731
+        cache,
+        guild_id,
+        fetch_entitlements,
+        timeout=timeout,
+        now=now,
+        ttl_seconds=ttl_seconds,
+        stale_limit=stale_limit,
+        failure_backoff_seconds=failure_backoff_seconds,
+    )
+    in_flight = getattr(cache, "in_flight", None)
+    if in_flight is None:
+        return await lookup()
+    shared = in_flight.get(guild_id)
+    if shared is None:
+        shared = asyncio.ensure_future(lookup())
+        in_flight[guild_id] = shared
+
+        def _done(task: asyncio.Future) -> None:
+            if in_flight.get(guild_id) is task:
+                del in_flight[guild_id]
+
+        shared.add_done_callback(_done)
+    # shield: a caller that gives up never cancels the lookup others await.
+    return await asyncio.shield(shared)
+
+
+async def _lookup_guild_premium(
+    cache: MutableMapping[Any, MutableMapping[str, Any]],
+    guild_id: Any,
+    fetch_entitlements: Callable[[], Awaitable[Iterable[Any] | None]],
+    *,
+    timeout: float,
+    now: float | None,
+    ttl_seconds: float,
+    stale_limit: float,
+    failure_backoff_seconds: float,
+) -> PremiumStatus:
+    """One entitlements lookup for ``resolve_guild_premium_status``."""
+    # An entitlement event may have landed between the call and this start.
+    cached = get_cached_premium(cache.get(guild_id), now=now, ttl_seconds=ttl_seconds)
+    if cached is not None:
+        return _status(cached)
+    backoff = getattr(cache, "backoff_until", None)
+
+    def back_off() -> None:
+        if backoff is None or failure_backoff_seconds <= 0:
+            return
+        clock = time.monotonic() if now is None else now
+        for expired in [key for key, until in backoff.items() if until <= clock]:
+            del backoff[expired]
+        backoff[guild_id] = clock + failure_backoff_seconds
+
     generation = premium_generation(cache, guild_id)
     try:
         entitlements = await asyncio.wait_for(fetch_entitlements(), timeout=timeout)
     except asyncio.TimeoutError:
+        back_off()
         # Re-read the entry: an entitlement event may have landed meanwhile.
         fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
         logging.warning(
@@ -234,6 +313,7 @@ async def resolve_guild_premium_status(
         )
         return "unconfirmed" if fallback is None else _status(fallback)
     except Exception as e:
+        back_off()
         fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
         logging.error(
             "Premium entitlement check for guild %s failed: %s; using %s",
@@ -242,6 +322,8 @@ async def resolve_guild_premium_status(
             "last cached value" if fallback is not None else "free for this message",
         )
         return "unconfirmed" if fallback is None else _status(fallback)
+    if backoff is not None:
+        backoff.pop(guild_id, None)
     raced = premium_generation(cache, guild_id) != generation
     if raced:
         # An entitlement event landed mid-lookup; its value is fresher.
