@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Deleted or protected X posts get a FixEmbed "Post unavailable" card**
+- A link to an X/Twitter post that was deleted, or that comes from a protected account, fell back to an FxTwitter link, so Discord showed FxTwitter's own "unavailable" embed instead of a FixEmbed card.
+- FixEmbed now shows its own "Post unavailable" card in that case, with a short reason ("deleted or no longer available", or "from a protected account") and the usual footer link to the post.
+- The card is only shown when X's own API and FxTwitter both say the post is gone or protected. If either one is just down or slow, FixEmbed keeps its current fallback, so a working post is never shown as unavailable.
+- A post that quotes an unavailable post still gets its normal card.
+- Ships with a Worker deploy and a bot restart.
+
 #### **Overnight canary: one CDN hiccup no longer fails a healthy carousel (#76)**
 - The production canary checks that every image on a card loads. A Twitter carousel checks about four images at once, so a single timeout, dropped connection, 429 or 5xx from X's image servers failed the whole check even though the post was fine. Re-running it passed.
 - Each image now gets one retry for those temporary errors. A 403, 404, wrong file type or unexpected host still fails right away, and an image that fails twice still fails.
