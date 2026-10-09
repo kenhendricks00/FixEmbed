@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Deleted Bluesky posts get a FixEmbed "Post unavailable" card**
+- A link to a deleted Bluesky post, or to a post whose account was deleted or changed its handle, fell back to the plain link instead of a FixEmbed card.
+- FixEmbed now shows the same "Post unavailable" card X posts get, with the reason ("deleted or no longer available", or "the account no longer exists or changed its handle").
+- The card is only shown when Bluesky itself says the post or account is gone. If Bluesky is down or slow, FixEmbed keeps its current fallback.
+- The X and Bluesky cards now share one card layout.
+- Ships with a Worker deploy and a bot restart.
+
 #### **Deleted or protected X posts get a FixEmbed "Post unavailable" card**
 - A link to an X/Twitter post that was deleted, or that comes from a protected account, fell back to an FxTwitter link, so Discord showed FxTwitter's own "unavailable" embed instead of a FixEmbed card.
 - FixEmbed now shows its own "Post unavailable" card in that case, with a short reason ("deleted or no longer available", or "from a protected account") and the usual footer link to the post.

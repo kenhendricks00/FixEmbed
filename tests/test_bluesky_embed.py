@@ -76,3 +76,35 @@ class BlueskyEmbedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnavailableBlueskyPostTests(unittest.TestCase):
+    """A deleted Bluesky post (or a gone account) gets a FixEmbed card."""
+
+    @staticmethod
+    def texts(layout):
+        container = layout.to_components()[0]
+        return container, [c.get("content", "") for c in container["components"] if c.get("type") == 10]
+
+    def test_worker_unavailable_payload_renders_a_clean_card(self):
+        url = "https://bsky.app/profile/creator.bsky.social/post/3aaaaaaaaaaaa"
+        reason = "The account for this post no longer exists or changed its handle."
+        container, (header, footer) = self.texts(build_bluesky_layout({
+            "title": "Post unavailable",
+            "description": reason,
+            "url": url,
+            "platform": "bluesky",
+            "sections": [{"kind": "tombstone", "title": "Post unavailable", "body": reason}],
+        }))
+        self.assertEqual(header, f"**Bluesky**\n### Post unavailable\n{reason}")
+        self.assertIn(url, footer)
+        self.assertEqual(container["accent_color"], 0x1185FE)
+
+    def test_normal_post_is_not_mistaken_for_unavailable(self):
+        _, texts = self.texts(build_bluesky_layout({
+            "authorName": "Creator",
+            "authorHandle": "creator.bsky.social",
+            "description": "hello",
+            "url": "https://bsky.app/profile/creator.bsky.social/post/3abc",
+        }))
+        self.assertNotIn("### Post unavailable", "\n".join(texts))

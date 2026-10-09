@@ -6798,6 +6798,63 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'blueskyHandler shows a FixEmbed "Post unavailable" card only when Bluesky says so',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const postUrl = 'https://bsky.app/profile/creator.bsky.social/post/3aaaaaaaaaaaa';
+            const scenario = async (resolve: () => Response, thread: () => Response) => {
+                globalThis.fetch = (async (input: RequestInfo | URL) => {
+                    const url = String(input);
+                    if (url.includes('resolveHandle')) return resolve();
+                    if (url.includes('getPostThread')) return thread();
+                    throw new Error(`Unexpected fetch: ${url}`);
+                }) as typeof fetch;
+                return blueskyHandler.handle(postUrl, env);
+            };
+            const did = () => Response.json({ did: 'did:plc:creator' });
+            try {
+                // Deleted post: Bluesky's own NotFound error.
+                const gone = await scenario(did, () => Response.json(
+                    { error: 'NotFound', message: 'Post not found: at://did:plc:creator/app.bsky.feed.post/3aaaaaaaaaaaa' },
+                    { status: 400 },
+                ));
+                assert.equal(gone.success, true);
+                assert.equal(gone.data?.title, 'Post unavailable');
+                assert.equal(gone.data?.url, postUrl);
+                assert.equal(gone.data?.platform, 'bluesky');
+                assert.equal(gone.data?.sections?.[0]?.kind, 'tombstone');
+                assert.match(gone.data?.description || '', /deleted/);
+
+                // The thread view's notFoundPost says the same.
+                const notFoundPost = await scenario(did, () => Response.json({
+                    thread: { $type: 'app.bsky.feed.defs#notFoundPost', uri: 'at://x', notFound: true },
+                }));
+                assert.equal(notFoundPost.data?.title, 'Post unavailable');
+
+                // Deleted or renamed account.
+                const account = await scenario(
+                    () => Response.json({ error: 'InvalidRequest', message: 'Unable to resolve handle' }, { status: 400 }),
+                    () => { throw new Error('thread must not be fetched'); },
+                );
+                assert.equal(account.data?.title, 'Post unavailable');
+                assert.match(account.data?.description || '', /account/);
+
+                // Outages keep the old fallback (redirect to the original link).
+                for (const [resolve, thread] of [
+                    [did, () => new Response('bad gateway', { status: 502 })],
+                    [() => new Response('unavailable', { status: 503 }), did],
+                    [did, () => Response.json({ error: 'InternalServerError' }, { status: 400 })],
+                ] as const) {
+                    const outage = await scenario(resolve, thread);
+                    assert.equal(outage.success, false);
+                    assert.equal(outage.redirect, postUrl);
+                }
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'blueskyHandler preserves creator identity and every carousel image',
         run: async () => {
             const originalFetch = globalThis.fetch;

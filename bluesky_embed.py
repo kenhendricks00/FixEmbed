@@ -13,6 +13,7 @@ from embed_footer import FooterBranding, build_component_footer, translated_sour
 from card_preferences import CardPreferences, apply_caption_preferences
 from markdown_safety import masked_link
 from timestamp_utils import parse_post_timestamp
+from unavailable_card import build_unavailable_post_layout, is_unavailable_post_payload
 
 
 FIXEMBED_API = "https://fixembed.app/api/embed"
@@ -32,6 +33,16 @@ def build_bluesky_layout(
     card_preferences: Optional[CardPreferences] = None,
 ) -> discord.ui.LayoutView:
     """Build a Bluesky Components V2 card using remote media URLs."""
+    if is_unavailable_post_payload(payload):
+        return build_unavailable_post_layout(
+            payload,
+            platform_name="Bluesky",
+            platform_emoji=f"<:bluesky:{BLUESKY_EMOJI_ID}>",
+            accent_color=BLUESKY_COLOR,
+            converted_url=converted_url,
+            footer_branding=footer_branding,
+            card_preferences=card_preferences,
+        )
     raw_name = str(payload.get("authorName") or "Bluesky").strip()
     handle = _clean_handle(payload.get("authorHandle"))
     if not handle and raw_name.startswith("@"):
