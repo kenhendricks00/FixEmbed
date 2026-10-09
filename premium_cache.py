@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from collections import OrderedDict
-from typing import Any, Awaitable, Callable, Iterable, Mapping, MutableMapping
+from typing import Any, Awaitable, Callable, Iterable, Literal, Mapping, MutableMapping
 
 from premium_roles import entitlement_is_active
 
@@ -155,7 +155,28 @@ def record_guild_premium(
     _enforce_premium_cache_bound(cache)
 
 
+PremiumStatus = Literal["active", "inactive", "unconfirmed"]
+
+
+def _status(is_premium: bool) -> PremiumStatus:
+    return "active" if is_premium else "inactive"
+
+
 async def resolve_guild_premium(
+    cache: MutableMapping[Any, MutableMapping[str, Any]],
+    guild_id: Any,
+    fetch_entitlements: Callable[[], Awaitable[Iterable[Any] | None]],
+    **options: Any,
+) -> bool:
+    """True when the guild is Premium; see ``resolve_guild_premium_status``.
+
+    Message handling uses this plain answer: anything not confirmed active,
+    including ``unconfirmed``, is treated as free for that message.
+    """
+    return await resolve_guild_premium_status(cache, guild_id, fetch_entitlements, **options) == "active"
+
+
+async def resolve_guild_premium_status(
     cache: MutableMapping[Any, MutableMapping[str, Any]],
     guild_id: Any,
     fetch_entitlements: Callable[[], Awaitable[Iterable[Any] | None]],
@@ -164,19 +185,25 @@ async def resolve_guild_premium(
     now: float | None = None,
     ttl_seconds: float = PREMIUM_CACHE_TTL_SECONDS,
     stale_grace_seconds: float = PREMIUM_STALE_GRACE_SECONDS,
-) -> bool:
+) -> PremiumStatus:
     """Return a guild's Premium status, caching every answer Discord gives.
+
+    ``unconfirmed`` means Discord could not be asked and nothing usable was
+    cached (#101). /premium and the settings screens say "couldn't confirm"
+    for it instead of "not active" or locked, because that is the moment a
+    subscriber starts wondering whether their payment went through.
 
     - A fresh cached value (premium or not) is returned without a lookup.
     - Otherwise ``fetch_entitlements`` runs with a ``timeout`` cap. Its answer is
       cached for ``ttl_seconds`` whether or not the guild is Premium.
     - ``fetch_entitlements`` returning None means the guild cannot be checked
-      right now (for example it is not in the client cache): False, not cached.
+      right now (for example it is not in the client cache): ``unconfirmed``,
+      not cached.
     - On timeout or error the last cached value is returned even if past its
       TTL, as long as it is at most ``ttl_seconds + stale_grace_seconds`` old.
       Its timestamp is never refreshed, so the next call retries Discord. With
-      no usable cached value the guild is treated as free for this call only and
-      nothing is cached, so a paying guild is never pinned to free.
+      no usable cached value the answer is ``unconfirmed`` (free for that one
+      message) and nothing is cached, so a paying guild is never pinned to free.
     - Every fallback answer is in memory only; this function never persists.
     - The guild's generation is read before the lookup starts. If an
       entitlement event bumped it while the lookup was in flight, the lookup's
@@ -191,7 +218,7 @@ async def resolve_guild_premium(
     cached = get_cached_premium(entry, now=now, ttl_seconds=ttl_seconds)
     if cached is not None:
         _touch(cache, guild_id)
-        return cached
+        return _status(cached)
     stale_limit = ttl_seconds + stale_grace_seconds
     generation = premium_generation(cache, guild_id)
     try:
@@ -205,7 +232,7 @@ async def resolve_guild_premium(
             timeout,
             "last cached value" if fallback is not None else "free for this message",
         )
-        return bool(fallback)
+        return "unconfirmed" if fallback is None else _status(fallback)
     except Exception as e:
         fallback = last_cached_premium(cache.get(guild_id), now=now, max_age_seconds=stale_limit)
         logging.error(
@@ -214,21 +241,22 @@ async def resolve_guild_premium(
             e,
             "last cached value" if fallback is not None else "free for this message",
         )
-        return bool(fallback)
+        return "unconfirmed" if fallback is None else _status(fallback)
     raced = premium_generation(cache, guild_id) != generation
     if raced:
         # An entitlement event landed mid-lookup; its value is fresher.
         newer = get_cached_premium(cache.get(guild_id), now=now, ttl_seconds=ttl_seconds)
         if newer is not None:
-            return newer
+            return _status(newer)
     if entitlements is None:
-        return False
+        # The guild can't be checked right now (not in the client cache).
+        return "unconfirmed"
     is_premium = any_entitlement_grants_premium(entitlements)
     if raced:
         # The event's entry was evicted; don't re-add the guild with the older answer.
-        return is_premium
+        return _status(is_premium)
     # Same write as record_guild_premium, minus the generation bump.
     set_cached_premium(cache.setdefault(guild_id, {}), is_premium, now=now)
     _touch(cache, guild_id)
     _enforce_premium_cache_bound(cache)
-    return is_premium
+    return _status(is_premium)

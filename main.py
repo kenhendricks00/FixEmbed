@@ -92,7 +92,7 @@ from premium_cache import (
     PREMIUM_CHECK_TIMEOUT_SECONDS,
     PremiumStatusCache,
     record_guild_premium,
-    resolve_guild_premium,
+    resolve_guild_premium_status,
 )
 from premium_roles import (
     entitlement_is_active,
@@ -414,10 +414,12 @@ def get_guild_lang(guild_id):
 # bot_settings row. Entries use the premium_cache TTL helpers; bounded LRU.
 premium_status_cache = PremiumStatusCache()
 
-async def is_guild_premium(guild_id):
-    """Check if a guild has an active premium subscription."""
+async def guild_premium_status(guild_id):
+    """``active``, ``inactive``, or ``unconfirmed`` when Discord couldn't be
+    checked and nothing is cached. Only /premium and the settings screens use
+    the third answer (#101); message handling uses ``is_guild_premium``."""
     if not PREMIUM_SKU_ID:
-        return False
+        return "inactive"
 
     async def fetch_entitlements():
         guild = client.get_guild(guild_id)
@@ -427,12 +429,17 @@ async def is_guild_premium(guild_id):
 
     # Fresh cache hit (premium or not) skips Discord. Otherwise one lookup capped
     # at PREMIUM_CHECK_TIMEOUT_SECONDS, falling back to the last cached value.
-    return await resolve_guild_premium(
+    return await resolve_guild_premium_status(
         premium_status_cache,
         guild_id,
         fetch_entitlements,
         timeout=PREMIUM_CHECK_TIMEOUT_SECONDS,
     )
+
+
+async def is_guild_premium(guild_id):
+    """Check if a guild has an active premium subscription."""
+    return await guild_premium_status(guild_id) == "active"
 
 
 def get_footer_branding(guild, settings, premium):
@@ -1285,13 +1292,21 @@ def format_premium_activation_checklist(lang, settings, items):
 
 async def open_settings_surface(source_interaction, interaction, settings, value):
     """Open the matching /settings page or modal for a dropdown value."""
-    if value == "Embed Color" and await is_guild_premium(interaction.guild.id):
-        await interaction.response.send_modal(
-            EmbedColorModal(source_interaction, settings)
+    if value == "Embed Color":
+        status = await guild_premium_status(interaction.guild.id)
+        if status == "active":
+            await interaction.response.send_modal(
+                EmbedColorModal(source_interaction, settings)
+            )
+            return
+        view = PremiumSettingsView(
+            source_interaction, settings, unconfirmed=status == "unconfirmed"
         )
+        await interaction.response.send_message(view=view, ephemeral=True)
         return
     if value == "Footer Branding":
-        premium = await is_guild_premium(interaction.guild.id)
+        # Premium pages take the status so "couldn't confirm" isn't shown as locked (#101).
+        premium = await guild_premium_status(interaction.guild.id)
         view = FooterBrandingSettingsView(
             source_interaction, settings, premium=premium
         )
@@ -1306,16 +1321,16 @@ async def open_settings_surface(source_interaction, interaction, settings, value
         "Exclusions": ExclusionSettingsView,
     }
     if value in premium_pages:
-        premium = await is_guild_premium(interaction.guild.id)
+        premium = await guild_premium_status(interaction.guild.id)
         view = premium_pages[value](
             source_interaction, settings, premium=premium
         )
         await interaction.response.send_message(view=view, ephemeral=True)
         return
     if value == "Analytics":
-        premium = await is_guild_premium(interaction.guild.id)
+        premium = await guild_premium_status(interaction.guild.id)
         summary = []
-        if premium:
+        if premium == "active":
             try:
                 summary = await fetch_analytics_summary(
                     client.db, interaction.guild.id, days=30
@@ -1356,7 +1371,6 @@ async def open_settings_surface(source_interaction, interaction, settings, value
         "Channel Rules": ChannelRulesSettingsView,
         "Language": LanguageSettingsView,
         "Debug": DebugSettingsView,
-        "Embed Color": PremiumSettingsView,
     }
     view = page_types[value](source_interaction, settings)
     await interaction.response.send_message(view=view, ephemeral=True)
@@ -2014,15 +2028,21 @@ class DebugSettingsView(StaticSettingsView):
         super().__init__(interaction, settings, title="Debug Information", description="Permission and runtime diagnostics for this server.", status=status, footer="Diagnostics")
 
 
+def premium_page_state(premium):
+    """(active, unconfirmed) from a ``guild_premium_status`` answer or a bool."""
+    return premium is True or premium == "active", premium == "unconfirmed"
+
+
 class PremiumSettingsView(SettingsPageView):
-    def __init__(self, interaction, settings):
+    def __init__(self, interaction, settings, *, unconfirmed=False):
         super().__init__(interaction, settings)
         controls = ()
-        if PREMIUM_SKU_ID:
+        # No purchase button when Discord just couldn't confirm a subscription (#101).
+        if PREMIUM_SKU_ID and not unconfirmed:
             controls = ((discord.ui.Button(style=discord.ButtonStyle.premium, sku_id=int(PREMIUM_SKU_ID)),),)
         self.render_page(
             title=get_text(self.lang, "embed_color_title"),
-            description=get_text(self.lang, "premium_required"),
+            description=get_text(self.lang, "premium_unconfirmed" if unconfirmed else "premium_required"),
             controls=controls,
             accent_color=discord.Color.gold(),
             footer="Premium",
@@ -2034,7 +2054,7 @@ class PremiumControlsPage(SettingsPageView):
 
     def __init__(self, interaction, settings, *, premium):
         super().__init__(interaction, settings)
-        self.premium = premium
+        self.premium, self.premium_unconfirmed = premium_page_state(premium)
 
     async def save_premium(self):
         await save_premium_controls(
@@ -2043,7 +2063,7 @@ class PremiumControlsPage(SettingsPageView):
 
     def render_locked(self, *, title, description):
         controls = ()
-        if PREMIUM_SKU_ID:
+        if PREMIUM_SKU_ID and not self.premium_unconfirmed:
             controls = ((discord.ui.Button(
                 style=discord.ButtonStyle.premium,
                 sku_id=int(PREMIUM_SKU_ID),
@@ -2051,14 +2071,21 @@ class PremiumControlsPage(SettingsPageView):
         self.render_page(
             title=title,
             description=description,
-            status="This is a FixEmbed Premium feature.",
+            status=(
+                get_text(self.lang, "premium_unconfirmed")
+                if self.premium_unconfirmed
+                else "This is a FixEmbed Premium feature."
+            ),
             controls=controls,
             accent_color=discord.Color.gold(),
             footer="Premium",
         )
 
     async def confirm_premium(self, interaction):
-        self.premium = await is_guild_premium(interaction.guild.id)
+        # Re-check before every mutation; nothing is written unless confirmed active.
+        self.premium, self.premium_unconfirmed = premium_page_state(
+            await guild_premium_status(interaction.guild.id)
+        )
         if self.premium:
             return True
         self.render()
@@ -2321,10 +2348,7 @@ class FooterEmojiSelect(ui.Select):
         self.page = page
 
     async def callback(self, interaction):
-        if not await is_guild_premium(interaction.guild.id):
-            self.page.premium = False
-            self.page.render()
-            await interaction.response.edit_message(view=self.page)
+        if not await self.page.recheck_premium(interaction):
             return
         value = self.values[0]
         if value == "none":
@@ -2348,13 +2372,24 @@ class FooterEmojiSelect(ui.Select):
 class FooterBrandingSettingsView(SettingsPageView):
     def __init__(self, interaction, settings, *, premium):
         super().__init__(interaction, settings)
-        self.premium = premium
+        self.premium, self.premium_unconfirmed = premium_page_state(premium)
         self.render()
+
+    async def recheck_premium(self, interaction):
+        """Re-check before a mutation; re-render locked or unconfirmed if not active."""
+        self.premium, self.premium_unconfirmed = premium_page_state(
+            await guild_premium_status(interaction.guild.id)
+        )
+        if self.premium:
+            return True
+        self.render()
+        await interaction.response.edit_message(view=self)
+        return False
 
     def render(self):
         if not self.premium:
             controls = ()
-            if PREMIUM_SKU_ID:
+            if PREMIUM_SKU_ID and not self.premium_unconfirmed:
                 controls = ((discord.ui.Button(
                     style=discord.ButtonStyle.premium,
                     sku_id=int(PREMIUM_SKU_ID),
@@ -2362,7 +2397,11 @@ class FooterBrandingSettingsView(SettingsPageView):
             self.render_page(
                 title="Custom Footer Branding",
                 description="Use your server name and an optional server emoji on social cards.",
-                status="This is a FixEmbed Premium feature.",
+                status=(
+                    get_text(self.lang, "premium_unconfirmed")
+                    if self.premium_unconfirmed
+                    else "This is a FixEmbed Premium feature."
+                ),
                 controls=controls,
                 accent_color=discord.Color.gold(),
                 footer="Premium",
@@ -2398,10 +2437,7 @@ class FooterBrandingSettingsView(SettingsPageView):
         )
 
     async def toggle(self, interaction):
-        if not await is_guild_premium(interaction.guild.id):
-            self.premium = False
-            self.render()
-            await interaction.response.edit_message(view=self)
+        if not await self.recheck_premium(interaction):
             return
         self.settings["footer_branding_enabled"] = not bool(
             self.settings.get("footer_branding_enabled", False)
@@ -2891,8 +2927,11 @@ class PremiumActivationView:
 async def premium_command(interaction: discord.Interaction):
     lang = get_guild_lang(interaction.guild.id if interaction.guild else None)
     premium = False
+    unconfirmed = False
     if interaction.guild:
-        premium = await is_guild_premium(interaction.guild.id)
+        premium, unconfirmed = premium_page_state(
+            await guild_premium_status(interaction.guild.id)
+        )
 
     if premium and interaction.guild:
         guild_settings = bot_settings.get(
@@ -2945,12 +2984,18 @@ async def premium_command(interaction: discord.Interaction):
         return
 
     controls = ()
-    if PREMIUM_SKU_ID and not premium:
+    # A subscriber whose status couldn't be confirmed must not be asked to buy again (#101).
+    if PREMIUM_SKU_ID and not premium and not unconfirmed:
         subscribe_button = discord.ui.Button(
             style=discord.ButtonStyle.premium,
             sku_id=int(PREMIUM_SKU_ID))
         controls = ((subscribe_button,),)
-    status = get_text(lang, "premium_active") if premium else get_text(lang, "premium_not_active")
+    if premium:
+        status = get_text(lang, "premium_active")
+    elif unconfirmed:
+        status = get_text(lang, "premium_unconfirmed")
+    else:
+        status = get_text(lang, "premium_not_active")
     view = SettingsNoticeView(
         title=get_text(lang, "premium_title"),
         description=f"{get_text(lang, 'premium_description')}\n\n**Status**\n{status}\n\n**{get_text(lang, 'premium_perks_title')}**\n{get_text(lang, 'premium_perks')}",
