@@ -1,5 +1,15 @@
 ## Unreleased
 
+#### **Reddit comment text from the old.reddit fallback keeps its formatting (#96)**
+- Quotes inside a comment keep their quote marker, the same as Reddit's API gives them. Before, a quoted line like `>non-null` showed as plain text.
+- Links in comment text work in more cases. Links to `/r/...` and `/u/...` now point at Reddit instead of dropping their target. A link whose address contains `(` or `)`, such as a Wikipedia page, no longer breaks. A link that is only code keeps the code.
+- Link text in comments follows the same rules as titles from #103: no stray backslashes, mentions shown as `＠everyone`, and text that contains another URL shown as text followed by the link instead of raw markdown.
+- Text an author typed as `[x](https://...)` stays text instead of turning into a live link.
+- Code keeps its blank lines and backticks: blank lines inside a code block are no longer squeezed out, and inline code that contains two backticks in a row can't end early.
+- A long comment cut at the 3000 character limit never leaves a code block open, so the rest of the card isn't shown as code. Long post text gets the same treatment.
+- A comment that is only an invisible character (`&#x200B;`) now gets the normal card with no comment text, instead of a card that looks empty.
+- Ships with a Worker deploy. No bot restart needed.
+
 #### **Traditional Chinese servers get Traditional Chinese translations (#97)**
 - A server translating into Traditional Chinese (`zh-TW`, `zh-HK` or `zh-Hant`) got Simplified Chinese, because the translator only writes Simplified and the region was dropped.
 - Translations into Traditional Chinese are now converted to Traditional characters, with Taiwan and Hong Kong forms where they differ (`裡` for Taiwan, for example). The conversion uses OpenCC's dictionaries, so phrases like `头发` (hair) become `頭髮`, not a character-by-character guess.
