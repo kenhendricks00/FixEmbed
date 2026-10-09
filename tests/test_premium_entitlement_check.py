@@ -312,13 +312,16 @@ class MainWiringTests(unittest.TestCase):
         return body.split(end_marker, 1)[0]
 
     def test_is_guild_premium_uses_shared_cache_with_timeout(self):
-        section = MAIN_SOURCE.split("async def is_guild_premium(guild_id):", 1)[1].split("\ndef ", 1)[0]
+        section = MAIN_SOURCE.split("async def guild_premium_status(guild_id):", 1)[1].split("\nasync def ", 1)[0]
         self.assertIn("if not PREMIUM_SKU_ID:", section)
-        self.assertIn("resolve_guild_premium(", section)
+        self.assertIn("resolve_guild_premium_status(", section)
         self.assertIn("premium_status_cache", section)
         self.assertIn("timeout=PREMIUM_CHECK_TIMEOUT_SECONDS", section)
         self.assertNotIn("guild_id in bot_settings", section)
         self.assertNotIn("bot_settings.get(guild_id)", section)
+        # Message handling's plain answer is the same check (#101).
+        wrapper = MAIN_SOURCE.split("async def is_guild_premium(guild_id):", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn('return await guild_premium_status(guild_id) == "active"', wrapper)
 
     def test_entitlement_events_update_every_guild(self):
         for handler in ("on_entitlement_create", "on_entitlement_update", "on_entitlement_delete"):
@@ -351,17 +354,20 @@ WRITE_CALLS = {
     "commit",
 }
 
-# Every function in main.py that awaits is_guild_premium or confirm_premium, and
-# how a False (possibly a fallback) answer is kept from writing anything.
+# Every function in main.py that awaits a Premium check, and how a False,
+# "inactive" or "unconfirmed" (possibly a fallback) answer is kept from writing.
+PREMIUM_CHECKS = {"is_guild_premium", "guild_premium_status", "confirm_premium", "recheck_premium"}
 READ_ONLY = "read_only"  # no writes anywhere in the function
 PREMIUM_BRANCH = "premium_branch"  # writes only inside `if premium:`
 EARLY_RETURN = "early_return"  # `if not await <check>: ... return` before any write
 PREMIUM_CALLERS = {
+    "is_guild_premium": READ_ONLY,
     "send_components_v2_links": READ_ONLY,
     "open_settings_surface": READ_ONLY,
     "settings": READ_ONLY,
     "premium_command": READ_ONLY,
     "PremiumControlsPage.confirm_premium": READ_ONLY,
+    "FooterBrandingSettingsView.recheck_premium": READ_ONLY,
     "on_message": PREMIUM_BRANCH,
     "FooterEmojiSelect.callback": EARLY_RETURN,
     "FooterBrandingSettingsView.toggle": EARLY_RETURN,
@@ -412,7 +418,7 @@ class FallbackWritesNothingTests(unittest.TestCase):
         callers = {
             self._enclosing_function(node)
             for node in ast.walk(self.tree)
-            if isinstance(node, ast.Call) and _call_name(node) in {"is_guild_premium", "confirm_premium"}
+            if isinstance(node, ast.Call) and _call_name(node) in PREMIUM_CHECKS
         }
         # A new caller must be added to PREMIUM_CALLERS with its write guard.
         self.assertEqual(set(PREMIUM_CALLERS), callers)
@@ -453,7 +459,7 @@ class FallbackWritesNothingTests(unittest.TestCase):
                 self.assertIsInstance(guard.test, ast.UnaryOp)
                 self.assertIsInstance(guard.test.op, ast.Not)
                 self.assertIsInstance(guard.test.operand, ast.Await)
-                self.assertIn(_call_name(guard.test.operand.value), {"is_guild_premium", "confirm_premium"})
+                self.assertIn(_call_name(guard.test.operand.value), PREMIUM_CHECKS)
                 self.assertIsInstance(guard.body[-1], ast.Return)
                 self.assertEqual([], self._writes(guard))
                 self.assertTrue(self._writes(function), "expected a guarded write")

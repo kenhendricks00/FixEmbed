@@ -10,6 +10,13 @@
 - A comment that is only an invisible character (`&#x200B;`) now gets the normal card with no comment text, instead of a card that looks empty.
 - Ships with a Worker deploy. No bot restart needed.
 
+#### **/premium says "couldn't confirm" instead of "not active" when Discord can't be checked (#101)**
+- When FixEmbed could not reach Discord to check a server's subscription and had no recent answer saved, `/premium` said "This server does not have Premium." and showed the Buy button, and the Premium settings screens showed as locked. A paying server could think its payment had not gone through.
+- `/premium` now says "Couldn't confirm Premium status right now. Try again in a minute." in that case, without a Buy button. The Embed Color, Footer Branding, Card Style, Exclusions and Analytics screens say the same instead of showing as locked.
+- Nothing is saved while the status is unconfirmed, the same as before. Link cards are unchanged: an unconfirmed server gets the free card for that one message, and the next message checks again.
+- The message is translated into all eight bot languages.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Traditional Chinese servers get Traditional Chinese translations (#97)**
 - A server translating into Traditional Chinese (`zh-TW`, `zh-HK` or `zh-Hant`) got Simplified Chinese, because the translator only writes Simplified and the region was dropped.
 - Translations into Traditional Chinese are now converted to Traditional characters, with Taiwan and Hong Kong forms where they differ (`裡` for Taiwan, for example). The conversion uses OpenCC's dictionaries, so phrases like `头发` (hair) become `頭髮`, not a character-by-character guess.
