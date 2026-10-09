@@ -1,5 +1,12 @@
 ## Unreleased
 
+#### **Faster cards when Discord's subscription check is slow or down (#101)**
+- When several links arrive at once from a server whose Premium status isn't cached, FixEmbed now asks Discord once and every message uses that answer. Before, each message started its own check.
+- If Discord's check fails or takes longer than 2.5 seconds, FixEmbed waits 45 seconds before asking again for that server. Until then it uses the last answer it saved, or treats the server as free for those messages, instead of making each message wait up to 2.5 seconds again during an outage.
+- A subscribe, renew or cancel event from Discord ends the wait right away, and the next successful check clears it too.
+- Nothing is saved from a failed check, the same as before, and `/premium` still says "couldn't confirm" when there is no recent answer.
+- Ships with a bot restart only. No Worker deploy needed.
+
 #### **Reddit comment text from the old.reddit fallback keeps its formatting (#96)**
 - Quotes inside a comment keep their quote marker, the same as Reddit's API gives them. Before, a quoted line like `>non-null` showed as plain text.
 - Links in comment text work in more cases. Links to `/r/...` and `/u/...` now point at Reddit instead of dropping their target. A link whose address contains `(` or `)`, such as a Wikipedia page, no longer breaks. A link that is only code keeps the code.
