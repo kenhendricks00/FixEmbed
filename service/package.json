@@ -13,12 +13,12 @@
   },
   "dependencies": {
     "franc-min": "^6.2.0",
-    "hono": "^4.13.12"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261002.1",
+    "@cloudflare/workers-types": "^5.20261010.1",
     "typescript": "^5.3.0",
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.149.0"
   },
   "engines": {
     "node": ">=18.0.0"
