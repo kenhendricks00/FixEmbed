@@ -375,6 +375,112 @@ class InstagramEmbedTests(unittest.TestCase):
             [f"attachment://instagram-{index:02d}.jpg" for index in range(1, 11)],
         )
 
+    def test_fetch_delivery_uploads_long_carousels_instead_of_remote_media(self):
+        # Regression: a 14-image carousel used to skip the attachment path and
+        # make Discord fetch 14 remote relay URLs while creating the message.
+        # That send could outlast the delivery deadline, so the bot posted a
+        # bare fallback link instead of the card.
+        image_urls = [
+            f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+            for index in range(1, 15)
+        ]
+        payload = {
+            "caption": "Fourteen-image carousel",
+            "url": "https://www.instagram.com/p/Dfm-fc-DMGZ/",
+            "authorHandle": "@dodollsdream",
+            "images": image_urls,
+        }
+        downloads = tuple(
+            (f"image-{index}".encode(), "image/jpeg")
+            for index in range(1, 11)
+        )
+
+        with (
+            patch(
+                'fixembed.platforms.instagram._fetch_instagram_payload',
+                AsyncMock(return_value=payload),
+            ),
+            patch(
+                'fixembed.platforms.instagram._download_instagram_carousel',
+                AsyncMock(return_value=downloads),
+            ) as download_carousel,
+        ):
+            delivery = asyncio.run(fetch_instagram_delivery(payload["url"]))
+
+        download_carousel.assert_awaited_once_with(tuple(image_urls[:10]))
+        self.assertEqual(len(delivery.files), 10)
+        children = delivery.layout.to_components()[0]["components"]
+        galleries = [child for child in children if child["type"] == 12]
+        self.assertEqual(len(galleries), 1)
+        media_urls = [item["media"]["url"] for item in galleries[0]["items"]]
+        self.assertEqual(
+            media_urls,
+            [f"attachment://instagram-{index:02d}.jpg" for index in range(1, 11)],
+        )
+        self.assertFalse(any(url.startswith("https://") for url in media_urls))
+        self.assertEqual(
+            galleries[0]["items"][0]["description"],
+            "Instagram image 1 of 14",
+        )
+        more_lines = [
+            child["content"]
+            for child in children
+            if child["type"] == 10 and "more on Instagram" in child.get("content", "")
+        ]
+        self.assertEqual(
+            more_lines,
+            ["-# [+4 more on Instagram](https://www.instagram.com/p/Dfm-fc-DMGZ/)"],
+        )
+
+    def test_fetch_delivery_falls_back_to_remote_gallery_when_an_upload_fails(self):
+        image_urls = [
+            f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+            for index in range(1, 4)
+        ]
+        payload = {
+            "caption": "Three-image carousel",
+            "url": "https://www.instagram.com/p/FlakyUpload/",
+            "authorHandle": "@creator",
+            "images": image_urls,
+        }
+
+        for error in (asyncio.TimeoutError(), aiohttp.ClientError("reset"), ValueError("bad image")):
+            with (
+                patch(
+                    'fixembed.platforms.instagram._fetch_instagram_payload',
+                    AsyncMock(return_value=payload),
+                ),
+                patch(
+                    'fixembed.platforms.instagram._download_instagram_carousel',
+                    AsyncMock(side_effect=error),
+                ),
+                self.assertLogs(level="WARNING"),
+            ):
+                delivery = asyncio.run(fetch_instagram_delivery(payload["url"]))
+
+            self.assertEqual(delivery.files, ())
+            gallery = delivery.layout.to_components()[0]["components"][1]
+            self.assertEqual(
+                [
+                    parse_qs(urlsplit(item["media"]["url"]).query)["url"][0]
+                    for item in gallery["items"]
+                ],
+                image_urls,
+            )
+
+    def test_carousel_delivery_rejects_a_short_download_set(self):
+        payload = {
+            "url": "https://www.instagram.com/p/Short/",
+            "images": [
+                f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
+                for index in range(1, 15)
+            ],
+        }
+        downloads = [(b"image", "image/jpeg")] * 9
+
+        with self.assertRaises(ValueError):
+            build_instagram_delivery(payload, downloads)
+
     def test_fetch_delivery_preserves_single_image_remote_delivery(self):
         image_url = "https://scontent.example.cdninstagram.com/single.jpg"
         payload = {

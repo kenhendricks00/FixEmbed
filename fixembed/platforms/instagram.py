@@ -228,6 +228,7 @@ def build_instagram_layout(
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
     gallery_media_urls: Optional[Sequence[str]] = None,
+    more_media_count: int = 0,
 ) -> discord.ui.LayoutView:
     """Build an Embedded-style Components V2 card with remotely unfurled media."""
     name = str(payload.get("authorName") or "Instagram").strip().lstrip("@")
@@ -282,7 +283,7 @@ def build_instagram_layout(
         media_urls = [relay_media_url(url) for url in media_urls]
     if media_urls:
         media_kind = "video" if video_url and gallery_media_urls is None else "image"
-        total_media = len(media_urls)
+        total_media = len(media_urls) + max(0, more_media_count)
         for start in range(0, len(media_urls), 10):
             children.append(
                 discord.ui.MediaGallery(
@@ -301,6 +302,14 @@ def build_instagram_layout(
                     )
                 )
             )
+
+    if more_media_count > 0:
+        more_label = f"+{more_media_count} more on Instagram"
+        children.append(
+            discord.ui.TextDisplay(
+                f"-# [{more_label}]({source_url})" if source_url else f"-# {more_label}"
+            )
+        )
 
     stats = format_component_stats(str(payload.get("stats") or "").strip())
     if stats and preferences.show_stats:
@@ -334,9 +343,13 @@ def build_instagram_delivery(
     footer_branding: Optional[FooterBranding] = None,
     card_preferences: Optional[CardPreferences] = None,
 ) -> InstagramDelivery:
-    """Build a V2 gallery backed by message attachments."""
+    """Build a V2 gallery backed by message attachments.
+
+    Discord allows ten attachments per message, so a longer carousel attaches its
+    first ten images and links the rest instead of making Discord fetch them.
+    """
     image_urls = payload.get("images") if isinstance(payload.get("images"), list) else []
-    if len(downloaded_images) != len(image_urls):
+    if len(downloaded_images) != min(len(image_urls), INSTAGRAM_CAROUSEL_MAX_ITEMS):
         raise ValueError("downloaded Instagram image count does not match carousel")
 
     extensions = {
@@ -368,6 +381,7 @@ def build_instagram_delivery(
             footer_branding,
             card_preferences,
             gallery_media_urls=attachment_urls,
+            more_media_count=len(image_urls) - len(attachment_urls),
         ),
         files=tuple(files),
     )
@@ -490,7 +504,14 @@ async def fetch_instagram_delivery(
     *,
     translation_language: Optional[str] = None,
 ) -> InstagramDelivery:
-    """Fetch Instagram metadata and prepare a fast Components V2 delivery."""
+    """Fetch Instagram metadata and prepare a fast Components V2 delivery.
+
+    Carousels are sent as uploaded files, the first ten when a post is longer
+    than Discord's ten-attachment limit. Remote gallery URLs leave Discord to
+    fetch every image itself, and a long remote carousel can outlast the
+    delivery deadline, which turns the card into a bare fallback link. If the
+    upload cannot be prepared, the card still goes out with a remote gallery.
+    """
     payload = await _fetch_instagram_payload(source_url, translation_language)
     video = payload.get("video")
     video_url = str(video.get("url") or "") if isinstance(video, Mapping) else ""
@@ -500,18 +521,24 @@ async def fetch_instagram_delivery(
         if isinstance(raw_image_urls, list)
         else []
     )
-    if (
-        not video_url
-        and 2 <= len(image_urls) <= INSTAGRAM_CAROUSEL_MAX_ITEMS
-    ):
-        downloads = await _download_instagram_carousel(tuple(image_urls))
-        return build_instagram_delivery(
-            payload,
-            downloads,
-            converted_url,
-            footer_branding,
-            card_preferences,
-        )
+    if not video_url and len(image_urls) >= 2:
+        try:
+            downloads = await _download_instagram_carousel(
+                tuple(image_urls[:INSTAGRAM_CAROUSEL_MAX_ITEMS])
+            )
+            return build_instagram_delivery(
+                payload,
+                downloads,
+                converted_url,
+                footer_branding,
+                card_preferences,
+            )
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as error:
+            # One slow or rejected image must not cost the whole card.
+            logging.warning(
+                "Instagram carousel upload unavailable (%s); sending a remote gallery",
+                type(error).__name__,
+            )
 
     return InstagramDelivery(
         layout=build_instagram_layout(
