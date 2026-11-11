@@ -59,6 +59,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
     - **Threads**
     - **Pixiv**
     - **Bluesky**
+        - Also fixes Bluesky-compatible (AT Protocol) app links: any site whose post links look like `/profile/<handle>/post/<id>`. Links outside bsky.app are checked against the public AT Protocol network first and ignored if the account or post doesn't exist. Cards are labelled AT Protocol and link back to the app the post was shared from.
     - **Bilibili**
     - **YouTube Community Posts**
     - **Pinterest Pins**
@@ -86,7 +87,7 @@ Send a message containing a <code>X/Twitter</code>, <code>Instagram</code>, <cod
 8. **Free Post Translation**:
     - Choose a default language in `/settings` → Translation for every supported platform.
     - Successful translations replace primary and quoted-post text and add `Translated from [language] · Link` to the card footer.
-    - X links can still use `/en`, `/es`, or another two-letter language code as a per-link override.
+    - X links can still use `/en`, `/es`, or another two-letter language code as a per-link override. Chinese also accepts `/zh-cn` (Simplified) and `/zh-tw` or `/zh-hant` (Traditional).
 9. **X Layout Modifiers**:
     - Append `/gallery` for media-and-author-only cards or `/mosaic` to force native multi-image attachments.
     - Modifiers can be combined, such as `https://x.com/user/status/123/es/mosaic`.
@@ -125,7 +126,7 @@ For SparkedHost or another file-based Python host, use the
 `sparkedhost-deployment-<commit>` artifact from a successful **Quality checks**
 workflow run. Extract the complete `fixembed-sparkedhost.zip` into the bot root
 as one deployment while preserving the host's existing `.env` and database.
-The archive contains every root Python module plus required runtime metadata,
+The archive contains `main.py`, the complete `fixembed/` package, and runtime metadata,
 and its included manifest records the expected size and SHA-256 checksum of
 every file so partial or modified bundles fail verification.
 
@@ -139,13 +140,21 @@ python scripts/build_sparkedhost_bundle.py --verify dist/fixembed-sparkedhost.zi
 Operators can run the same semantic production canaries used by FixEmbed:
 
 ```bash
-python conformance.py --manifest conformance/production.json --fail-on-degraded
+python -m fixembed.conformance --manifest conformance/production.json --fail-on-degraded
 ```
 
 The bounded JSON report contains case IDs, platform names, source mode,
 latency, and fixed outcome codes only. It never includes source URLs, post
 content, usernames, rendered cards, or raw upstream errors. The canary builds
 cards locally for validation and never posts them to Discord.
+
+## Development layout
+
+The Discord bot starts with `python main.py`. Its orchestration lives in
+`fixembed/`, with platform card renderers in `fixembed/platforms/`. The Worker starts
+at `service/src/index.ts` and composes the modules in `service/src/routes/`.
+See [the code layout and validation guide](docs/architecture.md) for module
+responsibilities, tests, and deployment packaging.
 
 # 💬 Support
 If you need support or have any questions, you can join the [support server](https://discord.gg/QFxTAmtZdn) or open an issue on GitHub.

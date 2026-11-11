@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 
 import aiohttp
-import instagram_embed
 
-from instagram_embed import (
+import fixembed.platforms.instagram as instagram_embed
+from fixembed.platforms.instagram import (
     _upgrade_instagram_avatar,
     build_instagram_card,
     build_instagram_delivery,
@@ -258,6 +258,25 @@ class InstagramEmbedTests(unittest.TestCase):
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
 
+    def test_components_v2_layout_relays_direct_instagram_video_as_video(self):
+        video_url = (
+            "https://scontent-lga3-2.cdninstagram.com/o1/v/"
+            "direct-reel.mp4?token=signed"
+        )
+        payload = {
+            "video": {"url": video_url},
+        }
+
+        components = build_instagram_layout(payload).to_components()
+        gallery = components[0]["components"][1]
+        media_url = gallery["items"][0]["media"]["url"]
+        parsed = urlsplit(media_url)
+
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "fixembed.app")
+        self.assertEqual(parsed.path, "/video/instagram")
+        self.assertEqual(parse_qs(parsed.query)["url"], [video_url])
+
     def test_components_v2_layout_relays_all_nine_carousel_images(self):
         image_urls = [
             f"https://scontent.example.cdninstagram.com/carousel-{index}.jpg"
@@ -337,11 +356,11 @@ class InstagramEmbedTests(unittest.TestCase):
 
         with (
             patch(
-                "instagram_embed._fetch_instagram_payload",
+                'fixembed.platforms.instagram._fetch_instagram_payload',
                 AsyncMock(return_value=payload),
             ),
             patch(
-                "instagram_embed._download_instagram_carousel",
+                'fixembed.platforms.instagram._download_instagram_carousel',
                 AsyncMock(return_value=downloads),
             ) as download_carousel,
         ):
@@ -366,11 +385,11 @@ class InstagramEmbedTests(unittest.TestCase):
 
         with (
             patch(
-                "instagram_embed._fetch_instagram_payload",
+                'fixembed.platforms.instagram._fetch_instagram_payload',
                 AsyncMock(return_value=payload),
             ),
             patch(
-                "instagram_embed._download_instagram_carousel",
+                'fixembed.platforms.instagram._download_instagram_carousel',
                 AsyncMock(),
             ) as download_carousel,
         ):
@@ -410,11 +429,11 @@ class InstagramEmbedTests(unittest.TestCase):
 
         with (
             patch(
-                "instagram_embed._fetch_instagram_payload",
+                'fixembed.platforms.instagram._fetch_instagram_payload',
                 AsyncMock(return_value=payload),
             ),
             patch(
-                "instagram_embed._download_instagram_carousel",
+                'fixembed.platforms.instagram._download_instagram_carousel',
                 AsyncMock(),
             ) as download_carousel,
         ):

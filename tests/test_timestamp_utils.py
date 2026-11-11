@@ -1,6 +1,6 @@
 import unittest
 
-from timestamp_utils import parse_post_timestamp
+from fixembed.presentation.timestamps import parse_post_timestamp
 
 
 class TimestampUtilsTests(unittest.TestCase):

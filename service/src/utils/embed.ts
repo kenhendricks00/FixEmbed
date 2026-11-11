@@ -3,6 +3,7 @@
  */
 
 import type { EmbedData } from '../types.ts';
+import { normalizeLanguage } from './translation.ts';
 
 /**
  * FixEmbed logo URL for branding in embeds
@@ -249,8 +250,8 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
         let activitySourceUrl = embed.platform === 'instagram'
             ? `${embed.url}${embed.url.includes('?') ? '&' : '?'}fixembed_activity=${INSTAGRAM_ACTIVITY_REVISION}`
             : embed.url;
-        const translationLanguage = embed.translation?.targetLanguage;
-        if (translationLanguage && /^[a-z]{2}$/.test(translationLanguage)) {
+        const translationLanguage = normalizeLanguage(embed.translation?.targetLanguage);
+        if (translationLanguage) {
             const parsedSourceUrl = new URL(activitySourceUrl);
             parsedSourceUrl.searchParams.set('fixembed_lang', translationLanguage);
             activitySourceUrl = parsedSourceUrl.toString();
@@ -325,6 +326,7 @@ export const platformNames: Record<string, string> = {
     threads: '🧵 Threads',
     pixiv: '🎨 Pixiv',
     bluesky: '🦋 Bluesky',
+    atproto: '🦋 AT Protocol',
     bilibili: '📺 Bilibili',
     youtube: '▶️ YouTube',
     pinterest: '📌 Pinterest',

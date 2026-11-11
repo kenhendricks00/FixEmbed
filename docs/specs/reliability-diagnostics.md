@@ -28,7 +28,7 @@ and Discord-delivery health.
 
 ## Tech Stack and Structure
 
-- `reliability.py`: validated status contract, Worker stale-marker handling,
+- `fixembed/telemetry/reliability.py`: validated status contract, Worker stale-marker handling,
   short-lived bot cache, stale-data policy, HTTP adapter, and Discord-safe
   formatting.
 - `service/src/utils/status_report_cache.ts`: bounded refresh coalescing,

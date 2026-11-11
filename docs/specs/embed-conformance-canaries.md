@@ -29,17 +29,17 @@ ordinary unit tests depend on the internet.
   `python -m unittest discover -s tests -p test_conformance.py -v`
 - All Python tests: `python -m unittest discover -s tests -v`
 - Production canary:
-  `python conformance.py --manifest conformance/production.json --fail-on-degraded`
+  `python -m fixembed.conformance --manifest conformance/production.json --fail-on-degraded`
 - Worker tests: `cd service && npm test`
 - Worker type check: `cd service && npx tsc --noEmit`
 
 ## Project Structure
 
-- `conformance.py`: manifest validation, contract evaluation, bounded HTTP
+- `fixembed/conformance/runner.py`: manifest validation, contract evaluation, bounded HTTP
   client, privacy-safe report, and CLI.
-- `card_conformance.py`: real platform-layout registry and bounded serialized
+- `fixembed/conformance/cards.py`: real platform-layout registry and bounded serialized
   Components V2 checks.
-- `media_conformance.py`: typed media targets, approved CDN policy, bounded
+- `fixembed/conformance/media.py`: typed media targets, approved CDN policy, bounded
   byte-range fetches, and privacy-safe reachability outcomes.
 - `conformance/production.json`: reviewed public sample URLs and semantic
   expectations.

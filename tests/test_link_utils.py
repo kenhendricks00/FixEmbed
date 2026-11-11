@@ -1,6 +1,13 @@
 import unittest
 
-from link_utils import build_automatic_url, build_fixembed_url, chunk_lines, extract_supported_links, social_service
+from fixembed.links import (
+    build_automatic_url,
+    build_fixembed_url,
+    chunk_lines,
+    extract_supported_links,
+    normalize_translation_language,
+    social_service,
+)
 
 
 class SocialServiceTests(unittest.TestCase):
@@ -225,6 +232,53 @@ class SocialServiceTests(unittest.TestCase):
         self.assertEqual(
             build_fixembed_url(link),
             "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123&v=154&lang=es",
+        )
+
+    def test_twitter_translation_suffixes_cover_japanese_and_chinese_variants(self):
+        # Issue #129: ja and every zh variant must reach the Worker, alongside working codes.
+        cases = {
+            "ja": "ja",
+            "zh": "zh",
+            "zh-cn": "zh",
+            "zh-CN": "zh",
+            "zh-hans": "zh",
+            "zh-tw": "zh-tw",
+            "zh-TW": "zh-tw",
+            "zh-hant": "zh-tw",
+            "zh_Hant": "zh-tw",
+            "zh-hk": "zh-tw",
+            "ko": "ko",
+            "fr": "fr",
+            "es": "es",
+        }
+        for suffix, expected in cases.items():
+            with self.subTest(suffix=suffix):
+                link = extract_supported_links(
+                    f"https://x.com/openai/status/123/{suffix}/gallery"
+                )[0]
+                self.assertEqual(link.language, expected)
+                self.assertEqual(link.mode, "gallery")
+                self.assertEqual(link.canonical_url, "https://x.com/openai/status/123")
+                self.assertEqual(
+                    build_fixembed_url(link),
+                    "https://fixembed.app/embed?url=https%3A%2F%2Fx.com%2Fopenai%2Fstatus%2F123"
+                    f"&v=154&lang={expected}&mode=gallery",
+                )
+
+    def test_twitter_translation_suffix_ignores_unknown_tags(self):
+        for suffix in ("zh-xx", "en-us", "photo", "japanese"):
+            with self.subTest(suffix=suffix):
+                link = extract_supported_links(f"https://x.com/openai/status/123/{suffix}")[0]
+                self.assertIsNone(link.language)
+        self.assertIsNone(normalize_translation_language(None))
+        self.assertEqual(normalize_translation_language(" ZH-Hant "), "zh-tw")
+
+    def test_fxtwitter_provider_keeps_traditional_chinese_suffix(self):
+        link = extract_supported_links("https://x.com/openai/status/123/zh-hant")[0]
+
+        self.assertEqual(
+            build_automatic_url(link, twitter_provider="fxtwitter"),
+            "https://fxtwitter.com/openai/status/123/zh-tw",
         )
 
     def test_build_fixembed_url_preserves_gallery_and_mosaic_modifiers(self):

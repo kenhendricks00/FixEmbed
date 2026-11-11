@@ -6,7 +6,10 @@ from typing import Any, Mapping
 
 from aiohttp.test_utils import TestClient, TestServer
 
-from pixiv_relay import _content_length_within_limit, create_pixiv_relay_app
+from fixembed.platforms.pixiv_relay import (
+    _content_length_within_limit,
+    create_pixiv_relay_app,
+)
 
 
 class PixivRelayTests(unittest.IsolatedAsyncioTestCase):

@@ -12,10 +12,10 @@ Give Premium servers a tasteful, opt-in identity in Components V2 social-card fo
 
 ## Project Structure
 
-- `embed_footer.py`: shared footer-branding contract and safe text formatting.
+- `fixembed/presentation/footer.py`: shared footer-branding contract and safe text formatting.
 - Platform `*_embed.py` modules: additive optional branding input.
 - `main.py`: Premium enforcement, persisted guild settings, settings UI, and guild-join orchestration.
-- `onboarding.py`: Components V2 onboarding card and private delivery helper.
+- `fixembed/onboarding.py`: Components V2 onboarding card and private delivery helper.
 - `tests/`: footer, settings, onboarding, and platform regression coverage.
 
 ## Interface Contract

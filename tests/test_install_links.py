@@ -1,7 +1,7 @@
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from install_links import (
+from fixembed.install_links import (
     DISCORD_CLIENT_ID,
     SERVER_INSTALL_PERMISSIONS,
     SERVER_INSTALL_URL,

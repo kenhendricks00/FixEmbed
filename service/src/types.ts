@@ -120,6 +120,16 @@ export interface HandlerResponse {
     error?: string;
     redirect?: string;
     source?: 'first-party' | 'fallback';
+    /**
+     * A translation was requested and expected, but no provider returned one.
+     * The original card is still served, but it is not cached.
+     */
+    translationUnavailable?: boolean;
+    /**
+     * The URL looked like a supported link but failed verification (an
+     * unverified AT Protocol app host). Routes treat it like an unknown link.
+     */
+    unsupported?: boolean;
 }
 
 export interface HandlerOptions {

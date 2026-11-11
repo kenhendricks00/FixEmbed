@@ -1,373 +1,538 @@
+import asyncio
+import importlib
 import unittest
-from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
+
+import discord
+
+from fixembed import atproto, cards, config, events, runtime, settings, storage
+from fixembed.telemetry.reliability import ReliabilityReport
 
 
-class DiscordRuntimeCompatibilityTests(unittest.TestCase):
-    def test_app_command_only_bot_does_not_parse_slash_text_as_a_prefix_command(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+def interaction():
+    channel = Mock(
+        spec=discord.TextChannel,
+        id=22,
+        mention="<#22>",
+        name="general",
+        parent_id=None,
+        is_nsfw=lambda: False,
+        permissions_for=lambda _: discord.Permissions.all(),
+    )
+    channel.name = "general"
+    guild = SimpleNamespace(
+        id=11,
+        name="Example",
+        shard_id=0,
+        emojis=[],
+        text_channels=[channel],
+        me=object(),
+        get_emoji=lambda _: None,
+        get_channel_or_thread=lambda _: channel,
+        get_channel=lambda _: channel,
+    )
+    return SimpleNamespace(
+        guild=guild,
+        channel=channel,
+        user=SimpleNamespace(id=33),
+        response=SimpleNamespace(
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+            send_modal=AsyncMock(),
+            defer=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
+        edit_original_response=AsyncMock(),
+    )
 
-        self.assertNotIn("command_prefix='/'", main_source)
-        self.assertNotIn("await client.process_commands(message)", main_source)
 
-    def test_bot_does_not_call_removed_trigger_typing_api(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+class DiscordRuntimeCompatibilityTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        importlib.import_module("fixembed.commands")
+        self.interaction = interaction()
+        self.settings = storage.default_settings()
+        runtime.client.launch_time = discord.utils.utcnow()
+        self.addCleanup(storage.bot_settings.clear)
+        self.addCleanup(storage.channel_states.clear)
+        self.addCleanup(storage.channel_service_rules.clear)
+        self.addCleanup(storage.channel_visibility_overrides.clear)
+        self.addCleanup(runtime.processed_link_cache.clear)
 
-        self.assertNotIn("trigger_typing", main_source)
+    def test_importing_entry_point_never_starts_discord(self):
+        with patch("fixembed.app.run") as run:
+            import main
 
-    def test_platform_application_emojis_are_configured(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+            importlib.reload(main)
+        run.assert_not_called()
 
-        expected_ids = {
-            "YouTube": 1526267390592290926,
-            "Pixiv": 1526268469920792577,
-            "Threads": 1526267848924725399,
-            "Reddit": 1526267589808881684,
-            "Instagram": 1526267158793949435,
-            "Twitter": 1526268173589155921,
-            "Bluesky": 1526269663334502544,
-            "Bilibili": 1526271150739423304,
-            "Pinterest": 1526398381415731240,
-            "TikTok": 1527868616215629954,
-            "Tumblr": 1527868615393546400,
-            "Twitch": 1527868614269468852,
-            "DeviantArt": 1528150711089500180,
-        }
-        for service, emoji_id in expected_ids.items():
-            with self.subTest(service=service):
-                self.assertIn(f'"{service}": {emoji_id}', main_source)
-
-    def test_automatic_queue_sends_are_silent(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        silent_sends = (
-            main_source.count("silent=True")
-            + main_source.count('"silent": True')
+    def test_all_commands_are_registered_once(self):
+        names = [command.name for command in runtime.client.tree.get_commands()]
+        self.assertCountEqual(
+            names,
+            [
+                "activate",
+                "deactivate",
+                "about",
+                "help",
+                "invite",
+                "fix",
+                "Fix Embed",
+                "settings",
+                "delivery",
+                "quality",
+                "rule",
+                "status",
+                "premium",
+            ],
         )
-        self.assertGreaterEqual(silent_sends, 2)
+        self.assertEqual(len(names), len(set(names)))
 
-    def test_settings_workflow_uses_components_v2_without_legacy_embeds(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(
-            "@client.tree.command(name='delivery'", 1
-        )[0]
+    def test_server_settings_require_manage_server(self):
+        command = runtime.client.tree.get_command("settings")
+        self.assertTrue(command.guild_only)
+        self.assertTrue(command.default_permissions.manage_guild)
+        self.assertTrue(command.checks)
 
-        self.assertIn("class SettingsPageView(ui.LayoutView)", settings_section)
-        self.assertIn("class SettingsView(SettingsPageView)", settings_section)
-        self.assertIn("render_settings_layout(", settings_section)
-        self.assertNotIn("discord.Embed(", settings_section)
-        self.assertIn(
-            "view=SettingsView(interaction, guild_settings, premium=premium)",
-            settings_section,
-        )
+    def test_personal_commands_support_user_installs_and_private_contexts(self):
+        for name in ("about", "help", "invite", "fix", "premium"):
+            with self.subTest(command=name):
+                command = runtime.client.tree.get_command(name)
+                self.assertTrue(command.allowed_installs.user)
+                self.assertTrue(command.allowed_contexts.dm_channel)
+                self.assertTrue(command.allowed_contexts.private_channel)
 
-        alias_section = main_source.split("@client.tree.command(name='delivery'", 1)[1].split(
-            "@client.event\nasync def on_message", 1
-        )[0]
-        self.assertGreaterEqual(alias_section.count("SettingsNoticeView("), 3)
-        self.assertIn("view = ReliabilitySettingsView(", alias_section)
-        self.assertNotIn("discord.Embed(", alias_section)
-        self.assertIn("view=DebugSettingsView(interaction, settings)", main_source)
-        self.assertIn('title=f"{client.user.name} Activated"', main_source)
-        self.assertIn('title=f"{client.user.name} Deactivated"', main_source)
+    def test_every_supported_platform_has_an_application_emoji(self):
+        self.assertEqual(set(config.SERVICE_NAMES), set(config.SERVICE_EMOJI_IDS))
+        for name in config.SERVICE_NAMES:
+            emoji = runtime.get_service_select_emoji(self.interaction.guild, name)
+            self.assertEqual(emoji.id, config.SERVICE_EMOJI_IDS[name])
 
-    def test_reliability_views_use_live_worker_health_with_refresh_and_dashboard(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+    def test_settings_use_components_v2_and_only_non_subscribers_see_purchase(self):
+        with patch.object(runtime.client, "premium_sku_id", "12345"):
+            for premium in (False, True):
+                view = settings.SettingsView(
+                    self.interaction, self.settings, premium=premium
+                )
+                self.assertIsInstance(view, discord.ui.LayoutView)
+                self.assertEqual(view.children[0].type, discord.ComponentType.container)
+                purchases = [
+                    item
+                    for item in view.walk_children()
+                    if isinstance(item, discord.ui.Button)
+                    and item.style == discord.ButtonStyle.premium
+                ]
+                self.assertEqual(len(purchases), 0 if premium else 1)
 
-        self.assertIn("from reliability import (", main_source)
-        self.assertIn("reliability_client = ReliabilityClient(", main_source)
-        self.assertIn('if value == "Reliability Status":', main_source)
-        self.assertGreaterEqual(main_source.count("await reliability_client.get_report("), 3)
-        self.assertIn('label="Refresh"', main_source)
-        self.assertIn('label="Public status"', main_source)
-        self.assertIn('url="https://fixembed.app/status"', main_source)
-        self.assertIn("format_reliability_status(", main_source)
-        status_decorators = main_source.split(
-            "@client.tree.command(name='status'", 1
-        )[1].split("async def status", 1)[0]
-        self.assertIn("@app_commands.guild_only()", status_decorators)
-
-    def test_card_builds_emit_privacy_safe_local_conversion_telemetry(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from conversion_telemetry import (", main_source)
-        self.assertIn(
-            "conversion_telemetry = ConversionTelemetry(supported_services=SERVICE_NAMES)",
-            main_source,
-        )
-        self.assertEqual(main_source.count("async with conversion_telemetry.observe("), 1)
-        self.assertIn("format_local_conversion_health(", main_source)
-        self.assertNotIn("component build failed; using link fallback", main_source)
-
-    def test_send_queue_emits_privacy_safe_delivery_telemetry(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from delivery_telemetry import (", main_source)
-        self.assertIn("delivery_telemetry = DeliveryTelemetry()", main_source)
-        self.assertIn("ticket = delivery_telemetry.queued(", main_source)
-        self.assertIn("await deliver_with_fallback(", main_source)
-        self.assertIn("completion = asyncio.get_running_loop().create_future()", main_source)
-        self.assertIn("return await asyncio.shield(completion)", main_source)
-        self.assertIn("format_delivery_health(", main_source)
-        self.assertNotIn("Queue send failed:", main_source)
-        self.assertNotIn("Queue fallback send failed:", main_source)
-
-    def test_automatic_delivery_mode_fallback_keeps_cards_sendable(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from delivery_policy import (", main_source)
-        self.assertIn("delivery_decision = resolve_delivery_mode(", main_source)
-        self.assertIn("effective_delivery_mode = delivery_decision.effective_mode", main_source)
-        self.assertIn("delivery_telemetry.mode_downgraded(", main_source)
-        self.assertIn("await apply_source_message_action(", main_source)
-        self.assertIn("should_apply_source_message_action(", main_source)
-        self.assertIn("delivery_outcomes.append(", main_source)
-        self.assertIn("await rate_limited_send(", main_source)
-        self.assertIn('if effective_delivery_mode == "delete":', main_source)
-        self.assertIn('elif effective_delivery_mode == "suppress":', main_source)
-        self.assertGreaterEqual(main_source.count("format_delivery_mode_status("), 2)
-
-    def test_settings_only_offers_premium_purchase_to_non_subscribers(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        settings_section = main_source.split("# Components V2 settings implementation used", 1)[1].split(
-            "@client.tree.command(name='delivery'", 1
-        )[0]
-
-        self.assertIn("if PREMIUM_SKU_ID and not premium:", settings_section)
-        self.assertIn("style=discord.ButtonStyle.premium", settings_section)
-        self.assertIn("premium = await is_guild_premium(guild_id)", settings_section)
-        self.assertIn("SettingsView(interaction, guild_settings, premium=premium)", settings_section)
-
-    def test_channel_visibility_uses_unbounded_native_channel_selection(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        visibility_section = main_source.split(
-            "class ChannelVisibilityChannelSelect", 1
-        )[1].split("class LanguageSelect", 1)[0]
-
-        self.assertIn("(ui.ChannelSelect):", visibility_section)
-        self.assertIn("get_channel_or_thread", visibility_section)
-        self.assertNotIn("text_channels[:25]", visibility_section)
-        self.assertIn("disabled=channel is None", visibility_section)
-
-    def test_premium_footer_branding_is_persisted_and_propagated(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("footer_branding_enabled BOOLEAN DEFAULT FALSE", main_source)
-        self.assertIn("footer_emoji_id INTEGER DEFAULT NULL", main_source)
-        self.assertIn("class FooterBrandingSettingsView(SettingsPageView)", main_source)
-        self.assertIn("footer_branding = get_footer_branding(", main_source)
-        self.assertGreaterEqual(main_source.count("footer_branding,"), 9)
-        self.assertIn("layout = build_twitter_layout(", main_source)
-        self.assertIn("if not premium or not settings.get(\"footer_branding_enabled\"", main_source)
-
-    def test_premium_card_controls_free_translation_and_exclusions_are_wired(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("class CardStyleSettingsView(PremiumControlsPage)", main_source)
-        self.assertIn("class TranslationSettingsView(SettingsPageView)", main_source)
-        self.assertIn("class ExclusionSettingsView(PremiumControlsPage)", main_source)
-        self.assertIn("preferences_from_settings(", main_source)
-        self.assertIn("resolve_translation_language(", main_source)
-        self.assertIn(
-            'label="Translation", description="Translate every supported platform",',
-            main_source,
-        )
-        self.assertIn("should_skip_automatic(message, guild_settings, premium=premium)", main_source)
-        self.assertGreaterEqual(main_source.count("card_preferences,"), 9)
-        self.assertIn("def with_translation_language(item, guild_settings):", main_source)
-        self.assertGreaterEqual(
-            main_source.count("translation_language=translation_language"),
-            12,
-        )
-        self.assertGreaterEqual(
-            main_source.count("with_translation_language(item, guild_settings)"),
-            3,
-        )
-
-    def test_content_visibility_settings_are_persisted_and_applied_to_cards(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("show_nsfw BOOLEAN DEFAULT FALSE", main_source)
-        self.assertIn("show_spoilers BOOLEAN DEFAULT FALSE", main_source)
-        self.assertIn("await init_content_visibility(client.db)", main_source)
-        self.assertIn("await load_channel_visibility_overrides(client.db)", main_source)
-        self.assertIn("class ContentVisibilitySettingsView(SettingsPageView)", main_source)
-        self.assertIn("class ChannelVisibilitySettingsView(SettingsPageView)", main_source)
-        self.assertGreaterEqual(
-            main_source.count("effective_content_visibility("),
-            3,
-        )
-        self.assertGreaterEqual(
-            main_source.count("content_visibility=content_visibility"),
-            2,
-        )
-
-    def test_footer_branding_settings_option_is_visibly_premium(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn('label="Footer Branding"', main_source)
-        self.assertIn(
-            'description="Use this server\'s identity in social cards (Premium)"',
-            main_source,
-        )
-        self.assertIn('value="Footer Branding",\n                emoji="🏷️"', main_source)
-
-    def test_server_settings_require_manage_server_permission(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        settings_decorators = main_source.split(
-            "@client.tree.command(name='settings'", 1
-        )[1].split("async def settings", 1)[0]
-
-        self.assertIn("@app_commands.guild_only()", settings_decorators)
-        self.assertIn("@app_commands.default_permissions(manage_guild=True)", settings_decorators)
-        self.assertIn("@app_commands.checks.has_permissions(manage_guild=True)", settings_decorators)
-
-    def test_new_guilds_receive_owner_onboarding(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        join_section = main_source.split("async def on_guild_join(guild):", 1)[1].split(
-            "# --- Premium Command ---", 1
-        )[0]
-
-        self.assertIn("await send_onboarding_dm(guild)", join_section)
-
-    def test_about_and_help_commands_use_components_v2(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        info_commands = main_source.split("@client.tree.command(\n    name='about'", 1)[1].split(
-            "@client.tree.command(\n    name='fix'", 1
-        )[0]
-
-        self.assertNotIn("discord.Embed(", info_commands)
-        self.assertGreaterEqual(info_commands.count("CommandInfoView("), 2)
-        self.assertGreaterEqual(info_commands.count("interaction.response.send_message(view=view)"), 2)
-        self.assertIn("Fallback services & acknowledgements", info_commands)
-        self.assertIn("These services are not affiliated with or endorsed by FixEmbed.", info_commands)
-
-    def test_public_info_commands_offer_distinct_user_and_server_installs(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from install_links import build_install_controls", main_source)
-        self.assertIn("controls=build_install_controls()", main_source)
-        self.assertGreaterEqual(main_source.count("controls=build_install_controls()"), 3)
-        self.assertIn("name='invite'", main_source)
-        self.assertIn("async def invite(interaction: discord.Interaction):", main_source)
-
-    def test_instagram_uses_components_v2_with_carousel_attachments(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("include_fixembed=False", main_source)
-        self.assertNotIn("download_instagram_video", main_source)
-        self.assertNotIn("video_file = discord.File(", main_source)
-        self.assertIn("fetch_instagram_delivery", main_source)
-        self.assertIn("component_layouts", main_source)
-        self.assertIn("view=delivery.view", main_source)
-        self.assertIn("files=delivery.files", main_source)
-        self.assertIn('if item.service == "Instagram":', main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-
-    def test_twitter_uses_components_v2_with_existing_link_fallback(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from twitter_embed import build_twitter_layout, fetch_twitter_payload", main_source)
-        self.assertIn('elif item.service == "Twitter":', main_source)
-        self.assertIn("payload = await fetch_twitter_payload(", main_source)
-        self.assertIn("translation_language,", main_source)
-        self.assertIn("item.mode,", main_source)
-        self.assertIn("fixed_url = build_fixembed_url(translated_item, media_quality)", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("if is_animated_gif(payload):", main_source)
-
-    def test_reddit_uses_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from reddit_embed import fetch_reddit_layout", main_source)
-        self.assertIn('elif item.service == "Reddit":', main_source)
-        self.assertIn("fetch_reddit_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_reddit", main_source)
-
-    def test_threads_uses_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from threads_embed import fetch_threads_layout", main_source)
-        self.assertIn('elif item.service == "Threads":', main_source)
-        self.assertIn("fetch_threads_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_threads", main_source)
-
-    def test_bluesky_uses_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from bluesky_embed import fetch_bluesky_layout", main_source)
-        self.assertIn('elif item.service == "Bluesky":', main_source)
-        self.assertIn("fetch_bluesky_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_bluesky", main_source)
-
-    def test_pixiv_uses_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from pixiv_embed import fetch_pixiv_layout", main_source)
-        self.assertIn("from pixiv_relay import start_pixiv_relay", main_source)
-        self.assertIn('os.getenv("PIXIV_RELAY_ENABLED") == "1"', main_source)
-        self.assertIn('getattr(client, "pixiv_relay_runner", None) is None', main_source)
-        self.assertIn("client.pixiv_relay_runner = await start_pixiv_relay()", main_source)
-        self.assertIn('elif item.service == "Pixiv":', main_source)
-        self.assertIn("fetch_pixiv_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_pixiv", main_source)
-
-    def test_bilibili_uses_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from bilibili_embed import fetch_bilibili_layout", main_source)
-        self.assertIn('elif item.service == "Bilibili":', main_source)
-        self.assertIn("fetch_bilibili_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_bilibili", main_source)
-
-    def test_youtube_community_posts_use_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from youtube_embed import fetch_youtube_community_layout", main_source)
-        self.assertIn('elif item.service == "YouTube":', main_source)
-        self.assertIn("fetch_youtube_community_layout(", main_source)
-        self.assertIn("component_layouts.append(delivery)", main_source)
-        self.assertIn("fallback_content=delivery.fallback_url", main_source)
-        self.assertNotIn("download_youtube", main_source)
-
-    def test_pinterest_pins_use_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        self.assertIn("from pinterest_embed import fetch_pinterest_layout", main_source)
-        self.assertIn('elif item.service == "Pinterest":', main_source)
-        self.assertIn("fetch_pinterest_layout(", main_source)
-        self.assertNotIn("download_pinterest", main_source)
-
-    def test_new_social_platforms_use_components_v2_without_uploading_media(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-
-        for service, module_name, fetch_name in (
-            ("TikTok", "tiktok_embed", "fetch_tiktok_layout"),
-            ("Tumblr", "tumblr_embed", "fetch_tumblr_layout"),
-            ("Twitch", "twitch_embed", "fetch_twitch_layout"),
-            ("DeviantArt", "deviantart_embed", "fetch_deviantart_layout"),
+    async def test_navigation_opens_every_settings_page(self):
+        menu = settings.SettingsDropdown(self.interaction, self.settings)
+        with (
+            patch(
+                "fixembed.settings.navigation.is_guild_premium",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "fixembed.settings.navigation.reliability_client.get_report",
+                AsyncMock(return_value=ReliabilityReport("operational", None)),
+            ),
         ):
-            with self.subTest(service=service):
-                self.assertIn(f"from {module_name} import {fetch_name}", main_source)
-                self.assertIn(f'elif item.service == "{service}":', main_source)
-                self.assertIn(f"{fetch_name}(", main_source)
-                self.assertNotIn(f"download_{service.lower()}", main_source)
+            for option in menu.options:
+                with self.subTest(page=option.value):
+                    menu._values = [option.value]
+                    self.interaction.response.send_message.reset_mock()
+                    await menu.callback(self.interaction)
+                    send = (
+                        self.interaction.followup.send
+                        if option.value == "Reliability Status"
+                        else self.interaction.response.send_message
+                    )
+                    view = send.call_args.kwargs["view"]
+                    self.assertIsInstance(view, discord.ui.LayoutView)
 
-    def test_forbidden_channel_errors_keep_discord_context(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+    def test_channel_visibility_uses_native_channel_selection(self):
+        view = settings.ChannelVisibilitySettingsView(self.interaction, self.settings)
+        self.assertTrue(
+            any(
+                isinstance(item, discord.ui.ChannelSelect)
+                for item in view.walk_children()
+            )
+        )
 
-        self.assertIn("except discord.Forbidden as error:", main_source)
-        self.assertIn('logging.warning("Missing permissions in channel %s: %s"', main_source)
+    def test_premium_footer_branding_resolves_the_current_guild(self):
+        self.settings["footer_branding_enabled"] = True
+        self.assertIsNone(
+            runtime.get_footer_branding(self.interaction.guild, self.settings, False)
+        )
+        branding = runtime.get_footer_branding(
+            self.interaction.guild, self.settings, True
+        )
+        self.assertEqual(branding.name, "Example")
+
+    async def test_public_info_commands_render_cards_with_install_controls(self):
+        with patch.object(
+            runtime.client._connection, "user", SimpleNamespace(name="FixEmbed")
+        ):
+            for name in ("about", "help", "invite"):
+                self.interaction.response.send_message.reset_mock()
+                await runtime.client.tree.get_command(name).callback(self.interaction)
+                kwargs = self.interaction.response.send_message.call_args.kwargs
+                self.assertNotIn("embed", kwargs)
+                view = kwargs["view"]
+                self.assertIsInstance(view, discord.ui.LayoutView)
+                urls = [
+                    item.url
+                    for item in view.walk_children()
+                    if isinstance(item, discord.ui.Button)
+                ]
+                self.assertGreaterEqual(len(urls), 2)
+
+    async def test_onboarding_is_sent_when_a_guild_joins(self):
+        with (
+            patch("fixembed.events.save_guild_settings", AsyncMock()) as save,
+            patch(
+                "fixembed.events.send_onboarding_dm", AsyncMock(return_value=True)
+            ) as onboard,
+        ):
+            await events.on_guild_join(self.interaction.guild)
+        save.assert_awaited_once()
+        onboard.assert_awaited_once_with(self.interaction.guild)
+
+    async def test_reconnects_initialize_once_even_when_ready_events_overlap(self):
+        async def initialize():
+            await asyncio.sleep(0)
+
+        with (
+            patch.object(runtime.client, "initialized", False),
+            patch("fixembed.events._ready_lock", asyncio.Lock()),
+            patch(
+                "fixembed.events.initialize_runtime", AsyncMock(side_effect=initialize)
+            ) as start,
+        ):
+            await asyncio.gather(
+                events.on_ready(), events.on_ready(), events.on_ready()
+            )
+        start.assert_awaited_once()
+
+    async def test_failed_initialization_can_retry(self):
+        with (
+            patch.object(runtime.client, "initialized", False),
+            patch("fixembed.events._ready_lock", asyncio.Lock()),
+            patch(
+                "fixembed.events.initialize_runtime",
+                AsyncMock(side_effect=[RuntimeError("db busy"), None]),
+            ) as start,
+        ):
+            with self.assertRaises(RuntimeError):
+                await events.on_ready()
+            await events.on_ready()
+            self.assertTrue(runtime.client.initialized)
+        self.assertEqual(start.await_count, 2)
+
+    async def test_shutdown_closes_database_and_discord_even_if_relay_cleanup_fails(
+        self,
+    ):
+        database = SimpleNamespace(close=AsyncMock())
+        relay = SimpleNamespace(
+            cleanup=AsyncMock(side_effect=RuntimeError("relay cleanup"))
+        )
+        with (
+            patch.object(runtime.client, "db", database),
+            patch.object(runtime.client, "pixiv_relay_runner", relay),
+            patch("discord.ext.commands.AutoShardedBot.close", AsyncMock()) as close,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "relay cleanup"):
+                await runtime.client.close()
+            self.assertIsNone(runtime.client.db)
+            self.assertIsNone(runtime.client.pixiv_relay_runner)
+        database.close.assert_awaited_once()
+        close.assert_awaited_once()
+
+    async def test_source_message_changes_only_after_successful_replacement(self):
+        for mode, manage, outcome, expected in [
+            ("delete", True, "direct", "delete"),
+            ("suppress", True, "direct", "suppress"),
+            ("reply", True, "direct", None),
+            ("delete", False, "direct", None),
+            ("delete", True, "failed", None),
+            ("suppress", True, "failed", None),
+        ]:
+            with self.subTest(mode=mode, manage=manage, outcome=outcome):
+                runtime.processed_link_cache.clear()
+                storage.bot_settings[11] = {**self.settings, "delivery_mode": mode}
+                channel = self.interaction.channel
+                channel.permissions_for = lambda _: SimpleNamespace(
+                    manage_messages=manage
+                )
+                message = SimpleNamespace(
+                    guild=self.interaction.guild,
+                    channel=channel,
+                    author=SimpleNamespace(
+                        id=33,
+                        bot=False,
+                        display_name="Author",
+                        mention="<@33>",
+                        roles=[],
+                    ),
+                    content="https://x.com/jack/status/20",
+                    mentions=[],
+                    delete=AsyncMock(),
+                    edit=AsyncMock(),
+                )
+                delivery = cards.ComponentsV2Delivery(
+                    discord.ui.LayoutView(), "https://fixembed.app/embed?url=x"
+                )
+                with (
+                    patch(
+                        "fixembed.events.is_guild_premium",
+                        AsyncMock(return_value=False),
+                    ),
+                    patch(
+                        "fixembed.events.build_components_v2_link",
+                        AsyncMock(return_value=delivery),
+                    ),
+                    patch(
+                        "fixembed.events.rate_limited_send",
+                        AsyncMock(return_value=outcome),
+                    ) as send,
+                ):
+                    await events.on_message(message)
+                self.assertGreater(send.await_count, 0)
+                self.assertEqual(message.delete.await_count, int(expected == "delete"))
+                self.assertEqual(message.edit.await_count, int(expected == "suppress"))
+
+    async def test_card_build_failure_delivers_the_existing_link_fallback(self):
+        message = SimpleNamespace(
+            guild=self.interaction.guild,
+            channel=self.interaction.channel,
+            author=SimpleNamespace(id=33, bot=False, roles=[]),
+            content="https://x.com/jack/status/20",
+            mentions=[],
+            delete=AsyncMock(),
+            edit=AsyncMock(),
+        )
+        with (
+            patch("fixembed.events.is_guild_premium", AsyncMock(return_value=False)),
+            patch(
+                "fixembed.events.build_components_v2_link",
+                AsyncMock(side_effect=ValueError("bad payload")),
+            ),
+            patch(
+                "fixembed.events.rate_limited_send", AsyncMock(return_value="direct")
+            ) as send,
+        ):
+            await events.on_message(message)
+        self.assertIn("https://", send.call_args.kwargs["content"])
+        message.edit.assert_awaited_once_with(suppress=True)
+
+    def atproto_message(self, content):
+        return SimpleNamespace(
+            guild=self.interaction.guild,
+            channel=self.interaction.channel,
+            author=SimpleNamespace(id=33, bot=False, roles=[]),
+            content=content,
+            mentions=[],
+            delete=AsyncMock(),
+            edit=AsyncMock(),
+        )
+
+    async def test_unverified_atproto_link_is_ignored_silently(self):
+        # Issue #128: a non-AT site with the AT Protocol path shape gets no card,
+        # no fallback link, and no change to the source message.
+        atproto.clear_caches()
+        self.addCleanup(atproto.clear_caches)
+        message = self.atproto_message(
+            "https://news.example-blog.com/profile/someone.example-blog.com/post/3mzy5hts2g22i"
+        )
+        lookup = AsyncMock(return_value=(400, {"error": "InvalidRequest"}))
+        with (
+            patch("fixembed.atproto._fetch_json", lookup),
+            patch("fixembed.events.is_guild_premium", AsyncMock(return_value=False)),
+            patch("fixembed.events.build_components_v2_link", AsyncMock()) as build,
+            patch("fixembed.events.rate_limited_send", AsyncMock()) as send,
+        ):
+            await events.on_message(message)
+        lookup.assert_awaited_once()
+        build.assert_not_awaited()
+        send.assert_not_awaited()
+        message.edit.assert_not_awaited()
+        message.delete.assert_not_awaited()
+
+    async def test_verified_atproto_link_gets_a_card_on_its_own_host(self):
+        atproto.clear_caches()
+        self.addCleanup(atproto.clear_caches)
+        message = self.atproto_message(
+            "https://mu.social/profile/elenarossini.com/post/3mzfkhszhlc2l"
+        )
+        did = "did:plc:vggsjzvhakoa7l2m2mguqv4w"
+        uri = f"at://{did}/app.bsky.feed.post/3mzfkhszhlc2l"
+
+        async def appview(session, url):
+            if "resolveHandle" in url:
+                return 200, {"did": did}
+            return 200, {"posts": [{"uri": uri}]}
+
+        delivery = cards.ComponentsV2Delivery(
+            discord.ui.LayoutView(), "https://fixembed.app/embed?url=x"
+        )
+        with (
+            patch("fixembed.atproto._fetch_json", appview),
+            patch("fixembed.events.is_guild_premium", AsyncMock(return_value=False)),
+            patch(
+                "fixembed.events.build_components_v2_link",
+                AsyncMock(return_value=delivery),
+            ) as build,
+            patch(
+                "fixembed.events.rate_limited_send", AsyncMock(return_value="direct")
+            ) as send,
+        ):
+            await events.on_message(message)
+        item = build.await_args.args[0]
+        self.assertEqual(item.service, "Bluesky")
+        self.assertEqual(
+            item.canonical_url,
+            "https://mu.social/profile/elenarossini.com/post/3mzfkhszhlc2l",
+        )
+        send.assert_awaited()
+
+    async def test_atproto_link_is_not_looked_up_when_bluesky_is_disabled(self):
+        atproto.clear_caches()
+        self.addCleanup(atproto.clear_caches)
+        storage.bot_settings[11] = {
+            **self.settings,
+            "enabled_services": [
+                service for service in config.SERVICE_NAMES if service != "Bluesky"
+            ],
+        }
+        message = self.atproto_message(
+            "https://mu.social/profile/elenarossini.com/post/3mzfkhszhlc2l"
+        )
+        lookup = AsyncMock()
+        with (
+            patch("fixembed.atproto._fetch_json", lookup),
+            patch("fixembed.events.is_guild_premium", AsyncMock(return_value=False)),
+            patch("fixembed.events.rate_limited_send", AsyncMock()) as send,
+        ):
+            await events.on_message(message)
+        lookup.assert_not_awaited()
+        send.assert_not_awaited()
+
+    async def test_fix_command_treats_unverified_atproto_link_as_unsupported(self):
+        atproto.clear_caches()
+        self.addCleanup(atproto.clear_caches)
+        fix = runtime.client.tree.get_command("fix")
+        url = "https://news.example-blog.com/profile/someone.example-blog.com/post/3mzy5hts2g22i"
+        with (
+            patch(
+                "fixembed.atproto._fetch_json",
+                AsyncMock(return_value=(400, {"error": "InvalidRequest"})),
+            ),
+            patch("fixembed.commands.send_components_v2_links", AsyncMock()) as send,
+        ):
+            await fix.callback(self.interaction, link=url)
+        send.assert_not_awaited()
+        self.interaction.response.send_message.assert_awaited_once()
+        self.assertTrue(
+            self.interaction.response.send_message.await_args.kwargs.get("ephemeral")
+        )
+
+    async def test_fix_command_converts_verified_atproto_link(self):
+        atproto.clear_caches()
+        self.addCleanup(atproto.clear_caches)
+        fix = runtime.client.tree.get_command("fix")
+        did = "did:plc:e3bwgswz6lniwjadqqfno3c4"
+        url = f"https://wsocial.eu/profile/{did}/post/3mzy5hts2g22i"
+        uri = f"at://{did}/app.bsky.feed.post/3mzy5hts2g22i"
+        with (
+            patch(
+                "fixembed.atproto._fetch_json",
+                AsyncMock(return_value=(200, {"posts": [{"uri": uri}]})),
+            ),
+            patch("fixembed.commands.send_components_v2_links", AsyncMock()) as send,
+        ):
+            await fix.callback(self.interaction, link=url)
+        links = send.await_args.args[1]
+        self.assertEqual([link.canonical_url for link in links], [url])
+
+    async def test_test_instance_only_converts_links_in_its_guild(self):
+        for test_guild, expected_sends in (("999", 0), ("11", 1)):
+            runtime.processed_link_cache.clear()
+            message = SimpleNamespace(
+                guild=self.interaction.guild,
+                channel=self.interaction.channel,
+                author=SimpleNamespace(id=33, bot=False, roles=[]),
+                content="https://www.reddit.com/r/aww/s/uTcEAsBqTj",
+                mentions=[],
+                delete=AsyncMock(),
+                edit=AsyncMock(),
+            )
+            with (
+                self.subTest(test_guild=test_guild),
+                patch.dict("os.environ", {"FIXEMBED_TEST_GUILD_ID": test_guild}),
+                patch("fixembed.events.is_guild_premium", AsyncMock(return_value=False)),
+                patch(
+                    "fixembed.events.build_components_v2_link",
+                    AsyncMock(side_effect=ValueError("bad payload")),
+                ),
+                patch(
+                    "fixembed.events.rate_limited_send", AsyncMock(return_value="direct")
+                ) as send,
+            ):
+                await events.on_message(message)
+            self.assertEqual(send.await_count, expected_sends)
+
+    async def test_test_instance_never_sends_onboarding_dms(self):
+        for test_guild, expected_saves in (("999", 0), ("11", 1)):
+            storage.bot_settings.clear()
+            with (
+                self.subTest(test_guild=test_guild),
+                patch.dict("os.environ", {"FIXEMBED_TEST_GUILD_ID": test_guild}),
+                patch("fixembed.events.save_guild_settings", AsyncMock()) as save,
+                patch(
+                    "fixembed.events.send_onboarding_dm", AsyncMock(return_value=True)
+                ) as onboard,
+            ):
+                await events.on_guild_join(self.interaction.guild)
+            self.assertEqual(save.await_count, expected_saves)
+            onboard.assert_not_awaited()
+
+    async def test_test_instance_skips_support_server_role_reconciliation(self):
+        for environ, expected_calls in (({}, 1), ({"FIXEMBED_TEST_GUILD_ID": "11"}, 0)):
+            startup = {
+                name: AsyncMock(
+                    return_value={}
+                    if name in {"load_premium_controls", "load_channel_visibility_overrides"}
+                    else None
+                )
+                for name in (
+                    "init_content_visibility",
+                    "init_premium_controls",
+                    "migrate_youtube_service_default",
+                    "migrate_pinterest_service_default",
+                    "migrate_new_social_services_default",
+                    "load_channel_states",
+                    "load_settings",
+                    "load_premium_controls",
+                    "load_channel_service_rules",
+                    "load_channel_visibility_overrides",
+                )
+            }
+            with (
+                self.subTest(environ=environ),
+                patch.dict("os.environ", environ),
+                patch.multiple("fixembed.events", **startup),
+                patch("fixembed.events.resolve_premium_sku", AsyncMock(return_value="123")),
+                patch("fixembed.events.reconcile_supporter_roles", AsyncMock()) as reconcile,
+                patch.object(events.change_status, "is_running", return_value=True),
+                patch.object(runtime.client, "db", object()),
+                patch.object(runtime.client, "send_task", Mock(done=lambda: False)),
+                patch.object(runtime.client.tree, "sync", AsyncMock(return_value=[])),
+            ):
+                if not environ:
+                    import os
+
+                    os.environ.pop("FIXEMBED_TEST_GUILD_ID", None)
+                await events.initialize_runtime()
+            self.assertEqual(reconcile.await_count, expected_calls)
 
 
 if __name__ == "__main__":

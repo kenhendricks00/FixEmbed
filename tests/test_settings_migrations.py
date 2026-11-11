@@ -1,6 +1,6 @@
 import unittest
 
-from settings_migrations import (
+from fixembed.settings_migrations import (
     NEW_SOCIAL_SERVICE_MIGRATIONS,
     PINTEREST_DEFAULT_MIGRATION,
     add_service_to_serialized_settings,

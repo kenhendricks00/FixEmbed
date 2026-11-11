@@ -64,9 +64,36 @@ const LANGUAGE_CODES: Record<string, { code: string; name: string }> = {
     vie: { code: 'vi', name: 'Vietnamese' },
 };
 
-const LANGUAGE_NAMES = new Map(
-    Object.values(LANGUAGE_CODES).map(({ code, name }) => [code, name]),
-);
+/** Traditional Chinese, the one supported target that is not a bare two-letter code. */
+export const TRADITIONAL_CHINESE = 'zh-tw';
+
+const LANGUAGE_NAMES = new Map([
+    ...Object.values(LANGUAGE_CODES).map(({ code, name }): [string, string] => [code, name]),
+    [TRADITIONAL_CHINESE, 'Chinese (Traditional)'],
+]);
+
+/**
+ * Regional and script tags accepted for Chinese. `zh` means Simplified Chinese,
+ * which is what X and FxTwitter return for it.
+ */
+const LANGUAGE_ALIASES: Record<string, string> = {
+    'zh-cn': 'zh',
+    'zh-sg': 'zh',
+    'zh-my': 'zh',
+    'zh-hans': 'zh',
+    'zh-hans-cn': 'zh',
+    'zh-hans-sg': 'zh',
+    'zh-tw': TRADITIONAL_CHINESE,
+    'zh-hk': TRADITIONAL_CHINESE,
+    'zh-mo': TRADITIONAL_CHINESE,
+    'zh-hant': TRADITIONAL_CHINESE,
+    'zh-hant-tw': TRADITIONAL_CHINESE,
+    'zh-hant-hk': TRADITIONAL_CHINESE,
+    'zh-hant-mo': TRADITIONAL_CHINESE,
+};
+
+/** Targets the Workers AI translation model cannot produce. */
+const WORKERS_AI_UNSUPPORTED_TARGETS = new Set([TRADITIONAL_CHINESE]);
 
 export function languageName(language: string): string {
     const normalized = normalizeLanguage(language);
@@ -75,9 +102,15 @@ export function languageName(language: string): string {
         : 'Unknown';
 }
 
+/**
+ * Return the canonical translation language for a code: a two-letter code,
+ * or `zh-tw` for Traditional Chinese. Chinese variants such as `zh-CN`,
+ * `zh_Hant`, and `zh-HK` fold into `zh` or `zh-tw`.
+ */
 export function normalizeLanguage(value: unknown): string | undefined {
-    const language = String(value || '').trim().toLowerCase();
-    return /^[a-z]{2}$/.test(language) ? language : undefined;
+    const language = String(value || '').trim().toLowerCase().replace(/_/g, '-');
+    if (/^[a-z]{2}$/.test(language)) return language;
+    return LANGUAGE_ALIASES[language];
 }
 
 const HINDI_SIGNALS = new Set([
@@ -326,6 +359,9 @@ export async function applyRequestedTranslation(
     if (data.platform === 'twitter') {
         return result;
     }
+    if (WORKERS_AI_UNSUPPORTED_TARGETS.has(targetLanguage)) {
+        return result;
+    }
     if (
         data.translation
         && normalizeLanguage(data.translation.targetLanguage) !== targetLanguage
@@ -397,6 +433,6 @@ export async function applyRequestedTranslation(
             platform: data.platform,
             errorType: error instanceof Error ? error.name : 'UnknownError',
         });
-        return result;
+        return { ...result, translationUnavailable: true };
     }
 }

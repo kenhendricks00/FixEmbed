@@ -2,7 +2,7 @@ import unittest
 
 import aiosqlite
 
-from content_visibility import (
+from fixembed.content_visibility import (
     ContentVisibility,
     channel_visibility_override,
     init_content_visibility,

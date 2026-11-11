@@ -1,5 +1,43 @@
 ## Unreleased
 
+#### **X translation for Japanese and Chinese**
+- Fixed `/zh` translation of X posts silently returning the original card. FxTwitter answers a `zh` request with a `zh-cn` translation, which FixEmbed rejected as the wrong language. Chinese regional codes are now matched to the requested language.
+- Added `/zh-cn`, `/zh-tw`, `/zh-hant`, and other Chinese region and script suffixes on X links. `zh-cn` and `zh-hans` translate to Simplified Chinese; `zh-tw`, `zh-hant`, and `zh-hk` translate to Traditional Chinese. These suffixes were previously ignored by both the bot and the hosted service.
+- Fixed X translations, most noticeably `/ja`, intermittently returning the original card. FxTwitter leaves out the translation on about one in five requests for every language, and the hosted service cached the untranslated card for five minutes, so retrying the same link kept failing. FixEmbed now retries FxTwitter up to three more times when a translation is expected but missing, and no longer caches a card whose requested translation is missing.
+- Other platforms translated with Workers AI now accept `zh-cn` as Simplified Chinese. Traditional Chinese is not available there yet, so those cards keep the original text.
+
+#### **Bluesky-compatible (AT Protocol) app links**
+- Added support for Bluesky-compatible (AT Protocol) app links, such as those from W Social (`wsocial.eu`) and mu (`mu.social`). Any HTTPS site whose post link has the form `/profile/<handle-or-DID>/post/<id>`, or `/public/profile/...`, is recognized. No app is listed by name.
+- Before converting a link from a site other than bsky.app, FixEmbed checks the handle, DID, and post ID syntax, then confirms the account and the post through the public AT Protocol API. Links that fail are ignored silently, as are a list of large sites that are not AT Protocol apps. bsky.app links work as before.
+- Lookups are cached: found accounts and posts for an hour in the bot (posts for five minutes in the hosted service), missing ones for ten minutes, and API outages for one minute. Each request times out after 2 seconds in the bot and 4 seconds in the hosted service. Verification for a message finishes within 2.5 seconds, and at most three uncached links are checked per message.
+- These cards are labelled AT Protocol, link back to the app the post was shared from, and follow the server's Bluesky setting.
+
+#### **Reddit video audio**
+- Restored audio on Reddit videos. Reddit changed the key order of its embed media sources, so FixEmbed stopped finding the muxed audio-and-video file and sent the silent DASH video track instead. Sources are now read as JSON regardless of key order.
+- Fixed silent Reddit videos from the hosted service. Reddit blocks Cloudflare from the embed page that lists muxed files, so the Worker only saw the video-only DASH track. When Reddit's DASH manifest has an audio track, FixEmbed now serves `/video/reddit`, which combines the video and audio fragments into one MP4 without re-encoding. If the files can't be combined, it falls back to the silent video track.
+- Fixed Reddit videos on popular posts showing only text. When a post's old.reddit page was larger than 512 KB because of its comments, FixEmbed discarded the whole page and fell back to a title-only card. It now reads the first 512 KB, which contains the post and its video player.
+- Fixed playback for Reddit videos uploaded before 2020. Their DASH files are named without an `.mp4` extension, such as `DASH_360` and `audio`, so FixEmbed skipped them. `/video/reddit` now accepts these names and combines them with audio the same way as current videos.
+- Fixed combined Reddit videos showing a 4–5 second duration and refusing to seek when played in a browser. The combined file dropped Reddit's `sidx` index and ignored byte-range requests, so players only knew the part they had downloaded. FixEmbed now plans the combined file from both files' indexes, writes a single `sidx` covering the full length, and answers range requests by fetching only the matching parts from Reddit. Files without a complete index keep the previous behavior.
+
+#### **Isolated test instances**
+- Added optional `FIXEMBED_API_BASE` and `FIXEMBED_TEST_GUILD_ID` settings so a separate test bot can read card metadata from a staging Worker and act in one test server only. A test instance skips onboarding DMs and support-server role changes. With both unset, the bot behaves as before.
+
+#### **Premium purchase button**
+- Fixed `/premium` and Premium settings showing Discord's "Product Unavailable" button when `PREMIUM_SKU_ID` names a SKU that cannot be bought, such as the subscription group. At startup the bot now checks the ID against the application's SKUs, uses the only purchasable subscription when the ID is wrong, and logs the correct value to set.
+- Blank or non-numeric `PREMIUM_SKU_ID` values now disable Premium with a clear log line instead of failing when a Premium button is built.
+
+#### **Bot and Worker refactor**
+- Grouped the Discord bot implementation under `fixembed/`, reducing root Python files from 37 to one and turning the 2,876-line `main.py` into a seven-line launcher.
+- Split commands, events, storage, delivery, card rendering, and settings into dedicated modules while preserving `python main.py`, existing database formats, and all 13 Discord commands.
+- Consolidated automatic delivery modes, platform card dispatch, and standard Worker metadata requests to reduce repeated logic.
+- Serialized startup initialization, added shutdown cleanup for background sends and open resources, and made exhausted SQLite lock retries report failures.
+- Split the 1,660-line Worker entry point into six route modules and a 38-line entry point with shared embed-request preparation.
+- Removed unreachable debug implementations and the unused nested Worker source copy, reducing TypeScript under `service/src/` from 20,298 to 14,141 lines.
+- Increased total bot Python from 10,689 to 11,143 lines across the launcher and package. Entry-point reductions primarily reflect moved code; source line counts include comments and blank lines and exclude tests and build scripts.
+- Updated imports, CI, documentation, and deployment packaging for the new layout, with 65 runtime files in the verified SparkedHost bundle.
+- Expanded passing Python tests from 274 to 286 and Worker tests from 167 to 171, including packaged-bot import and command-registration checks.
+- Passed Worker type checking, Python import linting and compilation, release metadata checks, archive verification, and a Wrangler deployment dry run. Live Discord operation and a Docker image build remain unverified.
+
 #### **Threads share links**
 - Restored automatic conversion for current `threads.com/share/...` links by resolving them to canonical Threads posts before rendering.
 - Preserved signed Threads profile-picture URLs so Discord can retrieve creator avatars reliably.

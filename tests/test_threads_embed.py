@@ -1,6 +1,6 @@
 import unittest
 
-from threads_embed import build_threads_layout
+from fixembed.platforms.threads import build_threads_layout
 
 
 class ThreadsEmbedTests(unittest.TestCase):

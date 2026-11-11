@@ -13,10 +13,10 @@ def read_version(path: Path) -> str:
 
 
 def main() -> None:
-    main_source = (ROOT / "main.py").read_text(encoding="utf-8")
+    main_source = (ROOT / "fixembed" / "config.py").read_text(encoding="utf-8")
     match = re.search(r'^VERSION = "([^"]+)"$', main_source, re.MULTILINE)
     if not match:
-        raise SystemExit("main.py does not declare VERSION")
+        raise SystemExit("fixembed/config.py does not declare VERSION")
 
     expected = match.group(1)
     versions = {
@@ -27,7 +27,7 @@ def main() -> None:
     mismatches = {name: version for name, version in versions.items() if version != expected}
     if mismatches:
         details = ", ".join(f"{name}={version}" for name, version in mismatches.items())
-        raise SystemExit(f"Release version mismatch: main.py={expected}; {details}")
+        raise SystemExit(f"Release version mismatch: fixembed/config.py={expected}; {details}")
 
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if not re.search(rf"^## v{re.escape(expected)} \(", changelog, re.MULTILINE):

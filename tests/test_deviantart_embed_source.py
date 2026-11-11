@@ -3,16 +3,15 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import deviantart_embed
-from deviantart_embed import (
+import fixembed.platforms.deviantart as deviantart_embed
+from fixembed.platforms.deviantart import (
     DeviantArtRateLimitError,
     DeviantArtSourceError,
-    _ProfileMetadataParser,
     _fetch_deviantart_oembed_payload,
+    _ProfileMetadataParser,
     _read_oembed_response,
     _request_deviantart_oembed_payload,
 )
-
 
 SOURCE_URL = (
     "https://www.deviantart.com/kabuvee/art/"
@@ -130,7 +129,7 @@ class DeviantArtSourceResponseTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_complete_request_fetches_profile_avatar_and_normalizes_card_data(self):
-        with patch("deviantart_embed.aiohttp.ClientSession", FakeSession):
+        with patch('fixembed.platforms.deviantart.aiohttp.ClientSession', FakeSession):
             payload = await _request_deviantart_oembed_payload(SOURCE_URL)
 
         self.assertEqual(payload["title"], "Lunar eclipse")
@@ -160,7 +159,7 @@ class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):
 
         direct_request = AsyncMock(side_effect=request)
         with patch(
-            "deviantart_embed._request_deviantart_oembed_payload",
+            'fixembed.platforms.deviantart._request_deviantart_oembed_payload',
             direct_request,
         ):
             first = asyncio.create_task(
@@ -183,7 +182,7 @@ class DeviantArtSourceCacheTests(unittest.IsolatedAsyncioTestCase):
             side_effect=DeviantArtSourceError("DeviantArt returned 404")
         )
         with patch(
-            "deviantart_embed._request_deviantart_oembed_payload",
+            'fixembed.platforms.deviantart._request_deviantart_oembed_payload',
             direct_request,
         ):
             with self.assertRaises(DeviantArtSourceError):

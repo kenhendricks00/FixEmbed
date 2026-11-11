@@ -2,7 +2,7 @@ import asyncio
 import json
 import unittest
 
-from conversion_telemetry import (
+from fixembed.telemetry.conversion import (
     ConversionTelemetry,
     classify_build_failure,
     format_local_conversion_health,

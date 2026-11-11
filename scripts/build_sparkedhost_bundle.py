@@ -5,14 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
-import zipfile
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_MANIFEST_NAME = "sparkedhost-manifest.json"
-REQUIRED_RUNTIME_FILES = ("requirements.txt", "LICENSE")
+REQUIRED_RUNTIME_FILES = ("main.py", "requirements.txt", "LICENSE")
 OPTIONAL_RUNTIME_FILES = (
     ".env.example",
     "manifest.json",
@@ -42,9 +41,11 @@ def _safe_relative_path(value: object) -> str:
 
 
 def collect_deployment_files(root: Path) -> tuple[Path, ...]:
-    """Return every root Python file plus reviewed runtime metadata paths."""
+    """Return the bot package, launcher, and reviewed runtime metadata paths."""
     root = root.resolve()
-    relative_paths = {path.relative_to(root) for path in root.glob("*.py")}
+    relative_paths = {
+        path.relative_to(root) for path in (root / "fixembed").rglob("*.py")
+    }
 
     for required in REQUIRED_RUNTIME_FILES:
         path = root / required

@@ -31,6 +31,7 @@ import { tumblrHandler } from './tumblr.ts';
 import { twitchHandler } from './twitch.ts';
 import { deviantartHandler } from './deviantart.ts';
 import type { PlatformHandler } from '../types.ts';
+import { parseAtprotoPostUrl } from '../utils/atproto.ts';
 
 // All handlers in priority order
 export const handlers: PlatformHandler[] = [
@@ -60,5 +61,8 @@ export function findHandler(url: string): PlatformHandler | null {
             }
         }
     }
+    // Last resort: a Bluesky-compatible (AT Protocol) app post on another host.
+    // The handler verifies it against the public AppView before rendering.
+    if (parseAtprotoPostUrl(url)) return blueskyHandler;
     return null;
 }

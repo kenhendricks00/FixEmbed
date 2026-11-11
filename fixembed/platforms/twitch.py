@@ -1,0 +1,58 @@
+"""Build bot-authored Twitch cards from FixEmbed metadata."""
+
+from __future__ import annotations
+
+from typing import Any, Mapping, Optional
+
+import discord
+
+from fixembed.platforms.shared import (
+    PlatformCardSpec,
+    build_platform_layout,
+    fetch_platform_payload,
+)
+from fixembed.presentation.footer import FooterBranding
+from fixembed.presentation.preferences import CardPreferences
+
+TWITCH_SPEC = PlatformCardSpec(
+    "twitch",
+    "Twitch",
+    0x9146FF,
+    "<:twitch:1527868614269468852>",
+    link_author_name_only=True,
+    merge_context_with_stats=True,
+)
+
+
+def build_twitch_layout(
+    payload: Mapping[str, Any],
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+) -> discord.ui.LayoutView:
+    return build_platform_layout(
+        payload,
+        TWITCH_SPEC,
+        converted_url,
+        footer_branding,
+        card_preferences,
+    )
+
+async def fetch_twitch_layout(
+    source_url: str,
+    converted_url: Optional[str] = None,
+    footer_branding: Optional[FooterBranding] = None,
+    card_preferences: Optional[CardPreferences] = None,
+    *,
+    translation_language: Optional[str] = None,
+) -> discord.ui.LayoutView:
+    return build_twitch_layout(
+        await fetch_platform_payload(
+            source_url,
+            TWITCH_SPEC.api_name,
+            translation_language,
+        ),
+        converted_url,
+        footer_branding,
+        card_preferences,
+    )

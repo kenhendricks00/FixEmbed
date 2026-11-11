@@ -178,6 +178,12 @@ interface SnapsaveMedia {
     thumbnail?: string;
 }
 
+interface SnapsaveRecovery {
+    media: SnapsaveMedia[];
+    description?: string;
+    preview?: string;
+}
+
 function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?: string, preview?: string } {
     const media: SnapsaveMedia[] = [];
     let description = '';
@@ -293,6 +299,41 @@ function parseSnapsaveHtml(html: string): { media: SnapsaveMedia[], description?
     return { media, description, preview };
 }
 
+async function fetchSnapsaveRecovery(
+    canonicalUrl: string,
+    timeoutMs: number,
+): Promise<SnapsaveRecovery> {
+    const formData = new URLSearchParams();
+    formData.append('url', canonicalUrl);
+
+    const response = await fetchWithTimeout('https://snapsave.app/action.php?lang=en', {
+        method: 'POST',
+        headers: {
+            'Accept': '*/*',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': 'https://snapsave.app',
+            'Referer': 'https://snapsave.app/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        body: formData,
+    }, timeoutMs);
+
+    if (!response.ok) {
+        throw new Error(`Snapsave returned ${response.status}`);
+    }
+
+    const decryptedHtml = decryptSnapSave(await response.text());
+    if (!decryptedHtml) {
+        throw new Error('Failed to decrypt response');
+    }
+
+    const recovery = parseSnapsaveHtml(decryptedHtml);
+    if (recovery.media.length === 0) {
+        throw new Error('No media found');
+    }
+    return recovery;
+}
+
 // ========== Handler ==========
 
 export const instagramHandler: PlatformHandler = {
@@ -371,6 +412,7 @@ export const instagramHandler: PlatformHandler = {
         }
 
         let nativeResult: HandlerResponse | undefined;
+        let vxVideoFallback: HandlerResponse | undefined;
         try {
             const remainingProviderTime = createTimeoutBudget(INSTAGRAM_TOTAL_TIMEOUT_MS);
             const shortcodeTimestamp = deriveMetaShortcodeTimestamp(parsed.shortcode);
@@ -411,7 +453,20 @@ export const instagramHandler: PlatformHandler = {
             // crawler response still contains the public creator, caption,
             // engagement, avatar, and poster. Recover that metadata in parallel
             // with Vx media so the fallback remains inside one shared deadline.
-            const [canonicalResult, vxResult] = await Promise.all([
+            const snapsavePromise = parsed.type === 'reel'
+                ? fetchSnapsaveRecovery(
+                    canonicalUrl,
+                    remainingProviderTime(),
+                ).catch((error) => {
+                    console.warn('fallback_fetch_failed', {
+                        platform: 'instagram',
+                        provider: 'snapsave',
+                        errorType: error instanceof Error ? error.name : 'unknown',
+                    });
+                    return undefined;
+                })
+                : Promise.resolve(undefined);
+            const [canonicalResult, vxResult, prefetchedSnapsave] = await Promise.all([
                 scrapeCanonicalHtml(
                     canonicalUrl,
                     parsed,
@@ -422,6 +477,7 @@ export const instagramHandler: PlatformHandler = {
                     parsed.type,
                     remainingProviderTime(INSTAGRAM_VX_TIMEOUT_MS),
                 ),
+                snapsavePromise,
             ]);
             if (canonicalResult.success && canonicalResult.data) {
                 const canonicalData = parsed.type === 'reel'
@@ -451,7 +507,10 @@ export const instagramHandler: PlatformHandler = {
                 const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
                 const metadata = nativeResult.data;
                 const preview = vxResult.image || metadata?.video?.thumbnail || metadata?.image;
-                return {
+                // Vx offload responses can advertise the full MP4 and then close
+                // early. Keep this result only as a last resort so the reel can
+                // use Snapsave's complete media response when it is available.
+                vxVideoFallback = {
                     success: true,
                     source: 'fallback',
                     data: {
@@ -618,42 +677,17 @@ export const instagramHandler: PlatformHandler = {
                 };
             }
 
-            // For videos/reels or if vxinstagram failed, use Snapsave
-            // Call Snapsave API
-            const formData = new URLSearchParams();
-            formData.append('url', canonicalUrl);
-
-            const response = await fetchWithTimeout('https://snapsave.app/action.php?lang=en', {
-                method: 'POST',
-                headers: {
-                    'Accept': '*/*',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Origin': 'https://snapsave.app',
-                    'Referer': 'https://snapsave.app/',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                },
-                body: formData,
-            }, remainingProviderTime());
-
-            if (!response.ok) {
-                throw new Error(`Snapsave returned ${response.status}`);
+            // Reels start Snapsave alongside the other recovery sources so it
+            // receives the full shared deadline instead of whatever time remains.
+            const snapsaveRecovery = prefetchedSnapsave || (
+                parsed.type === 'reel'
+                    ? undefined
+                    : await fetchSnapsaveRecovery(canonicalUrl, remainingProviderTime())
+            );
+            if (!snapsaveRecovery) {
+                throw new Error('Snapsave reel recovery was unavailable');
             }
-
-            const rawHtml = await response.text();
-
-            // Decrypt the response
-            const decryptedHtml = decryptSnapSave(rawHtml);
-
-            if (!decryptedHtml) {
-                throw new Error('Failed to decrypt response');
-            }
-
-            // Parse the HTML
-            const { media, description, preview } = parseSnapsaveHtml(decryptedHtml);
-
-            if (media.length === 0) {
-                throw new Error('No media found');
-            }
+            const { media, description, preview } = snapsaveRecovery;
 
             const firstMedia = media[0];
             if (parsed.type === 'reel' && firstMedia.type !== 'video') {
@@ -753,6 +787,9 @@ export const instagramHandler: PlatformHandler = {
                 errorType: error instanceof Error ? error.name : 'unknown',
             });
 
+            if (vxVideoFallback) {
+                return vxVideoFallback;
+            }
             if (
                 nativeResult?.success
                 && (parsed.type !== 'reel' || Boolean(nativeResult.data?.video))

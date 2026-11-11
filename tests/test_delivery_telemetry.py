@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from delivery_telemetry import (
+from fixembed.telemetry.delivery import (
     DeliveryTelemetry,
     classify_delivery_failure,
     deliver_with_fallback,
@@ -179,7 +179,7 @@ class DeliveryTelemetryTests(unittest.IsolatedAsyncioTestCase):
             return await awaitable
 
         with (
-            patch("delivery_telemetry.asyncio.wait_for", side_effect=observe_wait_for),
+            patch('fixembed.telemetry.delivery.asyncio.wait_for', side_effect=observe_wait_for),
             self.assertLogs("fixembed.delivery", level="WARNING"),
         ):
             outcome = await deliver_with_fallback(

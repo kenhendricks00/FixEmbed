@@ -2,7 +2,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = REPO_ROOT / ".github" / "workflows"
 ACTION_REFERENCE = re.compile(r"\buses:\s*([^\s#]+)(?:\s+#\s*(v\d+))?")

@@ -1,14 +1,14 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from deviantart_embed import (
+from fixembed.platforms.deviantart import (
     build_deviantart_layout,
     fetch_deviantart_layout,
     normalize_deviantart_oembed_payload,
 )
-from tiktok_embed import build_tiktok_layout
-from tumblr_embed import build_tumblr_layout
-from twitch_embed import build_twitch_layout
+from fixembed.platforms.tiktok import build_tiktok_layout
+from fixembed.platforms.tumblr import build_tumblr_layout
+from fixembed.platforms.twitch import build_twitch_layout
 
 
 def serialized_container(layout):
@@ -226,7 +226,7 @@ class DeviantArtRetrievalTests(unittest.IsolatedAsyncioTestCase):
 
         direct_fetch = AsyncMock(return_value=payload)
         with patch(
-            "deviantart_embed.fetch_deviantart_payload",
+            'fixembed.platforms.deviantart.fetch_deviantart_payload',
             direct_fetch,
         ):
             layout = await fetch_deviantart_layout(source_url)

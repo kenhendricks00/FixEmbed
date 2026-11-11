@@ -6,6 +6,7 @@ import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
 import { parseRedditUrl, fetchJSON, fetchWithTimeout, truncateText } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
 import { extractPostTimestampFromHtml } from '../utils/timestamp.ts';
+import { redditMuxedVideoUrl } from '../routes/reddit_video.ts';
 
 interface RedditPost {
     title: string;
@@ -46,6 +47,7 @@ interface RedditPost {
             width: number;
             height: number;
             duration: number;
+            dash_url?: string;
         };
     };
     secure_media?: {
@@ -54,6 +56,7 @@ interface RedditPost {
             width: number;
             height: number;
             duration: number;
+            dash_url?: string;
         };
     };
     created_utc: number;
@@ -80,6 +83,7 @@ const MAX_ARTICLE_HTML_BYTES = 512_000;
 const MAX_REDDIT_EMBED_HTML_BYTES = 512_000;
 const MAX_REDDIT_MANIFEST_BYTES = 128_000;
 const MAX_REDDIT_VIDEO_HEIGHT = 720;
+const REDDIT_DASH_MEDIA_PATH = /^\/[A-Za-z0-9]+\/[A-Za-z0-9_]+(?:\.mp4)?$/;
 
 type RedditVideo = {
     url: string;
@@ -238,6 +242,28 @@ function linkedArticleSection(value: string | undefined) {
     }];
 }
 
+/**
+ * Read at most `maxBytes` of a page. Reddit puts the post before its comments,
+ * so a prefix of a long thread still holds the post, media player, and meta tags.
+ */
+async function readTextPrefix(response: Response, maxBytes: number): Promise<string> {
+    if (!response.body) return '';
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let size = 0;
+    let html = '';
+    while (size < maxBytes) {
+        const { done, value } = await reader.read();
+        if (done) return html + decoder.decode();
+        const chunk = value.byteLength > maxBytes - size ? value.subarray(0, maxBytes - size) : value;
+        size += chunk.byteLength;
+        html += decoder.decode(chunk, { stream: true });
+    }
+    await reader.cancel().catch(() => undefined);
+    return html + decoder.decode();
+}
+
 async function readBoundedText(response: Response, maxBytes: number): Promise<string> {
     const declared = Number.parseInt(response.headers.get('Content-Length') || '', 10);
     if (Number.isFinite(declared) && declared > maxBytes) return '';
@@ -331,14 +357,12 @@ function redditPostBodyFromHtml(html: string, postId?: string): string {
         .trim();
 }
 
-async function redditVideoFromHtml(
-    html: string,
+async function redditDashVideo(
+    rawManifestUrl: string | undefined,
+    embedDomain: string,
     thumbnail?: string,
 ): Promise<RedditVideo | undefined> {
-    const playerTag = html.match(/<div\b(?=[^>]*\bdata-mpd-url=["'])[^>]*>/i)?.[0];
-    if (!playerTag) return undefined;
-
-    const manifestUrl = publicHttpsUrl(htmlAttribute(playerTag, 'data-mpd-url'));
+    const manifestUrl = rawManifestUrl ? publicHttpsUrl(rawManifestUrl) : undefined;
     if (
         !manifestUrl
         || manifestUrl.hostname.toLowerCase() !== 'v.redd.it'
@@ -372,24 +396,31 @@ async function redditVideoFromHtml(
             height: number;
             bandwidth: number;
         }> = [];
+        const audioTracks: Array<{ url: URL; bandwidth: number }> = [];
         for (const match of manifest.matchAll(/<Representation\b[^>]*>[\s\S]*?<\/Representation>/gi)) {
             const representation = match[0];
             const tag = representation.match(/<Representation\b[^>]*>/i)?.[0] || '';
-            if (htmlAttribute(tag, 'mimeType').toLowerCase() !== 'video/mp4') continue;
+            const mimeType = htmlAttribute(tag, 'mimeType').toLowerCase();
+            if (mimeType !== 'video/mp4' && mimeType !== 'audio/mp4') continue;
 
             const rawBaseUrl = representation.match(/<BaseURL\b[^>]*>([^<]+)<\/BaseURL>/i)?.[1] || '';
             const mediaUrl = publicHttpsUrl(rawBaseUrl, manifestUrl.toString());
             if (
                 !mediaUrl
                 || mediaUrl.hostname.toLowerCase() !== manifestUrl.hostname.toLowerCase()
-                || !/\.mp4$/i.test(mediaUrl.pathname)
+                // Current files end in .mp4; pre-2020 uploads use DASH_360 and audio.
+                || !REDDIT_DASH_MEDIA_PATH.test(mediaUrl.pathname)
             ) {
                 continue;
             }
 
+            const bandwidth = Number(htmlAttribute(tag, 'bandwidth'));
+            if (mimeType === 'audio/mp4') {
+                audioTracks.push({ url: mediaUrl, bandwidth: Number.isFinite(bandwidth) ? bandwidth : 0 });
+                continue;
+            }
             const width = Number(htmlAttribute(tag, 'width'));
             const height = Number(htmlAttribute(tag, 'height'));
-            const bandwidth = Number(htmlAttribute(tag, 'bandwidth'));
             if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) continue;
             candidates.push({
                 url: mediaUrl.toString(),
@@ -407,8 +438,15 @@ async function redditVideoFromHtml(
         const best = candidates[0];
         if (!best) return undefined;
 
+        const audio = audioTracks.sort((left, right) => right.bandwidth - left.bandwidth)[0]?.url;
+        const [, id, videoFile] = new URL(best.url).pathname.split('/');
+        const [, audioId, audioFile] = audio?.pathname.split('/') || [];
+        const muxedUrl = audioFile && audioId === id
+            ? redditMuxedVideoUrl(embedDomain, id, videoFile, audioFile)
+            : undefined;
+
         return {
-            url: best.url,
+            url: muxedUrl || best.url,
             width: best.width,
             height: best.height,
             thumbnail,
@@ -418,22 +456,31 @@ async function redditVideoFromHtml(
     }
 }
 
+function redditVideoFromHtml(
+    html: string,
+    embedDomain: string,
+    thumbnail?: string,
+): Promise<RedditVideo | undefined> {
+    const playerTag = html.match(/<div\b(?=[^>]*\bdata-mpd-url=["'])[^>]*>/i)?.[0];
+    return redditDashVideo(playerTag && htmlAttribute(playerTag, 'data-mpd-url'), embedDomain, thumbnail);
+}
+
 function redditMuxedVideoFromHtml(html: string, thumbnail?: string): RedditVideo | undefined {
     const decoded = decodeRedditHtml(html);
     const candidates: RedditVideo[] = [];
-    const sourcePattern = /"source"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"\s*,\s*"dimensions"\s*:\s*\{\s*"width"\s*:\s*(\d+)\s*,\s*"height"\s*:\s*(\d+)\s*\}[\s\S]{0,200}?\}/gi;
+    const sourcePattern = /"source"\s*:\s*(\{(?:[^{}]|\{[^{}]*\})*\})/gi;
 
     for (const match of decoded.matchAll(sourcePattern)) {
-        let rawUrl = match[1];
+        let source: { url?: unknown; dimensions?: { width?: unknown; height?: unknown } };
         try {
-            rawUrl = JSON.parse(`"${rawUrl}"`) as string;
+            source = JSON.parse(match[1]);
         } catch {
-            rawUrl = rawUrl.replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
+            continue;
         }
 
-        const mediaUrl = publicHttpsUrl(rawUrl);
-        const width = Number(match[2]);
-        const height = Number(match[3]);
+        const mediaUrl = typeof source.url === 'string' ? publicHttpsUrl(source.url) : undefined;
+        const width = Number(source.dimensions?.width);
+        const height = Number(source.dimensions?.height);
         if (
             !mediaUrl
             || mediaUrl.hostname.toLowerCase() !== 'packaged-media.redd.it'
@@ -540,6 +587,7 @@ function redditEmbedGalleryImagesFromHtml(html: string): string[] {
 async function recoverFromRedditCrawlerPage(
     subreddit: string,
     postId: string,
+    embedDomain: string,
 ): Promise<HandlerResponse | null> {
     const pageUrl = `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${encodeURIComponent(postId)}/`;
     const response = await fetchWithTimeout(pageUrl, {
@@ -550,7 +598,8 @@ async function recoverFromRedditCrawlerPage(
     });
     if (!response.ok) return null;
 
-    const html = await readBoundedText(response, MAX_ARTICLE_HTML_BYTES);
+    // Popular threads exceed the cap; the post block comes first, so keep the prefix.
+    const html = await readTextPrefix(response, MAX_ARTICLE_HTML_BYTES);
     if (!html) return null;
     const escapedPostId = postId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const postTag = html.match(
@@ -602,7 +651,7 @@ async function recoverFromRedditCrawlerPage(
     const hasVideoPlayer = /<div\b(?=[^>]*\bdata-mpd-url=["'])[^>]*>/i.test(postHtml);
     const video = hasVideoPlayer
         ? await fetchRedditMuxedVideo(subreddit, postId, thumbnail)
-            || await redditVideoFromHtml(postHtml, thumbnail)
+            || await redditVideoFromHtml(postHtml, embedDomain, thumbnail)
         : undefined;
     const image = video
         ? undefined
@@ -653,6 +702,7 @@ async function recoverFromRedditCrawlerPage(
 async function recoverFromRedditEmbed(
     subreddit: string,
     postId: string,
+    embedDomain: string,
 ): Promise<HandlerResponse | null> {
     const displaySubreddit = safeDecodeURIComponent(subreddit);
     const encodedSubreddit = encodeURIComponent(displaySubreddit);
@@ -662,6 +712,7 @@ async function recoverFromRedditEmbed(
         const crawlerRecovery = await recoverFromRedditCrawlerPage(
             displaySubreddit,
             safeDecodeURIComponent(postId),
+            embedDomain,
         );
         if (crawlerRecovery) return crawlerRecovery;
     } catch {
@@ -821,6 +872,7 @@ export const redditHandler: PlatformHandler = {
         }
 
         const parsed = parseRedditUrl(resolvedUrl);
+        const embedDomain = env.EMBED_DOMAIN || 'fixembed.app';
 
         if (!parsed) {
             // Try short URL format
@@ -873,6 +925,7 @@ export const redditHandler: PlatformHandler = {
                     ? decodeRedditHtml(post.thumbnail)
                     : undefined;
                 video = await fetchRedditMuxedVideo(post.subreddit, parsed.postId, thumbnail)
+                    || await redditDashVideo(redditVideo.dash_url, embedDomain, thumbnail)
                     || {
                         url: redditVideo.fallback_url,
                         width: redditVideo.width,
@@ -941,7 +994,7 @@ export const redditHandler: PlatformHandler = {
             };
         } catch (error) {
             try {
-                const recovered = await recoverFromRedditEmbed(parsed.subreddit, parsed.postId);
+                const recovered = await recoverFromRedditEmbed(parsed.subreddit, parsed.postId, embedDomain);
                 if (recovered) return recovered;
             } catch (recoveryError) {
                 console.error('Reddit embed recovery error:', recoveryError);

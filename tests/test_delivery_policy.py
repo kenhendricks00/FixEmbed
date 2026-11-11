@@ -1,6 +1,6 @@
 import unittest
 
-from delivery_policy import (
+from fixembed.delivery_policy import (
     apply_source_message_action,
     format_delivery_mode_status,
     resolve_delivery_mode,

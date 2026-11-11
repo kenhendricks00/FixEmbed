@@ -27,7 +27,7 @@ jobs:
         id: canary
         continue-on-error: true
         run: >-
-          python conformance.py
+          python -m fixembed.conformance
           --manifest conformance/production.json
           --output conformance-report.json
       - name: Publish bounded report to the job summary

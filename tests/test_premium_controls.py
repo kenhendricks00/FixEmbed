@@ -1,8 +1,8 @@
-import unittest
 import sqlite3
+import unittest
 from types import SimpleNamespace
 
-from premium_controls import (
+from fixembed.premium.controls import (
     DEFAULT_PREMIUM_CONTROLS,
     fetch_analytics_summary,
     init_premium_controls,

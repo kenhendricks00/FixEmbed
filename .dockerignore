@@ -2,6 +2,10 @@
 .git
 .github
 __pycache__
+.venv
+.ruff_cache
+venv
+dist
 *.py[cod]
 *.db
 *.sqlite3

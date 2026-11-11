@@ -13,7 +13,7 @@ Bring FixEmbed's first-party X/Twitter cards to user-visible parity with FxEmbed
 
 ## Commands
 
-- Python compile: `python -m compileall -q main.py translations.py link_utils.py`
+- Python compile: `python -m compileall -q main.py fixembed/translations.py fixembed/links.py`
 - Python tests: `python -m unittest discover -s tests -v`
 - Release metadata: `python scripts/check_release_metadata.py`
 - Service tests: `cd service && npm test`
@@ -23,7 +23,7 @@ Bring FixEmbed's first-party X/Twitter cards to user-visible parity with FxEmbed
 
 ## Project Structure
 
-- `link_utils.py`: public X URL modifiers preserved by the Discord bot
+- `fixembed/links.py`: public X URL modifiers preserved by the Discord bot
 - `service/src/handlers/twitter.ts`: X payload validation and first-party normalization
 - `service/src/types.ts`: platform-neutral embed contract
 - `service/src/utils/embed.ts`: Open Graph and oEmbed rendering

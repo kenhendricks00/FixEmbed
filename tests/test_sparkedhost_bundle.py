@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 
 from scripts.build_sparkedhost_bundle import (
     BUNDLE_MANIFEST_NAME,
@@ -18,8 +18,10 @@ class SparkedHostBundleTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
         (self.root / "main.py").write_text("print('ready')\n", encoding="utf-8")
-        (self.root / "a.py").write_text("VALUE = 1\n", encoding="utf-8")
-        (self.root / "b.py").write_text("LABEL = 'café'\n", encoding="utf-8")
+        (self.root / "fixembed").mkdir()
+        (self.root / "scratch.py").write_text("raise AssertionError\n", encoding="utf-8")
+        (self.root / "fixembed" / "a.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (self.root / "fixembed" / "b.py").write_text("LABEL = 'café'\n", encoding="utf-8")
         (self.root / "requirements.txt").write_text("discord.py==2.6.4\n", encoding="utf-8")
         (self.root / "LICENSE").write_text("AGPL-3.0-or-later\n", encoding="utf-8")
         (self.root / ".env").write_text("BOT_TOKEN=secret\n", encoding="utf-8")
@@ -29,11 +31,11 @@ class SparkedHostBundleTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
-    def test_collects_every_root_python_file_and_required_runtime_metadata(self):
+    def test_collects_package_and_required_metadata_without_root_scratch_files(self):
         paths = collect_deployment_files(self.root)
 
         self.assertEqual(
-            ("LICENSE", "a.py", "b.py", "main.py", "requirements.txt"),
+            ("LICENSE", "fixembed/a.py", "fixembed/b.py", "main.py", "requirements.txt"),
             tuple(path.as_posix() for path in paths),
         )
 
@@ -49,21 +51,35 @@ class SparkedHostBundleTests(unittest.TestCase):
         verified = verify_bundle(first)
         self.assertEqual(first_manifest, verified)
         self.assertEqual(
-            ["LICENSE", "a.py", "b.py", "main.py", "requirements.txt"],
+            ["LICENSE", "fixembed/a.py", "fixembed/b.py", "main.py", "requirements.txt"],
             [entry["path"] for entry in verified["files"]],
         )
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(
                 [
                     "LICENSE",
-                    "a.py",
-                    "b.py",
+                    "fixembed/a.py",
+                    "fixembed/b.py",
                     "main.py",
                     "requirements.txt",
                     BUNDLE_MANIFEST_NAME,
                 ],
                 sorted(archive.namelist()),
             )
+
+    def test_bundle_includes_nested_bot_modules_without_bytecode_or_secrets(self):
+        package = self.root / 'fixembed' / 'settings'
+        package.mkdir(parents=True)
+        (package / '__init__.py').write_text('', encoding='utf-8')
+        (package / 'general.py').write_text('VALUE = 1\n', encoding='utf-8')
+        (package / '.env').write_text('SECRET=hidden\n', encoding='utf-8')
+        (package / 'general.pyc').write_bytes(b'not source')
+        manifest = build_bundle(self.root, self.root / 'dist' / 'package.zip')
+        names = {entry['path'] for entry in manifest['files']}
+        self.assertIn('fixembed/settings/general.py', names)
+        self.assertIn('fixembed/settings/__init__.py', names)
+        self.assertNotIn('fixembed/settings/.env', names)
+        self.assertNotIn('fixembed/settings/general.pyc', names)
 
     def test_verification_rejects_a_partial_upload_bundle(self):
         complete = self.root / "dist" / "complete.zip"
@@ -72,10 +88,10 @@ class SparkedHostBundleTests(unittest.TestCase):
 
         with zipfile.ZipFile(complete) as source, zipfile.ZipFile(partial, "w") as target:
             for name in source.namelist():
-                if name != "b.py":
+                if name != "fixembed/b.py":
                     target.writestr(name, source.read(name))
 
-        with self.assertRaisesRegex(BundleVerificationError, "b.py"):
+        with self.assertRaisesRegex(BundleVerificationError, "fixembed/b.py"):
             verify_bundle(partial)
 
     def test_verification_rejects_unexpected_or_unsafe_archive_paths(self):

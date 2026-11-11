@@ -1,6 +1,6 @@
 import unittest
 
-from bluesky_embed import build_bluesky_layout
+from fixembed.platforms.bluesky import build_bluesky_layout, platform_label
 
 
 class BlueskyEmbedTests(unittest.TestCase):
@@ -47,6 +47,32 @@ class BlueskyEmbedTests(unittest.TestCase):
         self.assertNotIn("View original", footer["content"])
         self.assertNotIn("FixEmbed link", footer["content"])
         self.assertIn("<t:1783969200:R>", footer["content"])
+
+    def test_components_v2_layout_links_back_to_bluesky_compatible_app(self):
+        payload = {
+            "description": "European tech journalism meets European social media.",
+            "url": "https://wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i",
+            "authorName": "W Social",
+            "authorHandle": "@wsocial.eu",
+            "authorUrl": "https://wsocial.eu/profile/wsocial.eu",
+            "timestamp": "2026-11-10T12:00:00.000Z",
+        }
+
+        container = build_bluesky_layout(payload, None).to_components()[0]
+        header = container["components"][0]
+        footer = container["components"][-1]
+
+        self.assertIn("(https://wsocial.eu/profile/wsocial.eu)", header["content"])
+        self.assertIn(f"[AT Protocol]({payload['url']})", footer["content"])
+        self.assertIn("<:bluesky:1526269663334502544>", footer["content"])
+
+    def test_platform_label_names_bsky_app_bluesky_and_other_hosts_at_protocol(self):
+        self.assertEqual(platform_label("https://bsky.app/profile/a.bsky.social/post/3abc"), "Bluesky")
+        self.assertEqual(platform_label(""), "Bluesky")
+        self.assertEqual(
+            platform_label("https://mu.social/profile/a.bsky.social/post/3mzfkhszhlc2l"),
+            "AT Protocol",
+        )
 
     def test_components_v2_layout_preserves_playable_video(self):
         payload = {

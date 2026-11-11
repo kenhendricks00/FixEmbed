@@ -74,6 +74,16 @@ interface TextRuns {
     simpleText?: string;
 }
 
+interface YouTubeThumbnail {
+    url?: string;
+    width?: number;
+    height?: number;
+}
+
+interface BackstageImageRenderer {
+    image?: { thumbnails?: YouTubeThumbnail[] };
+}
+
 interface CommunityPostRenderer {
     authorText?: TextRuns;
     authorEndpoint?: { browseEndpoint?: { canonicalBaseUrl?: string } };
@@ -82,8 +92,11 @@ interface CommunityPostRenderer {
     voteCount?: TextRuns;
     replyCount?: TextRuns;
     backstageAttachment?: {
-        backstageImageRenderer?: {
-            image?: { thumbnails?: Array<{ url?: string; width?: number; height?: number }> };
+        backstageImageRenderer?: BackstageImageRenderer;
+        postMultiImageRenderer?: {
+            images?: Array<{
+                backstageImageRenderer?: BackstageImageRenderer;
+            }>;
         };
     };
 }
@@ -91,6 +104,12 @@ interface CommunityPostRenderer {
 function textFromRuns(value?: TextRuns): string {
     if (value?.simpleText) return value.simpleText;
     return value?.runs?.map((run) => run.text || '').join('').trim() || '';
+}
+
+function largestThumbnailUrl(renderer?: BackstageImageRenderer): string | undefined {
+    return [...(renderer?.image?.thumbnails || [])]
+        .sort((left, right) => (right.width || 0) * (right.height || 0) - (left.width || 0) * (left.height || 0))[0]
+        ?.url;
 }
 
 function extractJsonObjectAfterMarker(html: string, marker: string): string | null {
@@ -147,9 +166,12 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
         || metadataContent(html, 'author')
         || openGraphTitle.replace(/^Post from\s+/i, '');
     const authorPath = renderer?.authorEndpoint?.browseEndpoint?.canonicalBaseUrl;
-    const images = renderer?.backstageAttachment?.backstageImageRenderer?.image?.thumbnails || [];
-    const image = [...images]
-        .sort((left, right) => (right.width || 0) * (right.height || 0) - (left.width || 0) * (left.height || 0))[0]?.url
+    const carouselImages = (renderer?.backstageAttachment?.postMultiImageRenderer?.images || [])
+        .map((item) => largestThumbnailUrl(item.backstageImageRenderer))
+        .filter((url): url is string => Boolean(url))
+        .slice(0, 10);
+    const image = carouselImages[0]
+        || largestThumbnailUrl(renderer?.backstageAttachment?.backstageImageRenderer)
         || metadataContent(html, 'og:image');
     const rawAvatar = renderer?.authorThumbnail?.thumbnails?.at(-1)?.url;
     const avatar = rawAvatar?.startsWith('//') ? `https:${rawAvatar}` : rawAvatar;
@@ -168,6 +190,7 @@ export function parseYouTubeCommunityPostHtml(html: string, canonicalUrl: string
         authorUrl: authorPath ? `https://www.youtube.com${authorPath}` : undefined,
         authorAvatar: avatar,
         image: image || undefined,
+        images: carouselImages.length > 1 ? carouselImages : undefined,
         color: platformColors.youtube,
         platform: 'youtube',
         stats: stats || undefined,

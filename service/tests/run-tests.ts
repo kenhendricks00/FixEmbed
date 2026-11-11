@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { routeTests } from './routes.ts';
+import { redditVideoTests } from './reddit_video.ts';
 
 import app, { STATUS_PROBES } from '../src/index.ts';
 import { findHandler } from '../src/handlers/index.ts';
@@ -19,7 +21,7 @@ import { tiktokHandler } from '../src/handlers/tiktok.ts';
 import { tumblrHandler } from '../src/handlers/tumblr.ts';
 import { twitchHandler } from '../src/handlers/twitch.ts';
 import { deviantartHandler } from '../src/handlers/deviantart.ts';
-import type { Env } from '../src/types.ts';
+import type { Env, HandlerResponse } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
     StatusProbeTimeoutError,
@@ -45,7 +47,8 @@ import {
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
-import { applyRequestedTranslation } from '../src/utils/translation.ts';
+import { applyRequestedTranslation, languageName, normalizeLanguage } from '../src/utils/translation.ts';
+import { clearAtprotoCaches, parseAtprotoPostUrl } from '../src/utils/atproto.ts';
 import {
     cleanUrl,
     createTimeoutBudget,
@@ -112,6 +115,8 @@ async function signedRelayResponse(payload: unknown, secret: string): Promise<Re
 }
 
 const tests: TestCase[] = [
+    ...routeTests,
+    ...redditVideoTests,
     {
         name: 'createTimeoutBudget caps provider time against one shared deadline',
         run: () => {
@@ -505,12 +510,12 @@ const tests: TestCase[] = [
 
             assert.deepEqual(
                 parseBlueskyUrl('https://bsky.app/profile/bsky.app/post/3lb5u6adjs22t'),
-                { handle: 'bsky.app', postId: '3lb5u6adjs22t' },
+                { handle: 'bsky.app', postId: '3lb5u6adjs22t', origin: 'https://bsky.app' },
             );
 
             assert.deepEqual(
                 parseBlueskyUrl('https://bskyx.app/profile/example.bsky.social/post/3lask667wfj2b'),
-                { handle: 'example.bsky.social', postId: '3lask667wfj2b' },
+                { handle: 'example.bsky.social', postId: '3lask667wfj2b', origin: 'https://bsky.app' },
             );
         },
     },
@@ -1981,6 +1986,161 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'instagramHandler prefers Snapsave reel media over an unverified Vx offload',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            const sourceUrl = 'https://www.instagram.com/reel/DcwEt4Av7ju/';
+            const videoHtml = [
+                '<a href=\"https://d.rapidcdn.app/v2?token=video-token\">',
+                'Download Video',
+                '</a>',
+            ].join('');
+            const decodedVideoResponse = [
+                'document.getElementById(\"download-section\").innerHTML = \"',
+                videoHtml,
+                '\"; document.getElementById(\"inputData\").remove();',
+            ].join('');
+            const encodedVideoResponse = Array.from(decodedVideoResponse)
+                .map((character) => String(character.charCodeAt(0)))
+                .join('a');
+            const snapSaveVideoResponse = [
+                'decodeURIComponent(escape(r))}(\"',
+                encodedVideoResponse,
+                '\",\"unused\",\"0123456789a\",\"0\",\"10\",\"unused\"))',
+            ].join('');
+
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requested.push(url);
+                if (url.includes('/p/DcwEt4Av7ju/embed/captioned/')) {
+                    return new Response([
+                        '<span class=\"UsernameText\">driixiii</span>',
+                        '<div class=\"Caption\">by Sun</div>',
+                        '<script>{\"display_url\":\"https:\\\/\\\/scontent.example.cdninstagram.com\\\/poster.jpg\"}</script>',
+                    ].join(''), { status: 200 });
+                }
+                if (url === sourceUrl) {
+                    return new Response('', { status: 429 });
+                }
+                if (url.includes('vxinstagram.com/reel/DcwEt4Av7ju')) {
+                    return new Response(
+                        '<meta property=\"og:video\" content=\"https://vxinstagram.com/offload/DcwEt4Av7ju/0.mp4\">',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('kkinstagram.com/reel/DcwEt4Av7ju')) {
+                    return new Response('', { status: 404 });
+                }
+                if (url.includes('snapsave.app/action.php')) {
+                    return new Response(snapSaveVideoResponse, { status: 200 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const response = await instagramHandler.handle(sourceUrl, env);
+                const relayUrl = new URL(response.data?.video?.url || 'https://invalid.local/');
+                const upstreamUrl = new URL(
+                    relayUrl.searchParams.get('url') || 'https://invalid.local/',
+                );
+
+                assert.equal(response.success, true);
+                assert.equal(response.source, 'fallback');
+                assert.equal(relayUrl.pathname, '/video/instagram');
+                assert.equal(upstreamUrl.hostname, 'd.rapidcdn.app');
+                assert.equal(upstreamUrl.pathname, '/v2');
+                assert.equal(
+                    requested.some((request) => request.includes('snapsave.app/action.php')),
+                    true,
+                );
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'instagramHandler starts Snapsave reel recovery before canonical recovery settles',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const sourceUrl = 'https://www.instagram.com/reel/ConcurrentSnapsave/';
+            let canonicalRequested = false;
+            let snapsaveRequested = false;
+            let releaseCanonical: (() => void) | undefined;
+            const canonicalGate = new Promise<Response>((resolve) => {
+                releaseCanonical = () => resolve(new Response('', { status: 429 }));
+            });
+            const videoHtml = [
+                '<a href=\"https://d.rapidcdn.app/v2?token=concurrent-video\">',
+                'Download Video',
+                '</a>',
+            ].join('');
+            const decodedVideoResponse = [
+                'document.getElementById(\"download-section\").innerHTML = \"',
+                videoHtml,
+                '\"; document.getElementById(\"inputData\").remove();',
+            ].join('');
+            const encodedVideoResponse = Array.from(decodedVideoResponse)
+                .map((character) => String(character.charCodeAt(0)))
+                .join('a');
+            const snapSaveVideoResponse = [
+                'decodeURIComponent(escape(r))}(\"',
+                encodedVideoResponse,
+                '\",\"unused\",\"0123456789a\",\"0\",\"10\",\"unused\"))',
+            ].join('');
+
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('/p/ConcurrentSnapsave/embed/captioned/')) {
+                    return new Response(
+                        '<script>{\"display_url\":\"https:\\\/\\\/scontent.example.cdninstagram.com\\\/poster.jpg\"}</script>',
+                        { status: 200 },
+                    );
+                }
+                if (url === sourceUrl) {
+                    canonicalRequested = true;
+                    return canonicalGate;
+                }
+                if (url.includes('vxinstagram.com/reel/ConcurrentSnapsave')) {
+                    return new Response(
+                        '<meta property=\"og:video\" content=\"https://vxinstagram.com/offload/ConcurrentSnapsave/0.mp4\">',
+                        { status: 200 },
+                    );
+                }
+                if (url.includes('snapsave.app/action.php')) {
+                    snapsaveRequested = true;
+                    return new Response(snapSaveVideoResponse, { status: 200 });
+                }
+                if (url.includes('kkinstagram.com/reel/ConcurrentSnapsave')) {
+                    return new Response('', { status: 404 });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+
+            try {
+                const responsePromise = instagramHandler.handle(sourceUrl, env);
+                while (!canonicalRequested) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+                await Promise.resolve();
+                const startedBeforeCanonicalSettled = snapsaveRequested;
+                releaseCanonical?.();
+                const response = await responsePromise;
+
+                assert.equal(startedBeforeCanonicalSettled, true);
+                assert.equal(response.success, true);
+                const relayUrl = new URL(response.data?.video?.url || 'https://invalid.local/');
+                const upstreamUrl = new URL(
+                    relayUrl.searchParams.get('url') || 'https://invalid.local/',
+                );
+                assert.equal(upstreamUrl.hostname, 'd.rapidcdn.app');
+            } finally {
+                releaseCanonical?.();
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
         name: 'instagramHandler enriches a skeletal reel from canonical Instagram metadata',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -2029,6 +2189,12 @@ const tests: TestCase[] = [
                         { status: 200 },
                     );
                 }
+                if (url.includes('kkinstagram.com/reel/Da6v0VOOeJL')) {
+                    return new Response('', { status: 404 });
+                }
+                if (url.includes('snapsave.app/action.php')) {
+                    return new Response('', { status: 503 });
+                }
                 throw new Error(`Unexpected request: ${url}`);
             };
 
@@ -2060,8 +2226,10 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.timestamp, '2026-07-17T21:24:44.000Z');
                 assert.deepEqual(requested, [
                     'https://www.instagram.com/p/Da6v0VOOeJL/embed/captioned/',
+                    'https://snapsave.app/action.php?lang=en',
                     'https://www.instagram.com/reel/Da6v0VOOeJL/',
                     'https://vxinstagram.com/reel/Da6v0VOOeJL/',
+                    'https://kkinstagram.com/reel/Da6v0VOOeJL/',
                 ]);
             } finally {
                 globalThis.fetch = originalFetch;
@@ -2180,7 +2348,7 @@ const tests: TestCase[] = [
                 );
                 assert.equal(
                     requested.some((request) => request.includes('snapsave.app')),
-                    false,
+                    true,
                 );
             } finally {
                 globalThis.fetch = originalFetch;
@@ -2307,7 +2475,7 @@ const tests: TestCase[] = [
                 assert.equal(requested.includes(canonicalVideo), false);
                 assert.equal(
                     requested.some((request) => request.includes('snapsave.app')),
-                    false,
+                    true,
                 );
             } finally {
                 globalThis.fetch = originalFetch;
@@ -2816,7 +2984,7 @@ const tests: TestCase[] = [
                         <div data-testid="video-content">
                             {&quot;mediaSources&quot;:[
                                 {&quot;source&quot;:{&quot;url&quot;:&quot;https://packaged-media.redd.it/99iz27q26rgh1/pb/m2-res_360p.mp4?m=DASHPlaylist.mpd&amp;c=wh_ben_en&amp;v=1&quot;,&quot;dimensions&quot;:{&quot;width&quot;:640,&quot;height&quot;:360},&quot;videoCodec&quot;:&quot;H264&quot;}},
-                                {&quot;source&quot;:{&quot;url&quot;:&quot;${muxedVideoUrl.replace(/&/g, '&amp;')}&quot;,&quot;dimensions&quot;:{&quot;width&quot;:1280,&quot;height&quot;:720},&quot;videoCodec&quot;:&quot;H264&quot;}},
+                                {&quot;source&quot;:{&quot;bitrateBps&quot;:2557152,&quot;dimensions&quot;:{&quot;height&quot;:720,&quot;width&quot;:1280},&quot;url&quot;:&quot;${muxedVideoUrl.replace(/&/g, '&amp;')}&quot;,&quot;videoCodec&quot;:&quot;H264&quot;}},
                                 {&quot;source&quot;:{&quot;url&quot;:&quot;https://example.com/untrusted-1080p.mp4?m=DASHPlaylist.mpd&quot;,&quot;dimensions&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080},&quot;videoCodec&quot;:&quot;H264&quot;}}
                             ]}
                         </div>
@@ -2846,6 +3014,151 @@ const tests: TestCase[] = [
                 assert.equal(requested.includes(manifestUrl), false);
             } finally {
                 globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'redditHandler serves Reddit video with audio when packaged media is blocked',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const postPath = '/r/marvelrivals/comments/1vclj7w/avengers_vs_ultron_animation_by_sarpsarter/';
+            const manifestUrl = 'https://v.redd.it/99iz27q26rgh1/DASHPlaylist.mpd?a=signed&v=1';
+            const dashManifest = (audio: boolean) => `
+                <MPD><Period>
+                    <AdaptationSet contentType="video">
+                        <Representation bandwidth="840136" height="360" mimeType="video/mp4" width="640"><BaseURL>CMAF_360.mp4</BaseURL></Representation>
+                        <Representation bandwidth="2557152" height="720" mimeType="video/mp4" width="1280"><BaseURL>CMAF_720.mp4</BaseURL></Representation>
+                    </AdaptationSet>
+                    ${audio ? `<AdaptationSet contentType="audio">
+                        <Representation bandwidth="67463" mimeType="audio/mp4"><BaseURL>CMAF_AUDIO_64.mp4</BaseURL></Representation>
+                        <Representation bandwidth="132913" mimeType="audio/mp4"><BaseURL>CMAF_AUDIO_128.mp4</BaseURL></Representation>
+                        <Representation bandwidth="999999" mimeType="audio/mp4"><BaseURL>https://example.com/untrusted-audio.mp4</BaseURL></Representation>
+                    </AdaptationSet>` : ''}
+                </Period></MPD>`;
+
+            for (const [hasAudio, expectedUrl] of [
+                [true, 'https://fixembed.app/video/reddit?id=99iz27q26rgh1&video=CMAF_720.mp4&audio=CMAF_AUDIO_128.mp4'],
+                [false, 'https://v.redd.it/99iz27q26rgh1/CMAF_720.mp4'],
+            ] as const) {
+                globalThis.fetch = async (input) => {
+                    const url = String(input);
+                    if (url.includes('.json') || url.startsWith('https://embed.reddit.com/')) {
+                        return new Response("You've been blocked by network security.", { status: 403 });
+                    }
+                    if (url.startsWith('https://old.reddit.com/')) {
+                        return new Response(`
+                            <div class="thing link" id="thing_t3_1vclj7w" data-author="nemesisdelta24"
+                                data-url="https://v.redd.it/99iz27q26rgh1" data-permalink="${postPath}">
+                                <a class="title may-blank" href="https://v.redd.it/99iz27q26rgh1">Avengers vs. ULTRON!</a>
+                                <div data-mpd-url="${manifestUrl.replace(/&/g, '&amp;')}"></div>
+                            </div>
+                            <div class="child"></div>
+                        `, { status: 200, headers: { 'Content-Type': 'text/html' } });
+                    }
+                    if (url === manifestUrl) {
+                        return new Response(dashManifest(hasAudio), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/dash+xml' },
+                        });
+                    }
+                    if (url.startsWith('https://api.reddit.com/')) {
+                        return new Response(JSON.stringify({ data: {} }), { status: 200 });
+                    }
+                    throw new Error(`Unexpected request: ${url}`);
+                };
+
+                try {
+                    const response = await redditHandler.handle(`https://www.reddit.com${postPath}`, env);
+                    assert.equal(response.success, true);
+                    assert.equal(response.data?.video?.url, expectedUrl);
+                    assert.equal(response.data?.video?.height, 720);
+                } finally {
+                    globalThis.fetch = originalFetch;
+                }
+            }
+        },
+    },
+    {
+        name: 'redditHandler keeps legacy Reddit video with audio from oversized crawler pages behind share links',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const postPath = '/r/aww/comments/ao392q/i_still_laugh_when_i_see_this_video_the_cats/';
+            const manifestUrl = 'https://v.redd.it/s93jlji745f21/DASHPlaylist.mpd?a=signed&v=1&f=sd';
+            const posterUrl = 'https://external-preview.redd.it/legacy-poster.png?format=pjpg&auto=webp&s=signed';
+            // Popular posts carry hundreds of KB of comments after the post block.
+            const comments = '<div class="comment"><p>so funny</p></div>\n'.repeat(16_000);
+            const crawlerPage = `
+                <head><meta property="og:image" content="${posterUrl.replace(/&/g, '&amp;')}"></head>
+                <div class=" thing id-t3_ao392q odd gilded link " id="thing_t3_ao392q"
+                    data-author="rokkafox" data-subreddit="aww" data-timestamp="1549542666000"
+                    data-url="https://v.redd.it/s93jlji745f21" data-permalink="${postPath}"
+                    data-comments-count="236" data-score="17026" data-nsfw="false" data-spoiler="false">
+                    <a class="title may-blank" href="https://v.redd.it/s93jlji745f21">I still laugh when I see this video, the cat&#39;s reaction is hilarious!</a>
+                    <div class="media-preview" data-mpd-url="${manifestUrl.replace(/&/g, '&amp;')}"></div>
+                </div>
+                <div class="commentarea"><div class="child">${comments}</div></div>`;
+            assert.ok(new TextEncoder().encode(crawlerPage).byteLength > 600_000);
+            const legacyManifest = (audio: boolean) => `
+                <MPD><Period>
+                    <AdaptationSet>
+                        <Representation bandwidth="781802" height="360" mimeType="video/mp4" width="480"><BaseURL>DASH_360</BaseURL></Representation>
+                        <Representation bandwidth="590169" height="240" mimeType="video/mp4" width="320"><BaseURL>DASH_240</BaseURL></Representation>
+                    </AdaptationSet>
+                    ${audio ? `<AdaptationSet>
+                        <Representation bandwidth="129909" mimeType="audio/mp4"><BaseURL>audio</BaseURL></Representation>
+                    </AdaptationSet>` : ''}
+                </Period></MPD>`;
+
+            for (const [shareUrl, hasAudio, expectedUrl] of [
+                ['https://www.reddit.com/r/aww/s/uTcEAsBqTj', true, 'https://fixembed.app/video/reddit?id=s93jlji745f21&video=DASH_360&audio=audio'],
+                ['https://www.reddit.com/r/aww/s/5m7Uqoywhv', true, 'https://fixembed.app/video/reddit?id=s93jlji745f21&video=DASH_360&audio=audio'],
+                ['https://www.reddit.com/r/aww/s/uTcEAsBqTj', false, 'https://v.redd.it/s93jlji745f21/DASH_360'],
+            ] as const) {
+                globalThis.fetch = async (input) => {
+                    const url = String(input);
+                    if (url === shareUrl) {
+                        return new Response('', {
+                            status: 301,
+                            headers: { Location: `https://www.reddit.com${postPath}?share_id=abc&utm_source=share&utm_medium=ios_app` },
+                        });
+                    }
+                    if (url.includes('.json') || url.startsWith('https://embed.reddit.com/')) {
+                        return new Response("You've been blocked by network security.", { status: 403 });
+                    }
+                    if (url === 'https://old.reddit.com/r/aww/comments/ao392q/') {
+                        return new Response(crawlerPage, { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+                    }
+                    if (url === manifestUrl) {
+                        return new Response(legacyManifest(hasAudio), {
+                            status: 200,
+                            headers: { 'Content-Type': 'application/dash+xml' },
+                        });
+                    }
+                    if (url.startsWith('https://api.reddit.com/')) {
+                        return new Response(JSON.stringify({ data: {} }), { status: 200 });
+                    }
+                    if (url.startsWith('https://www.reddit.com/oembed')) {
+                        return new Response(JSON.stringify({ title: 'oEmbed title only', author_name: 'rokkafox' }), { status: 200 });
+                    }
+                    throw new Error(`Unexpected request: ${url}`);
+                };
+
+                try {
+                    const response = await redditHandler.handle(shareUrl, env);
+                    assert.equal(response.success, true);
+                    assert.equal(response.data?.title, "r/aww • I still laugh when I see this video, the cat's reaction is hilarious!");
+                    assert.equal(response.data?.url, `https://www.reddit.com${postPath}`);
+                    assert.deepEqual(response.data?.video, {
+                        url: expectedUrl,
+                        width: 480,
+                        height: 360,
+                        thumbnail: posterUrl,
+                    });
+                    assert.equal(response.data?.image, undefined);
+                    assert.equal(response.data?.timestamp, '2019-02-07T12:31:06.000Z');
+                } finally {
+                    globalThis.fetch = originalFetch;
+                }
             }
         },
     },
@@ -3857,6 +4170,56 @@ const tests: TestCase[] = [
         },
     },
     {
+        name: 'YouTube community posts preserve every carousel image in source order',
+        run: () => {
+            const renderer = {
+                contents: {
+                    backstagePostRenderer: {
+                        contentText: { runs: [{ text: 'Two-image community update' }] },
+                        backstageAttachment: {
+                            postMultiImageRenderer: {
+                                images: [
+                                    {
+                                        backstageImageRenderer: {
+                                            image: {
+                                                thumbnails: [
+                                                    { url: 'https://yt3.example/first-small.jpg', width: 320, height: 180 },
+                                                    { url: 'https://yt3.example/first-full.jpg', width: 1280, height: 720 },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                    {
+                                        backstageImageRenderer: {
+                                            image: {
+                                                thumbnails: [
+                                                    { url: 'https://yt3.example/second-small.jpg', width: 180, height: 320 },
+                                                    { url: 'https://yt3.example/second-full.jpg', width: 720, height: 1280 },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            };
+            const html = `<script>var ytInitialData = ${JSON.stringify(renderer)};</script>`;
+
+            const data = parseYouTubeCommunityPostHtml(
+                html,
+                'https://www.youtube.com/post/UgkxTwoImages',
+            );
+
+            assert.deepEqual(data?.images, [
+                'https://yt3.example/first-full.jpg',
+                'https://yt3.example/second-full.jpg',
+            ]);
+            assert.equal(data?.image, 'https://yt3.example/first-full.jpg');
+        },
+    },
+    {
         name: 'pixivHandler uses the FixEmbed relay when official Worker requests are blocked',
         run: async () => {
             const originalFetch = globalThis.fetch;
@@ -4171,6 +4534,292 @@ const tests: TestCase[] = [
                 assert.equal(response.data?.authorUrl, undefined);
                 assert.equal(response.data?.authorAvatar, undefined);
             } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'parseAtprotoPostUrl accepts AT Protocol app post links and validates them strictly',
+        run: () => {
+            const accepted: Array<[string, { origin: string; actor: string; rkey: string }]> = [
+                [
+                    'https://wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                    { origin: 'https://wsocial.eu', actor: 'wsocial.eu', rkey: '3mzy5hts2g22i' },
+                ],
+                [
+                    'https://www.wsocial.eu/public/profile/wsocial.eu/post/3mzy5hts2g22i?ref_src=embed',
+                    { origin: 'https://www.wsocial.eu', actor: 'wsocial.eu', rkey: '3mzy5hts2g22i' },
+                ],
+                [
+                    'https://mu.social/profile/ElenaRossini.com/post/3mzfkhszhlc2l#reply',
+                    { origin: 'https://mu.social', actor: 'elenarossini.com', rkey: '3mzfkhszhlc2l' },
+                ],
+                [
+                    'https://mu.social/profile/did:plc:vggsjzvhakoa7l2m2mguqv4w/post/3mzfkhszhlc2l',
+                    { origin: 'https://mu.social', actor: 'did:plc:vggsjzvhakoa7l2m2mguqv4w', rkey: '3mzfkhszhlc2l' },
+                ],
+                [
+                    'https://mu.social/profile/did%3Aplc%3Avggsjzvhakoa7l2m2mguqv4w/post/3mzfkhszhlc2l/',
+                    { origin: 'https://mu.social', actor: 'did:plc:vggsjzvhakoa7l2m2mguqv4w', rkey: '3mzfkhszhlc2l' },
+                ],
+                [
+                    'https://app.example-social.net/profile/did:web:alice.example-social.net/post/3mzfkhszhlc2l',
+                    {
+                        origin: 'https://app.example-social.net',
+                        actor: 'did:web:alice.example-social.net',
+                        rkey: '3mzfkhszhlc2l',
+                    },
+                ],
+            ];
+            for (const [url, expected] of accepted) {
+                assert.deepEqual(parseAtprotoPostUrl(url), expected, url);
+                assert.equal(findHandler(url)?.name, 'bluesky', url);
+            }
+
+            // bsky.app keeps its own fast path rather than the verified generic one.
+            assert.equal(parseAtprotoPostUrl('https://bsky.app/profile/bsky.app/post/3mzy5hts2g22i'), null);
+            assert.equal(findHandler('https://bsky.app/profile/bsky.app/post/3mzy5hts2g22i')?.name, 'bluesky');
+
+            const rejected = [
+                // Not a public HTTPS host.
+                'http://wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                'https://wsocial.eu:8443/profile/wsocial.eu/post/3mzy5hts2g22i',
+                'https://user@wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                'https://203.0.113.9/profile/wsocial.eu/post/3mzy5hts2g22i',
+                'https://localhost/profile/wsocial.eu/post/3mzy5hts2g22i',
+                'https://intranet/profile/wsocial.eu/post/3mzy5hts2g22i',
+                // Big non-AT Protocol sites are skipped without a lookup.
+                'https://github.com/profile/alice.dev/post/3mzy5hts2g22i',
+                'https://m.facebook.com/profile/alice.dev/post/3mzy5hts2g22i',
+                'https://www.youtube.com/profile/alice.dev/post/3mzy5hts2g22i',
+                // Bad handles.
+                'https://mu.social/profile/alice/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/bad_handle.com/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/alice..com/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/-alice.com/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/alice.local/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/alice.com%2Fx/post/3mzfkhszhlc2l',
+                // Bad DIDs.
+                'https://mu.social/profile/did:plc:short/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/did:plc:VGGSJZVHAKOA7L2M2MGUQV4W/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK/post/3mzfkhszhlc2l',
+                'https://mu.social/profile/did:web:localhost%3A8080/post/3mzfkhszhlc2l',
+                // Bad rkeys: not TIDs.
+                'https://mu.social/profile/alice.com/post/abc123',
+                'https://mu.social/profile/alice.com/post/3MZFKHSZHLC2L',
+                'https://mu.social/profile/alice.com/post/kmzfkhszhlc2l',
+                'https://mu.social/profile/alice.com/post/3mzfkhszhlc2la',
+                'https://mu.social/profile/alice.com/post/3mzfkhszhlc21',
+                // Other path shapes.
+                'https://mu.social/profile/alice.com/post/3mzfkhszhlc2l/likes',
+                'https://mu.social/profile/alice.com',
+                'https://mu.social/users/alice.com/post/3mzfkhszhlc2l',
+            ];
+            for (const url of rejected) {
+                assert.equal(parseAtprotoPostUrl(url), null, url);
+                assert.notEqual(findHandler(url)?.name, 'bluesky', url);
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler keeps the bsky.app fast path without extra checks',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                requests.push(url);
+                if (url.includes('resolveHandle')) return Response.json({ did: 'did:plc:creator' });
+                return Response.json({ thread: { post: {
+                    uri: 'at://did:plc:creator/app.bsky.feed.post/abc123',
+                    author: { did: 'did:plc:creator', handle: 'creator.bsky.social' },
+                    record: { text: 'Loose rkeys still work on bsky.app.', createdAt: '2026-11-10T12:00:00.000Z' },
+                } } });
+            };
+            try {
+                const response = await blueskyHandler.handle(
+                    'https://bsky.app/profile/creator.bsky.social/post/abc123',
+                    env,
+                );
+                assert.equal(response.success, true);
+                assert.equal(response.data?.url, 'https://bsky.app/profile/creator.bsky.social/post/abc123');
+                assert.equal(response.data?.siteName, 'FixEmbed • 🦋 Bluesky');
+                assert.deepEqual(requests, [
+                    'https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=creator.bsky.social',
+                    'https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri='
+                        + encodeURIComponent('at://did:plc:creator/app.bsky.feed.post/abc123'),
+                ]);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler renders verified wsocial.eu and mu.social posts on their own host',
+        run: async () => {
+            clearAtprotoCaches();
+            const originalFetch = globalThis.fetch;
+            const requests: string[] = [];
+            const posts: Record<string, { did: string; handle: string; name: string; text: string }> = {
+                'at://did:plc:e3bwgswz6lniwjadqqfno3c4/app.bsky.feed.post/3mzy5hts2g22i': {
+                    did: 'did:plc:e3bwgswz6lniwjadqqfno3c4',
+                    handle: 'wsocial.eu',
+                    name: 'W Social',
+                    text: 'European tech journalism meets European social media.',
+                },
+                'at://did:plc:vggsjzvhakoa7l2m2mguqv4w/app.bsky.feed.post/3mzfkhszhlc2l': {
+                    did: 'did:plc:vggsjzvhakoa7l2m2mguqv4w',
+                    handle: 'elenarossini.com',
+                    name: 'Elena Rossini',
+                    text: 'November 3 aka the last day the little companion will show up.',
+                },
+            };
+            globalThis.fetch = async (input) => {
+                const url = new URL(String(input));
+                requests.push(url.toString());
+                if (url.pathname.endsWith('/com.atproto.identity.resolveHandle')) {
+                    return url.searchParams.get('handle') === 'wsocial.eu'
+                        ? Response.json({ did: 'did:plc:e3bwgswz6lniwjadqqfno3c4' })
+                        : Response.json({ error: 'InvalidRequest' }, { status: 400 });
+                }
+                const uri = url.searchParams.get('uri') || '';
+                const post = posts[uri];
+                if (!post) return Response.json({ error: 'NotFound' }, { status: 400 });
+                return Response.json({ thread: { post: {
+                    uri,
+                    author: { did: post.did, handle: post.handle, displayName: post.name },
+                    record: { text: post.text, createdAt: '2026-11-10T12:00:00.000Z' },
+                    likeCount: 3,
+                } } });
+            };
+
+            try {
+                const cases: Array<[string, string, string, number]> = [
+                    [
+                        'https://wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                        'https://wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                        'European tech journalism meets European social media.',
+                        2,
+                    ],
+                    [
+                        'https://www.wsocial.eu/public/profile/wsocial.eu/post/3mzy5hts2g22i',
+                        'https://www.wsocial.eu/profile/wsocial.eu/post/3mzy5hts2g22i',
+                        'European tech journalism meets European social media.',
+                        0,
+                    ],
+                    [
+                        // DID form: no handle resolution, just the post lookup.
+                        'https://mu.social/profile/did:plc:vggsjzvhakoa7l2m2mguqv4w/post/3mzfkhszhlc2l',
+                        'https://mu.social/profile/elenarossini.com/post/3mzfkhszhlc2l',
+                        'November 3 aka the last day the little companion will show up.',
+                        1,
+                    ],
+                ];
+                for (const [sourceUrl, expectedUrl, text, expectedRequests] of cases) {
+                    requests.length = 0;
+                    const response = await blueskyHandler.handle(sourceUrl, env);
+
+                    assert.equal(response.success, true, sourceUrl);
+                    assert.equal(response.data?.platform, 'bluesky', sourceUrl);
+                    assert.equal(response.data?.url, expectedUrl, sourceUrl);
+                    assert.equal(
+                        response.data?.authorUrl,
+                        expectedUrl.replace(/\/post\/.*$/, ''),
+                        sourceUrl,
+                    );
+                    assert.equal(response.data?.description, text, sourceUrl);
+                    assert.equal(response.data?.siteName, 'FixEmbed • 🦋 AT Protocol', sourceUrl);
+                    // The /public/ link reuses the cached handle and post lookups.
+                    assert.equal(requests.length, expectedRequests, sourceUrl);
+                    assert.ok(requests.every((url) => url.startsWith('https://public.api.bsky.app/xrpc/')));
+                }
+                assert.ok(requests.some((url) => url.includes('getPostThread')));
+            } finally {
+                globalThis.fetch = originalFetch;
+                clearAtprotoCaches();
+            }
+        },
+    },
+    {
+        name: 'unverified AT Protocol-shaped links render nothing and cache the miss',
+        run: async () => {
+            clearAtprotoCaches();
+            const originalFetch = globalThis.fetch;
+            const requests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = new URL(String(input));
+                requests.push(url.toString());
+                if (url.pathname.endsWith('/com.atproto.identity.resolveHandle')) {
+                    return url.searchParams.get('handle') === 'real.example-blog.com'
+                        ? Response.json({ did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa' })
+                        : Response.json({ error: 'InvalidRequest', message: 'Unable to resolve handle' }, { status: 400 });
+                }
+                return Response.json({ error: 'NotFound', message: 'Post not found' }, { status: 400 });
+            };
+
+            try {
+                // A random non-AT site with the same path shape: the handle does not resolve.
+                const unknownHandle = 'https://news.example-blog.com/profile/someone.example-blog.com/post/3mzy5hts2g22i';
+                // The handle resolves, but no such post exists.
+                const missingPost = 'https://news.example-blog.com/profile/real.example-blog.com/post/3mzfkhszhlc2l';
+                // A DID that has no such post.
+                const missingDidPost = 'https://news.example-blog.com/profile/did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/post/3mzfkhszhlc2l';
+
+                for (const [url, firstRequests] of [
+                    [unknownHandle, 1],
+                    [missingPost, 2],
+                    [missingDidPost, 1],
+                ] as const) {
+                    requests.length = 0;
+                    const first = await blueskyHandler.handle(url, env);
+                    assert.equal(first.success, false, url);
+                    assert.equal(first.unsupported, true, url);
+                    assert.equal(first.data, undefined, url);
+                    assert.equal(requests.length, firstRequests, url);
+
+                    requests.length = 0;
+                    const second = await blueskyHandler.handle(url, env);
+                    assert.equal(second.unsupported, true, url);
+                    assert.deepEqual(requests, [], `${url} misses are cached`);
+                }
+
+                const api = await app.request(`/api/embed?url=${encodeURIComponent(unknownHandle)}`, {}, env);
+                assert.equal(api.status, 404);
+                assert.deepEqual(await api.json(), { error: 'Unsupported URL', supported: false });
+
+                const embed = await app.request(
+                    `/embed?url=${encodeURIComponent(unknownHandle)}`,
+                    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0)' } },
+                    env,
+                );
+                assert.equal(embed.status, 302);
+                assert.equal(embed.headers.get('Location'), unknownHandle);
+                assert.doesNotMatch(await embed.text(), /FixEmbed Error/);
+            } finally {
+                globalThis.fetch = originalFetch;
+                clearAtprotoCaches();
+            }
+        },
+    },
+    {
+        name: 'AT Protocol lookups treat AppView outages as unsupported and cache them briefly',
+        run: async () => {
+            clearAtprotoCaches();
+            const originalFetch = globalThis.fetch;
+            let requests = 0;
+            globalThis.fetch = async () => {
+                requests += 1;
+                return new Response('unavailable', { status: 503 });
+            };
+            try {
+                const url = 'https://mu.social/profile/outage.example-blog.com/post/3mzfkhszhlc2l';
+                const first = await blueskyHandler.handle(url, env);
+                const second = await blueskyHandler.handle(url, env);
+                assert.equal(first.unsupported, true);
+                assert.equal(second.unsupported, true);
+                assert.equal(requests, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+                clearAtprotoCaches();
+            }
         },
     },
     {
@@ -4805,6 +5454,434 @@ const tests: TestCase[] = [
             } finally {
                 globalThis.fetch = originalFetch;
             }
+        },
+    },
+    {
+        name: 'normalizeLanguage folds Chinese regional and script tags into zh or zh-tw',
+        run: () => {
+            const cases: Array<[unknown, string | undefined]> = [
+                ['ja', 'ja'],
+                ['KO', 'ko'],
+                [' fr ', 'fr'],
+                ['zh', 'zh'],
+                ['zh-cn', 'zh'],
+                ['zh-CN', 'zh'],
+                ['zh_Hans', 'zh'],
+                ['zh-sg', 'zh'],
+                ['zh-tw', 'zh-tw'],
+                ['zh-TW', 'zh-tw'],
+                ['zh-hant', 'zh-tw'],
+                ['zh_Hant', 'zh-tw'],
+                ['zh-hk', 'zh-tw'],
+                ['zh-hant-tw', 'zh-tw'],
+                ['en-us', undefined],
+                ['japanese', undefined],
+                ['zh-xx', undefined],
+                ['', undefined],
+                [undefined, undefined],
+            ];
+            for (const [input, expected] of cases) {
+                assert.equal(normalizeLanguage(input), expected, `normalizeLanguage(${String(input)})`);
+            }
+            assert.equal(languageName('zh-cn'), 'Chinese');
+            assert.equal(languageName('zh-hant'), 'Chinese (Traditional)');
+            assert.equal(languageName('ja'), 'Japanese');
+        },
+    },
+    {
+        name: 'twitterHandler translates English X posts into ja, zh, zh-cn, zh-tw, zh-hant, ko, and fr',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            // What FxTwitter returns for each translation path (observed live, November 2026).
+            const fxTranslations: Record<string, { target_lang: string; text: string }> = {
+                ja: { target_lang: 'ja', text: 'ただ twttr をセットアップ中' },
+                'zh-cn': { target_lang: 'zh-cn', text: '刚在设置我的 twttr' },
+                'zh-tw': { target_lang: 'zh-tw', text: '正在設定我的 twttr' },
+                ko: { target_lang: 'ko', text: '내 twttr 설정 중이야' },
+                fr: { target_lang: 'fr', text: 'juste en train de configurer mon twttr' },
+            };
+            const cases: Array<{ requested: string; fxPath: string; target: string }> = [
+                { requested: 'ja', fxPath: 'ja', target: 'ja' },
+                { requested: 'zh', fxPath: 'zh-cn', target: 'zh' },
+                { requested: 'zh-cn', fxPath: 'zh-cn', target: 'zh' },
+                { requested: 'zh-CN', fxPath: 'zh-cn', target: 'zh' },
+                { requested: 'zh-tw', fxPath: 'zh-tw', target: 'zh-tw' },
+                { requested: 'zh-hant', fxPath: 'zh-tw', target: 'zh-tw' },
+                { requested: 'ko', fxPath: 'ko', target: 'ko' },
+                { requested: 'fr', fxPath: 'fr', target: 'fr' },
+            ];
+
+            try {
+                for (const { requested, fxPath, target } of cases) {
+                    const fxRequests: string[] = [];
+                    globalThis.fetch = async (input) => {
+                        const url = String(input);
+                        if (url.startsWith('https://api.fxtwitter.com/')) {
+                            fxRequests.push(url);
+                            const path = url.split('/').pop() || '';
+                            const translation = fxTranslations[path];
+                            return Response.json({
+                                code: 200,
+                                tweet: {
+                                    id: '20',
+                                    text: 'just setting up my twttr',
+                                    lang: 'en',
+                                    ...(translation ? {
+                                        translation: {
+                                            ...translation,
+                                            source_lang: 'en',
+                                            source_lang_en: 'English',
+                                            provider: 'grok',
+                                        },
+                                    } : {}),
+                                },
+                            });
+                        }
+                        return Response.json({
+                            __typename: 'Tweet',
+                            id_str: '20',
+                            text: 'just setting up my twttr',
+                            lang: 'en',
+                            user: {
+                                name: 'jack',
+                                screen_name: 'jack',
+                                profile_image_url_https: 'https://pbs.twimg.com/profile_images/jack.jpg',
+                            },
+                            created_at: '2006-03-21T20:50:14.000Z',
+                        });
+                    };
+
+                    const response = await twitterHandler.handle(
+                        'https://x.com/jack/status/20',
+                        env,
+                        { language: requested },
+                    );
+
+                    assert.equal(response.source, 'first-party', requested);
+                    assert.deepEqual(fxRequests, [
+                        `https://api.fxtwitter.com/jack/status/20/${fxPath}`,
+                    ], requested);
+                    assert.equal(response.data?.description, fxTranslations[fxPath].text, requested);
+                    assert.deepEqual(response.data?.translation, {
+                        sourceLanguage: 'en',
+                        sourceLanguageName: 'English',
+                        targetLanguage: target,
+                        originalUrl: 'https://x.com/jack/status/20',
+                    }, requested);
+                    assert.equal(response.translationUnavailable, undefined, requested);
+                }
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler fallback accepts FxTwitter regional Chinese codes',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (!url.startsWith('https://api.fxtwitter.com/')) {
+                    return new Response('unavailable', { status: 503 });
+                }
+                fxRequests.push(url);
+                return Response.json({
+                    code: 200,
+                    tweet: {
+                        id: '20',
+                        text: 'just setting up my twttr',
+                        lang: 'en',
+                        author: {
+                            name: 'jack',
+                            screen_name: 'jack',
+                            avatar_url: 'https://pbs.twimg.com/profile_images/jack_normal.jpg',
+                        },
+                        translation: {
+                            text: '正在設定我的 twttr',
+                            source_lang: 'en',
+                            target_lang: 'zh-tw',
+                            provider: 'grok',
+                        },
+                    },
+                });
+            };
+
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/jack/status/20',
+                    env,
+                    { language: 'zh-Hant' },
+                );
+
+                assert.equal(response.source, 'fallback');
+                assert.equal(response.data?.description, '正在設定我的 twttr');
+                assert.equal(response.data?.translation?.targetLanguage, 'zh-tw');
+                assert.equal(response.data?.translation?.sourceLanguageName, 'English');
+                assert.deepEqual(fxRequests, ['https://api.fxtwitter.com/jack/status/20/zh-tw']);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'twitterHandler retries FxTwitter when an expected translation is missing',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const firstPartyTweet = (lang: string) => Response.json({
+                __typename: 'Tweet',
+                id_str: '20',
+                text: 'just setting up my twttr',
+                lang,
+                user: {
+                    name: 'jack',
+                    screen_name: 'jack',
+                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/jack.jpg',
+                },
+                created_at: '2006-03-21T20:50:14.000Z',
+            });
+            const scenarios = [
+                // FxTwitter drops the translation field on some requests, then returns it.
+                { language: 'ja', lang: 'en', missesBeforeSuccess: 2, expectedRequests: 3, translated: true },
+                // Every attempt misses: keep the original card, flag it, and stop after four tries.
+                { language: 'zh', lang: 'en', missesBeforeSuccess: 99, expectedRequests: 4, translated: false },
+                // A post already in the target language never gets a translation, so don't retry.
+                { language: 'zh', lang: 'zh', missesBeforeSuccess: 99, expectedRequests: 0, translated: false },
+            ];
+
+            try {
+                for (const scenario of scenarios) {
+                    let fxRequests = 0;
+                    globalThis.fetch = async (input) => {
+                        const url = String(input);
+                        if (!url.startsWith('https://api.fxtwitter.com/')) {
+                            return firstPartyTweet(scenario.lang);
+                        }
+                        fxRequests += 1;
+                        const translated = fxRequests > scenario.missesBeforeSuccess;
+                        return Response.json({
+                            code: 200,
+                            tweet: {
+                                id: '20',
+                                text: 'just setting up my twttr',
+                                lang: scenario.lang,
+                                ...(translated ? {
+                                    translation: {
+                                        text: 'ただ twttr をセットアップ中',
+                                        source_lang: 'en',
+                                        target_lang: 'ja',
+                                    },
+                                } : {}),
+                            },
+                        });
+                    };
+
+                    const response = await twitterHandler.handle(
+                        'https://x.com/jack/status/20',
+                        env,
+                        { language: scenario.language },
+                    );
+                    const label = `${scenario.language} from ${scenario.lang}`;
+
+                    assert.equal(fxRequests, scenario.expectedRequests, label);
+                    assert.equal(Boolean(response.data?.translation), scenario.translated, label);
+                    if (!scenario.translated) {
+                        assert.equal(response.data?.description, 'just setting up my twttr', label);
+                    }
+                    assert.equal(
+                        response.translationUnavailable,
+                        scenario.expectedRequests === 4 ? true : undefined,
+                        label,
+                    );
+                }
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: '/api/embed does not cache an X card whose requested translation was missing',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const pendingWrites: Promise<unknown>[] = [];
+            const cacheKey = (key: Request | string) => typeof key === 'string' ? key : key.url;
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+            let fxAvailable = false;
+
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request | string) {
+                                return entries.get(cacheKey(key))?.clone();
+                            },
+                            async put(key: Request | string, response: Response) {
+                                entries.set(cacheKey(key), response.clone());
+                            },
+                        };
+                    },
+                },
+            });
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '20',
+                            text: 'just setting up my twttr',
+                            lang: 'en',
+                            ...(fxAvailable ? {
+                                translation: {
+                                    text: 'ただ twttr をセットアップ中',
+                                    source_lang: 'en',
+                                    target_lang: 'ja',
+                                },
+                            } : {}),
+                        },
+                    });
+                }
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '20',
+                    text: 'just setting up my twttr',
+                    lang: 'en',
+                    user: { name: 'jack', screen_name: 'jack' },
+                    created_at: '2006-03-21T20:50:14.000Z',
+                });
+            };
+
+            try {
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+                const source = encodeURIComponent('https://x.com/jack/status/20');
+                const missed = await app.request(`/api/embed?url=${source}&lang=ja`, {}, cacheEnv, executionContext);
+                await Promise.all(pendingWrites.splice(0));
+                const missedPayload = await missed.json() as { data?: { translation?: unknown } };
+
+                assert.equal(missed.status, 200);
+                assert.equal(missedPayload.data?.translation, undefined);
+                assert.equal(missed.headers.get('X-FixEmbed-Cache'), null);
+                assert.equal(entries.size, 0);
+
+                fxAvailable = true;
+                const recovered = await app.request(`/api/embed?url=${source}&lang=ja`, {}, cacheEnv, executionContext);
+                await Promise.all(pendingWrites.splice(0));
+                const recoveredPayload = await recovered.json() as {
+                    data?: { translation?: { targetLanguage?: string } };
+                };
+
+                assert.equal(recoveredPayload.data?.translation?.targetLanguage, 'ja');
+                assert.equal(recovered.headers.get('X-FixEmbed-Cache'), 'MISS');
+                assert.equal(entries.size, 1);
+            } finally {
+                globalThis.fetch = originalFetch;
+                if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+                else delete (globalThis as { caches?: unknown }).caches;
+            }
+        },
+    },
+    {
+        name: 'X activity statuses keep a Traditional Chinese translation request',
+        run: async () => {
+            const html = generateEmbedHTML({
+                title: '@jack',
+                description: '正在設定我的 twttr',
+                url: 'https://x.com/jack/status/20',
+                siteName: 'FixEmbed • X',
+                authorName: 'jack',
+                authorHandle: '@jack',
+                platform: 'twitter',
+                translation: {
+                    sourceLanguage: 'en',
+                    sourceLanguageName: 'English',
+                    targetLanguage: 'zh-tw',
+                    originalUrl: 'https://x.com/jack/status/20',
+                },
+            }, 'Discordbot/2.0');
+            const status = html.match(/\/users\/jack\/statuses\/(\d+)/)?.[1];
+            assert.ok(status);
+
+            const originalFetch = globalThis.fetch;
+            const fxRequests: string[] = [];
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.startsWith('https://api.fxtwitter.com/')) {
+                    fxRequests.push(url);
+                    return Response.json({
+                        code: 200,
+                        tweet: {
+                            id: '20',
+                            text: 'just setting up my twttr',
+                            lang: 'en',
+                            translation: {
+                                text: '正在設定我的 twttr',
+                                source_lang: 'en',
+                                target_lang: 'zh-tw',
+                            },
+                        },
+                    });
+                }
+                return Response.json({
+                    __typename: 'Tweet',
+                    id_str: '20',
+                    text: 'just setting up my twttr',
+                    lang: 'en',
+                    user: { name: 'jack', screen_name: 'jack' },
+                    created_at: '2006-03-21T20:50:14.000Z',
+                });
+            };
+
+            try {
+                const response = await app.request(`/users/jack/statuses/${status}`, {}, env);
+                const activity = await response.json() as { content?: string };
+
+                assert.equal(response.status, 200);
+                assert.deepEqual(fxRequests, ['https://api.fxtwitter.com/jack/status/20/zh-tw']);
+                assert.match(activity.content || '', /正在設定我的 twttr/);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'Workers AI translation maps zh-cn to zh and skips unsupported Traditional Chinese',
+        run: async () => {
+            const targets: string[] = [];
+            const translationEnv: Env = {
+                ...env,
+                AI: {
+                    run: async (_model: string, input: { target_lang?: string }) => {
+                        targets.push(String(input.target_lang));
+                        return { translated_text: '谢谢你们的回复。' };
+                    },
+                } as unknown as Ai,
+            };
+            const result = {
+                success: true,
+                data: {
+                    title: 'r/FixEmbed • Thanks',
+                    description: 'Thank you for all of the replies to this announcement.',
+                    url: 'https://reddit.com/r/FixEmbed/comments/abc/post/',
+                    platform: 'reddit',
+                    sourceLanguage: 'en',
+                },
+            } as HandlerResponse;
+
+            const simplified = await applyRequestedTranslation(result, translationEnv, { language: 'zh-CN' });
+            assert.equal(simplified.data?.translation?.targetLanguage, 'zh');
+            assert.ok(targets.length > 0);
+            assert.ok(targets.every((target) => target === 'zh'));
+
+            targets.length = 0;
+            const traditional = await applyRequestedTranslation(result, translationEnv, { language: 'zh-hant' });
+            assert.equal(traditional, result);
+            assert.deepEqual(targets, []);
         },
     },
     {

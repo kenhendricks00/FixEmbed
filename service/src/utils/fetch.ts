@@ -165,14 +165,29 @@ export function parseYouTubeUrl(url: string): { videoId: string } | null {
 }
 
 /**
+ * Match a bsky.app (or bskyx.app proxy) post link. The host must start the
+ * string or follow `//` or a subdomain dot. Other Bluesky-compatible app hosts
+ * go through utils/atproto.ts, which verifies them first.
+ */
+export const BLUESKY_POST_URL_PATTERN =
+    /(?:^|\/\/|\.)bskyx?\.app\/profile\/([^\/?#]+)\/post\/([^\/?#]+)/i;
+
+/**
  * Parse Bluesky post URL
  */
-export function parseBlueskyUrl(url: string): { handle: string; postId: string } | null {
-    const pattern = /bskyx?\.app\/profile\/([^\/]+)\/post\/([^\/\?]+)/i;
-    const match = url.match(pattern);
+export function parseBlueskyUrl(
+    url: string,
+): { handle: string; postId: string; origin: string } | null {
+    const match = url.match(BLUESKY_POST_URL_PATTERN);
 
     if (match) {
-        return { handle: match[1], postId: match[2] };
+        let handle = match[1];
+        try {
+            handle = decodeURIComponent(handle);
+        } catch {
+            // Keep the raw segment; handle resolution will reject it if invalid.
+        }
+        return { handle, postId: match[2], origin: 'https://bsky.app' };
     }
     return null;
 }

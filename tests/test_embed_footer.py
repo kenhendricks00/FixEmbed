@@ -1,6 +1,6 @@
 import unittest
 
-from embed_footer import FooterBranding, build_component_footer
+from fixembed.presentation.footer import FooterBranding, build_component_footer
 
 
 class EmbedFooterTests(unittest.TestCase):

@@ -67,6 +67,7 @@ interface FxTwitterTweet {
     likes?: number;
     views?: number;
     created_at?: string;
+    lang?: string;
     translation?: {
         text?: string;
         source_lang?: string;
@@ -88,12 +89,17 @@ function requestedTranslationLanguage(options: HandlerOptions): string | undefin
     return normalizeLanguage(options.language);
 }
 
+/** FxTwitter answers a bare `zh` with `zh-cn`, so ask for the regional code directly. */
+function fxTwitterLanguagePath(language: string): string {
+    return language === 'zh' ? 'zh-cn' : language;
+}
+
 async function fetchFxTwitterTweet(
     username: string,
     tweetId: string,
     language?: string,
 ): Promise<FxTwitterTweet | undefined> {
-    const translationPath = language ? `/${language}` : '';
+    const translationPath = language ? `/${fxTwitterLanguagePath(language)}` : '';
     const url = `https://api.fxtwitter.com/${encodeURIComponent(username)}/status/${tweetId}${translationPath}`;
     try {
         const response = await fetchWithTimeout(
@@ -120,8 +126,10 @@ function fxTranslation(
     requestedLanguage: string,
 ): { text: string; sourceLanguage: string; targetLanguage: string } | undefined {
     const text = tweet?.translation?.text?.trim();
-    const sourceLanguage = tweet?.translation?.source_lang?.trim().toLowerCase();
-    const targetLanguage = tweet?.translation?.target_lang?.trim().toLowerCase();
+    const rawSourceLanguage = tweet?.translation?.source_lang?.trim().toLowerCase();
+    const sourceLanguage = normalizeLanguage(rawSourceLanguage) || rawSourceLanguage;
+    // FxTwitter reports regional codes such as `zh-cn` and `zh-tw`.
+    const targetLanguage = normalizeLanguage(tweet?.translation?.target_lang);
     if (
         !text
         || !sourceLanguage
@@ -131,6 +139,54 @@ function fxTranslation(
         return undefined;
     }
     return { text, sourceLanguage, targetLanguage };
+}
+
+/** X language tags for posts with no translatable prose (media, hashtags, mentions, etc.). */
+const UNTRANSLATABLE_TWEET_LANGUAGES = new Set(['und', 'zxx', 'art']);
+
+/** Whether FxTwitter should return a translation of this post into the requested language. */
+function expectsFxTranslation(
+    tweet: FxTwitterTweet | undefined,
+    requestedLanguage: string,
+): boolean {
+    const language = tweet?.lang?.trim().toLowerCase();
+    if (!tweet?.text?.trim() || !language) return false;
+    if (UNTRANSLATABLE_TWEET_LANGUAGES.has(language) || /^q[a-z]{2}$/.test(language)) {
+        return false;
+    }
+    return normalizeLanguage(language) !== requestedLanguage;
+}
+
+function missingFxTranslation(
+    tweet: FxTwitterTweet,
+    requestedLanguage: string,
+): boolean {
+    return (
+        (expectsFxTranslation(tweet, requestedLanguage) && !tweet.translation)
+        || (expectsFxTranslation(tweet.quote, requestedLanguage) && !tweet.quote?.translation)
+    );
+}
+
+const FX_TRANSLATION_ATTEMPTS = 4;
+
+/**
+ * Fetch a translated post from FxTwitter. FxTwitter intermittently answers
+ * a translation request without the `translation` field (about one in five
+ * requests in November 2026, for every target language), so retry a few
+ * times before serving the original text.
+ */
+async function fetchFxTwitterTranslation(
+    username: string,
+    tweetId: string,
+    language: string,
+): Promise<{ tweet: FxTwitterTweet | undefined; missing: boolean }> {
+    let tweet: FxTwitterTweet | undefined;
+    for (let attempt = 0; attempt < FX_TRANSLATION_ATTEMPTS; attempt += 1) {
+        tweet = await fetchFxTwitterTweet(username, tweetId, language);
+        if (!tweet) return { tweet, missing: true };
+        if (!missingFxTranslation(tweet, language)) return { tweet, missing: false };
+    }
+    return { tweet, missing: true };
 }
 
 type TwitterVerificationUser = {
@@ -336,8 +392,12 @@ async function fetchFxTwitterFallback(
 ): Promise<HandlerResponse> {
     try {
         const language = requestedTranslationLanguage(options);
-        const tweet = await fetchFxTwitterTweet(username, tweetId, language)
-            || (language ? await fetchFxTwitterTweet(username, tweetId) : undefined);
+        const translated = language
+            ? await fetchFxTwitterTranslation(username, tweetId, language)
+            : undefined;
+        const tweet = translated
+            ? translated.tweet || await fetchFxTwitterTweet(username, tweetId)
+            : await fetchFxTwitterTweet(username, tweetId);
         const author = tweet?.author;
         if (!tweet || !author?.screen_name || !author.name || !author.avatar_url) {
             return fallbackResponse(username, tweetId, firstPartyError);
@@ -382,6 +442,7 @@ async function fetchFxTwitterFallback(
         return {
             success: true,
             source: 'fallback',
+            ...(translated?.missing ? { translationUnavailable: true } : {}),
             data: {
                 title: `@${author.screen_name}`,
                 description: galleryMode ? '' : description,
@@ -607,14 +668,15 @@ export const twitterHandler: PlatformHandler = {
             }
             const canonicalUrl = `https://x.com/${handle}/status/${parsed.tweetId}`;
             const requestedLanguage = requestedTranslationLanguage(options);
-            const translatedTweet = requestedLanguage
+            const translatedResult = requestedLanguage
                 && (
-                    requestedLanguage !== tweet.lang?.toLowerCase()
+                    requestedLanguage !== normalizeLanguage(tweet.lang)
                     || Boolean(tweet.quote)
                 )
                 && options.mode !== 'gallery'
-                ? await fetchFxTwitterTweet(parsed.username, parsed.tweetId, requestedLanguage)
+                ? await fetchFxTwitterTranslation(parsed.username, parsed.tweetId, requestedLanguage)
                 : undefined;
+            const translatedTweet = translatedResult?.tweet;
             const primaryTranslation = requestedLanguage
                 ? fxTranslation(translatedTweet, requestedLanguage)
                 : undefined;
@@ -650,6 +712,7 @@ export const twitterHandler: PlatformHandler = {
             return {
                 success: true,
                 source: 'first-party',
+                ...(translatedResult?.missing ? { translationUnavailable: true } : {}),
                 data: {
                     title: `@${handle}`,
                     description: options.mode === 'gallery'

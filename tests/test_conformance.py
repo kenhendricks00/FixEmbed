@@ -1,9 +1,17 @@
 import asyncio
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 
-from conformance import (
+from fixembed.conformance.cards import (
+    BUILDERS,
+    MediaTarget,
+    evaluate_components_v2,
+    extract_media_targets,
+    validate_serialized_card,
+)
+from fixembed.conformance.media import MediaFetchResponse, probe_media_targets
+from fixembed.conformance.runner import (
     FetchResponse,
     ManifestError,
     _read_bounded_body,
@@ -12,14 +20,6 @@ from conformance import (
     parse_manifest,
     run_conformance,
 )
-from card_conformance import (
-    BUILDERS,
-    MediaTarget,
-    evaluate_components_v2,
-    extract_media_targets,
-    validate_serialized_card,
-)
-from media_conformance import MediaFetchResponse, probe_media_targets
 
 
 def valid_manifest(**case_overrides):

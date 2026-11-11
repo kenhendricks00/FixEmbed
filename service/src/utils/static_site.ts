@@ -2419,7 +2419,7 @@ export const docsHtml = `<!DOCTYPE html>
                             <tr><td>Reddit</td><td>reddit.com, redd.it</td></tr>
                             <tr><td>Threads</td><td>threads.net, threads.com</td></tr>
                             <tr><td>Pixiv</td><td>pixiv.net</td></tr>
-                            <tr><td>Bluesky</td><td>bsky.app</td></tr>
+                            <tr><td>Bluesky</td><td>bsky.app and Bluesky-compatible (AT Protocol) app links</td></tr>
 
                             <tr><td>Bilibili</td><td>bilibili.com, b23.tv</td></tr>
                             <tr><td>YouTube Community Posts</td><td>youtube.com/post</td></tr>

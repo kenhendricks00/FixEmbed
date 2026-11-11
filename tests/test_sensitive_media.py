@@ -1,8 +1,8 @@
 import unittest
 
-from card_conformance import BUILDERS
-from card_preferences import CardPreferences
-from content_visibility import ContentVisibility
+from fixembed.conformance.cards import BUILDERS
+from fixembed.content_visibility import ContentVisibility
+from fixembed.presentation.preferences import CardPreferences
 
 
 def gallery_items(component):

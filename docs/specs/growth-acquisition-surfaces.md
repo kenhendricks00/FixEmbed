@@ -18,7 +18,7 @@ first-class secondary audience for automatic conversion.
 
 ## Project Structure
 
-- `install_links.py`: canonical bot-facing install destinations and buttons.
+- `fixembed/install_links.py`: canonical bot-facing install destinations and buttons.
 - `main.py`: `/invite`, `/help`, and `/about` command surfaces.
 - `service/src/utils/install.ts`: validated web install redirect contract.
 - `service/src/utils/static_site.ts`: homepage and platform landing pages.

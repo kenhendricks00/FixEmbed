@@ -2,7 +2,7 @@ import unittest
 
 import discord
 
-from command_components import render_settings_layout
+from fixembed.presentation.components import render_settings_layout
 
 
 class SettingsComponentsTests(unittest.TestCase):

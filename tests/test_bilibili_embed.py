@@ -1,6 +1,6 @@
 import unittest
 
-from bilibili_embed import build_bilibili_layout
+from fixembed.platforms.bilibili import build_bilibili_layout
 
 
 class BilibiliEmbedTests(unittest.TestCase):

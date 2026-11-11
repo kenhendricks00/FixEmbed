@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from premium_roles import sync_supporter_role
+from fixembed.premium.roles import sync_supporter_role
 
 
 class FakeMember:

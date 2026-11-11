@@ -1,11 +1,11 @@
 import unittest
 
-from card_preferences import (
+from fixembed.content_visibility import ContentVisibility
+from fixembed.presentation.preferences import (
     CardPreferences,
     apply_caption_preferences,
     preferences_from_settings,
 )
-from content_visibility import ContentVisibility
 
 
 class CardPreferencesTests(unittest.TestCase):

@@ -3,8 +3,13 @@
  */
 
 import type { Env, HandlerResponse, PlatformHandler } from '../types.ts';
-import { parseBlueskyUrl, fetchJSON } from '../utils/fetch.ts';
+import { BLUESKY_POST_URL_PATTERN, parseBlueskyUrl, fetchJSON } from '../utils/fetch.ts';
 import { platformColors, getBrandedSiteName, formatStats } from '../utils/embed.ts';
+import {
+    fetchAtprotoPostThread,
+    parseAtprotoPostUrl,
+    resolveAtprotoDid,
+} from '../utils/atproto.ts';
 
 interface BlueskyPost {
     thread: {
@@ -69,17 +74,116 @@ export function buildBlueskyContent(text: string, handle: string): { title: stri
     };
 }
 
+type BlueskyThreadPost = BlueskyPost['thread']['post'];
+
+/** Build the card for a post, linking back to the app the link was shared from. */
+function blueskyCard(
+    post: BlueskyThreadPost,
+    postId: string,
+    origin: string,
+    siteName: string,
+): HandlerResponse {
+    const author = post.author;
+    const record = post.record;
+
+    const content = buildBlueskyContent(record.text, author.handle);
+
+    // Stats go to oEmbed row, not description
+    const statsStr = formatStats({
+        likes: post.likeCount,
+        retweets: post.repostCount,
+        comments: post.replyCount,
+    });
+
+    // Preserve the complete Bluesky carousel for Components V2.
+    let image: string | undefined;
+    let images: string[] | undefined;
+    if (post.embed?.images && post.embed.images.length > 0) {
+        const imageUrls = post.embed.images
+            .map((item) => item.fullsize)
+            .filter(Boolean)
+            .slice(0, 4);
+        if (imageUrls.length === 1) [image] = imageUrls;
+        if (imageUrls.length > 1) images = imageUrls;
+    } else if (post.embed?.external?.thumb) {
+        image = post.embed.external.thumb;
+    }
+
+    const videoView = post.embed?.$type === 'app.bsky.embed.video#view'
+        ? post.embed
+        : undefined;
+    const videoCid = videoView?.cid?.trim();
+    const video = videoCid ? {
+        url: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(author.did)}&cid=${encodeURIComponent(videoCid)}`,
+        width: positiveDimension(videoView?.aspectRatio?.width, 1280),
+        height: positiveDimension(videoView?.aspectRatio?.height, 720),
+        thumbnail: videoView?.thumbnail,
+    } : undefined;
+
+    return {
+        success: true,
+        source: 'first-party',
+        data: {
+            title: content.title,
+            description: content.description,
+            url: `${origin}/profile/${author.handle}/post/${postId}`,
+            siteName,
+            authorName: author.displayName?.trim() || `@${author.handle}`,
+            authorHandle: `@${author.handle}`,
+            authorUrl: `${origin}/profile/${author.handle}`,
+            authorAvatar: author.avatar,
+            image,
+            images,
+            video,
+            color: platformColors.bluesky,
+            platform: 'bluesky',
+            timestamp: record.createdAt,
+            stats: statsStr, // Stats shown via oEmbed author_name row
+        },
+    };
+}
+
+/** An AT Protocol app link that did not verify is treated like an unrecognized link. */
+const UNSUPPORTED: HandlerResponse = {
+    success: false,
+    error: 'Unsupported URL',
+    unsupported: true,
+};
+
+/**
+ * Render a Bluesky-compatible app link from another host. It only renders when
+ * the handle (or DID) and the post both check out on the public AppView.
+ */
+async function handleAtprotoAppPost(url: string): Promise<HandlerResponse> {
+    const link = parseAtprotoPostUrl(url);
+    if (!link) return UNSUPPORTED;
+    try {
+        const did = link.actor.startsWith('did:')
+            ? link.actor
+            : await resolveAtprotoDid(link.actor);
+        if (!did) return UNSUPPORTED;
+        const data = await fetchAtprotoPostThread<BlueskyPost>(did, link.rkey);
+        if (!data?.thread?.post?.author?.handle || !data.thread.post.record) return UNSUPPORTED;
+        return blueskyCard(
+            data.thread.post,
+            link.rkey,
+            link.origin,
+            getBrandedSiteName('atproto'),
+        );
+    } catch {
+        return UNSUPPORTED;
+    }
+}
+
 export const blueskyHandler: PlatformHandler = {
     name: 'bluesky',
-    patterns: [
-        /bskyx?\.app\/profile\/([^\/]+)\/post\/([^\/\?]+)/i,
-    ],
+    patterns: [BLUESKY_POST_URL_PATTERN],
 
     async handle(url: string, env: Env): Promise<HandlerResponse> {
         const parsed = parseBlueskyUrl(url);
 
         if (!parsed) {
-            return { success: false, error: 'Invalid Bluesky URL' };
+            return handleAtprotoAppPost(url);
         }
 
         try {
@@ -89,7 +193,7 @@ export const blueskyHandler: PlatformHandler = {
 
             if (!did.startsWith('did:')) {
                 // Resolve handle to DID
-                const resolveUrl = `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${parsed.handle}`;
+                const resolveUrl = `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(parsed.handle)}`;
                 const resolveData = await fetchJSON<{ did: string }>(resolveUrl);
                 did = resolveData.did;
             }
@@ -104,65 +208,12 @@ export const blueskyHandler: PlatformHandler = {
                 return { success: false, error: 'Post not found' };
             }
 
-            const post = data.thread.post;
-            const author = post.author;
-            const record = post.record;
-
-            const content = buildBlueskyContent(record.text, author.handle);
-
-            // Stats go to oEmbed row, not description
-            const statsStr = formatStats({
-                likes: post.likeCount,
-                retweets: post.repostCount,
-                comments: post.replyCount,
-            });
-
-            // Preserve the complete Bluesky carousel for Components V2.
-            let image: string | undefined;
-            let images: string[] | undefined;
-            if (post.embed?.images && post.embed.images.length > 0) {
-                const imageUrls = post.embed.images
-                    .map((item) => item.fullsize)
-                    .filter(Boolean)
-                    .slice(0, 4);
-                if (imageUrls.length === 1) [image] = imageUrls;
-                if (imageUrls.length > 1) images = imageUrls;
-            } else if (post.embed?.external?.thumb) {
-                image = post.embed.external.thumb;
-            }
-
-            const videoView = post.embed?.$type === 'app.bsky.embed.video#view'
-                ? post.embed
-                : undefined;
-            const videoCid = videoView?.cid?.trim();
-            const video = videoCid ? {
-                url: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(author.did)}&cid=${encodeURIComponent(videoCid)}`,
-                width: positiveDimension(videoView?.aspectRatio?.width, 1280),
-                height: positiveDimension(videoView?.aspectRatio?.height, 720),
-                thumbnail: videoView?.thumbnail,
-            } : undefined;
-
-            return {
-                success: true,
-                source: 'first-party',
-                data: {
-                    title: content.title,
-                    description: content.description,
-                    url: `https://bsky.app/profile/${author.handle}/post/${parsed.postId}`,
-                    siteName: getBrandedSiteName('bluesky'),
-                    authorName: author.displayName?.trim() || `@${author.handle}`,
-                    authorHandle: `@${author.handle}`,
-                    authorUrl: `https://bsky.app/profile/${author.handle}`,
-                    authorAvatar: author.avatar,
-                    image,
-                    images,
-                    video,
-                    color: platformColors.bluesky,
-                    platform: 'bluesky',
-                    timestamp: record.createdAt,
-                    stats: statsStr, // Stats shown via oEmbed author_name row
-                },
-            };
+            return blueskyCard(
+                data.thread.post,
+                parsed.postId,
+                parsed.origin,
+                getBrandedSiteName('bluesky'),
+            );
         } catch (error) {
             console.error('Bluesky handler error:', error);
             return {

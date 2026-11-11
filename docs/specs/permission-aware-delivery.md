@@ -21,8 +21,8 @@ Messages but FixEmbed does not currently have that permission.
 
 ## Tech Stack and Structure
 
-- `delivery_policy.py`: pure normalization, capability policy, and operator text.
-- `delivery_telemetry.py`: bounded aggregate downgrade counter and Reliability
+- `fixembed/delivery_policy.py`: pure normalization, capability policy, and operator text.
+- `fixembed/telemetry/delivery.py`: bounded aggregate downgrade counter and Reliability
   rendering.
 - `main.py`: Discord permission preflight, race-safe source-message actions,
   settings guidance, and Debug guidance.

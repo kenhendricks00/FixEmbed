@@ -1,6 +1,6 @@
 import unittest
 
-from reddit_embed import build_reddit_layout
+from fixembed.platforms.reddit import build_reddit_layout
 
 
 class RedditEmbedTests(unittest.TestCase):

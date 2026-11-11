@@ -1,6 +1,6 @@
 import unittest
 
-from pinterest_embed import build_pinterest_layout
+from fixembed.platforms.pinterest import build_pinterest_layout
 
 
 class PinterestEmbedTests(unittest.TestCase):

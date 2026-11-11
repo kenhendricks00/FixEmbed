@@ -1,6 +1,10 @@
 import unittest
 
-from component_emojis import APPLICATION_EMOJI_IDS, application_emoji, format_component_stats
+from fixembed.presentation.emojis import (
+    APPLICATION_EMOJI_IDS,
+    application_emoji,
+    format_component_stats,
+)
 
 
 class ComponentEmojiTests(unittest.TestCase):

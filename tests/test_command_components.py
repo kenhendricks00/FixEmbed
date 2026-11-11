@@ -2,8 +2,8 @@ import unittest
 
 import discord
 
-from command_components import render_command_layout
-from translations import TRANSLATIONS
+from fixembed.presentation.components import render_command_layout
+from fixembed.translations import TRANSLATIONS
 
 
 class CommandComponentsTests(unittest.TestCase):

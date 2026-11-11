@@ -1,7 +1,7 @@
 import unittest
 
-from card_preferences import CardPreferences
-from twitter_embed import build_twitter_layout
+from fixembed.platforms.twitter import build_twitter_layout
+from fixembed.presentation.preferences import CardPreferences
 
 
 class TwitterEmbedTests(unittest.TestCase):

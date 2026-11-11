@@ -98,25 +98,16 @@ GET /video/twitter?url=<encoded-url>
 
 ## Architecture
 
-```
-service/
-├── src/
-│   ├── index.ts              # Main router, endpoints, video proxies
-│   ├── handlers/             # Platform-specific handlers
-│   │   ├── twitter.ts        # Twitter/X Syndication API
-│   │   ├── instagram.ts      # VxInstagram + Snapsave fallback
-│   │   ├── threads.ts        # Meta Threads GraphQL API
-│   │   ├── bluesky.ts        # AT Protocol
-│   │   ├── reddit.ts         # Reddit JSON API
-│   │   ├── pixiv.ts          # Phixiv HTML scraping
-│   │   └── bilibili.ts       # VxBilibili HTML scraping
-│   ├── utils/
-│   │   ├── embed.ts          # OG tag generation, stats formatting
-│   │   └── fetch.ts          # HTTP utilities, URL parsing
-│   └── types.ts              # TypeScript definitions
-├── wrangler.toml             # Cloudflare Workers config
-└── package.json
-```
+`src/index.ts` composes the Worker routes and shared middleware. Route modules
+under `src/routes/` own the public website, status reports, rich-card endpoints,
+activity responses, and media delivery. Platform retrieval remains under
+`src/handlers/`. `src/utils/embed_request.ts` shares handler selection and
+translation across HTML, JSON, and activity requests.
+
+Run `npm test` for the offline regression suite and `npm run typecheck` for
+TypeScript validation. See [the repository architecture guide](../docs/architecture.md)
+for the complete module map. Run development and deployment commands from this
+`service` directory using its `wrangler.toml`.
 
 ## Embed Format
 

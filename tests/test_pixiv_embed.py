@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import pixiv_embed
-from pixiv_embed import _profile_image, build_pixiv_layout
+import fixembed.platforms.pixiv as pixiv_embed
+from fixembed.platforms.pixiv import _profile_image, build_pixiv_layout
 
 
 class PixivEmbedTests(unittest.TestCase):

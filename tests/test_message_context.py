@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from message_context import format_tagged_users
+from fixembed.presentation.mentions import format_tagged_users
 
 
 class MessageContextTests(unittest.TestCase):

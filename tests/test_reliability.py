@@ -1,13 +1,12 @@
 import asyncio
 import unittest
 
-from reliability import (
-    ReliabilityClient,
+from fixembed.telemetry.reliability import (
     STATUS_TIMEOUT_SECONDS,
+    ReliabilityClient,
     format_reliability_status,
     parse_reliability_payload,
 )
-
 
 STATUS_PAYLOAD = {
     "updatedAt": "2026-07-14T12:00:00Z",
@@ -138,7 +137,7 @@ class ReliabilityClientTests(unittest.IsolatedAsyncioTestCase):
             return worker_payload
 
         async def local_check():
-            from reliability import PlatformHealth
+            from fixembed.telemetry.reliability import PlatformHealth
 
             return PlatformHealth(
                 service="DeviantArt",

@@ -13,13 +13,13 @@ Render first-party X/Twitter posts as modern, bot-authored Discord Components V2
 ## Commands
 
 - Python tests: `python -m unittest discover -s tests -v`
-- Python compile: `python -m py_compile main.py twitter_embed.py component_emojis.py`
+- Python compile: `python -m py_compile main.py fixembed/platforms/twitter.py fixembed/presentation/emojis.py`
 - Service tests: `npm test --prefix service`
 - Diff validation: `git diff --check`
 
 ## Project Structure
 
-- `twitter_embed.py`: X payload normalization, Components V2 layout, and API fetch
+- `fixembed/platforms/twitter.py`: X payload normalization, Components V2 layout, and API fetch
 - `main.py`: automatic X delivery and link fallback
 - `service/src/index.ts`: metadata API option forwarding
 - `tests/test_twitter_embed.py`: card-level unit tests

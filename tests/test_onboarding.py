@@ -3,7 +3,11 @@ from types import SimpleNamespace
 
 import discord
 
-from onboarding import SUPPORT_SERVER_URL, build_onboarding_view, send_onboarding_dm
+from fixembed.onboarding import (
+    SUPPORT_SERVER_URL,
+    build_onboarding_view,
+    send_onboarding_dm,
+)
 
 
 class _Owner:

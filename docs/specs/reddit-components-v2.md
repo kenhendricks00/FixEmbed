@@ -13,13 +13,13 @@ Render first-party Reddit posts as modern, bot-authored Discord Components V2 ca
 ## Commands
 
 - Python tests: `python -m unittest discover -s tests -v`
-- Python compile: `python -m py_compile main.py reddit_embed.py component_emojis.py`
+- Python compile: `python -m py_compile main.py fixembed/platforms/reddit.py fixembed/presentation/emojis.py`
 - Service tests: `npm test --prefix service`
 - Diff validation: `git diff --check`
 
 ## Project Structure
 
-- `reddit_embed.py`: Reddit payload normalization, Components V2 layout, and API fetch
+- `fixembed/platforms/reddit.py`: Reddit payload normalization, Components V2 layout, and API fetch
 - `main.py`: automatic Reddit delivery and existing link fallback
 - `service/src/handlers/reddit.ts`: first-party Reddit metadata, gallery, icon, timestamp, and linked-article data
 - `tests/test_reddit_embed.py`: card-level unit tests

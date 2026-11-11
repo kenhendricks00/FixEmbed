@@ -1,28 +1,69 @@
 import unittest
-from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import discord
+
+from fixembed import cards
+from fixembed.links import extract_supported_links
 
 
-class UserCommandComponentsTests(unittest.TestCase):
-    def test_user_install_commands_use_components_v2_with_link_fallback(self):
-        main_source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
-        user_commands = main_source.split(
-            "@client.tree.command(\n    name='fix'", 1
-        )[1].split("async def debug_info", 1)[0]
+class UserCommandComponentsTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.interaction = SimpleNamespace(
+            guild=None,
+            channel=None,
+            response=SimpleNamespace(defer=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock()),
+        )
+        self.links = extract_supported_links("https://x.com/jack/status/20")
 
-        self.assertGreaterEqual(user_commands.count("send_components_v2_links(interaction, links)"), 2)
-        self.assertNotIn("fixed_links =", user_commands)
+    async def test_user_commands_send_components_and_attachments(self):
+        file = object()
+        delivery = cards.ComponentsV2Delivery(
+            discord.ui.LayoutView(), "https://fallback.test", (file,)
+        )
+        with patch(
+            "fixembed.cards.build_components_v2_link", AsyncMock(return_value=delivery)
+        ):
+            await cards.send_components_v2_links(self.interaction, self.links)
+        self.interaction.response.defer.assert_awaited_once()
+        self.interaction.followup.send.assert_awaited_once_with(
+            view=delivery.view, files=[file]
+        )
 
-        delivery_helper = main_source.split("async def send_components_v2_links(", 1)[1].split(
-            "@client.tree.command(\n    name='fix'", 1
-        )[0]
-        self.assertIn("await interaction.response.defer()", delivery_helper)
-        self.assertIn('send_options = {"view": delivery.view}', delivery_helper)
-        self.assertIn('send_options["files"] = list(delivery.files)', delivery_helper)
-        self.assertNotIn("files=None", delivery_helper)
-        self.assertIn("await interaction.followup.send(**send_options)", delivery_helper)
-        self.assertIn("await interaction.followup.send(fallback_url)", delivery_helper)
-        self.assertIn("await interaction.followup.send(delivery.fallback_url)", delivery_helper)
+    async def test_files_are_omitted_for_cards_without_attachments(self):
+        delivery = cards.ComponentsV2Delivery(
+            discord.ui.LayoutView(), "https://fallback.test"
+        )
+        with patch(
+            "fixembed.cards.build_components_v2_link", AsyncMock(return_value=delivery)
+        ):
+            await cards.send_components_v2_links(self.interaction, self.links)
+        self.interaction.followup.send.assert_awaited_once_with(view=delivery.view)
 
+    async def test_card_build_failure_uses_a_link(self):
+        with patch(
+            "fixembed.cards.build_components_v2_link",
+            AsyncMock(side_effect=ValueError("missing media")),
+        ):
+            await cards.send_components_v2_links(self.interaction, self.links)
+        args = self.interaction.followup.send.call_args.args
+        self.assertTrue(args[0].startswith("https://"))
 
-if __name__ == "__main__":
-    unittest.main()
+    async def test_discord_card_rejection_uses_the_delivery_fallback(self):
+        delivery = cards.ComponentsV2Delivery(
+            discord.ui.LayoutView(), "https://fallback.test"
+        )
+        error = discord.HTTPException(
+            SimpleNamespace(status=400, reason="Bad request"), "bad card"
+        )
+        self.interaction.followup.send.side_effect = [error, None]
+        with patch(
+            "fixembed.cards.build_components_v2_link", AsyncMock(return_value=delivery)
+        ):
+            await cards.send_components_v2_links(self.interaction, self.links)
+        self.assertEqual(self.interaction.followup.send.await_count, 2)
+        self.assertEqual(
+            self.interaction.followup.send.call_args.args, (delivery.fallback_url,)
+        )

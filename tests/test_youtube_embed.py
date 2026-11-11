@@ -1,6 +1,6 @@
 import unittest
 
-from youtube_embed import build_youtube_community_layout
+from fixembed.platforms.youtube import build_youtube_community_layout
 
 
 class YouTubeCommunityEmbedTests(unittest.TestCase):
