@@ -126,6 +126,12 @@ export interface HandlerResponse {
      */
     translationUnavailable?: boolean;
     /**
+     * The card is usable but lacks media Discord needs to render it (for
+     * example a video without a poster). It is served but never cached, so a
+     * later request can replace it with a complete card.
+     */
+    incomplete?: boolean;
+    /**
      * The URL looked like a supported link but failed verification (an
      * unverified AT Protocol app host). Routes treat it like an unknown link.
      */

@@ -1,5 +1,11 @@
 ## Unreleased
 
+#### **Instagram links in Discord**
+- Fixed Instagram links that sometimes unfurled in Discord with no preview at all. Discord reads a FixEmbed link in two steps: the page, then the post it points to. The hosted service fetched Instagram again for each step, and Instagram's answers differ from one request to the next, so the second step could get a different card than the first, or fail. Both steps now share the same card for five minutes, and the second step no longer contacts Instagram.
+- Fixed Instagram reels whose card had a video but no poster image. Discord shows nothing for those. When Instagram refuses its own pages, the backup source has the video but never the poster. FixEmbed now gets the poster from Instagram's image link, retries once when a card still has no poster or no media, and never caches a card like that.
+- Fixed reel captions from the backup source showing HTML codes such as `&#x2019;` instead of punctuation.
+- Link previews now use a single-line title. Instagram captions often contain line breaks and invisible separator characters.
+
 #### **X translation for Japanese and Chinese**
 - Fixed `/zh` translation of X posts silently returning the original card. FxTwitter answers a `zh` request with a `zh-cn` translation, which FixEmbed rejected as the wrong language. Chinese regional codes are now matched to the requested language.
 - Added `/zh-cn`, `/zh-tw`, `/zh-hant`, and other Chinese region and script suffixes on X links. `zh-cn` and `zh-hans` translate to Simplified Chinese; `zh-tw`, `zh-hant`, and `zh-hk` translate to Traditional Chinese. These suffixes were previously ignored by both the bot and the hosted service.

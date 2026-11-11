@@ -24,6 +24,7 @@ const INSTAGRAM_CANONICAL_TIMEOUT_MS = 1200;
 const INSTAGRAM_VX_TIMEOUT_MS = 1200;
 const INSTAGRAM_KK_TIMEOUT_MS = 600;
 const INSTAGRAM_STATS_TIMEOUT_MS = 650;
+const INSTAGRAM_POSTER_TIMEOUT_MS = 800;
 const INSTAGRAM_MAX_CAROUSEL_ITEMS = 20;
 
 // ========== VxInstagram Scraper ==========
@@ -84,7 +85,9 @@ async function scrapeVxInstagram(shortcode: string, type: string, timeoutMs: num
             image: ogImage,
             video: ogVideo,
             username: undefined, // Don't return username from vxinstagram to avoid wrong attribution
-            description: ogDesc || ogTitle,
+            // Vx copies Instagram's caption into HTML attributes, so decode its
+            // entities once here or cards show literal "&#x2019;" text.
+            description: ogDesc || ogTitle ? decodeInstagramText(ogDesc || ogTitle || '') : undefined,
             isVideo,
         };
     } catch (error) {
@@ -336,7 +339,7 @@ async function fetchSnapsaveRecovery(
 
 // ========== Handler ==========
 
-export const instagramHandler: PlatformHandler = {
+const instagramResolver: PlatformHandler = {
     name: 'instagram',
     patterns: [
         /instagram\.com\/p\/([^\/\?]+)/i,
@@ -798,6 +801,62 @@ export const instagramHandler: PlatformHandler = {
             }
             return { success: false, error: 'Unable to recover Instagram media', redirect: canonicalUrl };
         }
+    },
+};
+
+/**
+ * Give a poster-less Instagram video a poster from Instagram's public media
+ * redirect. Vxinstagram never sends a reel poster, so when Instagram's embed
+ * and canonical pages both refuse a request the card has only a bare MP4, and
+ * Discord unfurls that as a blank link. The redirect is a separate, light
+ * endpoint (/p/<shortcode>/media/?size=l -> poster JPG on Instagram's CDN).
+ */
+export async function recoverInstagramPoster(result: HandlerResponse): Promise<HandlerResponse> {
+    const data = result.data;
+    if (!result.success || !data?.video || data.video.thumbnail || data.image) return result;
+    const shortcode = parseInstagramUrl(data.url)?.shortcode;
+    if (!shortcode || !/^[\w-]+$/.test(shortcode)) return result;
+
+    try {
+        const response = await fetchWithTimeout(
+            `https://www.instagram.com/p/${shortcode}/media/?size=l`,
+            {
+                redirect: 'manual',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (compatible; FixEmbed/1.0; +https://fixembed.app)',
+                    'Accept': 'image/*',
+                },
+            },
+            INSTAGRAM_POSTER_TIMEOUT_MS,
+        );
+        const location = response.status >= 300 && response.status < 400
+            ? response.headers.get('Location')
+            : null;
+        const poster = location ? trustedInstagramMediaUrl(location) : undefined;
+        if (!poster) return result;
+        return {
+            ...result,
+            data: {
+                ...data,
+                image: poster,
+                video: { ...data.video, thumbnail: poster },
+            },
+        };
+    } catch (error) {
+        console.warn('fallback_fetch_failed', {
+            platform: 'instagram',
+            provider: 'media_poster',
+            errorType: error instanceof Error ? error.name : 'unknown',
+        });
+        return result;
+    }
+}
+
+/** Instagram handler: resolve the post, then make sure a video has a poster. */
+export const instagramHandler: PlatformHandler = {
+    ...instagramResolver,
+    async handle(url: string, env: Env): Promise<HandlerResponse> {
+        return recoverInstagramPoster(await instagramResolver.handle(url, env));
     },
 };
 

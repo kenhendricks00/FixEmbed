@@ -9,7 +9,7 @@ import {
     normalizeGraphQLTweet,
     normalizeTwitterWebsiteCard,
 } from '../src/handlers/twitter_graphql.ts';
-import { instagramHandler } from '../src/handlers/instagram.ts';
+import { instagramHandler, recoverInstagramPoster } from '../src/handlers/instagram.ts';
 import { redditHandler } from '../src/handlers/reddit.ts';
 import { parseYouTubeCommunityPostHtml, youtubeHandler } from '../src/handlers/youtube.ts';
 import { pixivHandler } from '../src/handlers/pixiv.ts';
@@ -21,7 +21,7 @@ import { tiktokHandler } from '../src/handlers/tiktok.ts';
 import { tumblrHandler } from '../src/handlers/tumblr.ts';
 import { twitchHandler } from '../src/handlers/twitch.ts';
 import { deviantartHandler } from '../src/handlers/deviantart.ts';
-import type { Env, HandlerResponse } from '../src/types.ts';
+import type { EmbedData, Env, HandlerResponse } from '../src/types.ts';
 import { assessProbeResult } from '../src/utils/status.ts';
 import {
     StatusProbeTimeoutError,
@@ -47,6 +47,8 @@ import {
 import { handleTopGgWebhook } from '../src/webhooks/topgg.ts';
 import { redactInstagramVideoRelayRequestLog } from '../src/routes/instagram_video_relay.ts';
 import { encodeActivitySource, formatActivityContent, generateEmbedHTML, normalizeEmbedLayout } from '../src/utils/embed.ts';
+import { EMBED_RETRY_WINDOW_MS, prepareEmbedRequest } from '../src/utils/embed_request.ts';
+import { clearEmbedMemoryCache } from '../src/utils/embed_cache.ts';
 import { applyRequestedTranslation, languageName, normalizeLanguage } from '../src/utils/translation.ts';
 import { clearAtprotoCaches, parseAtprotoPostUrl } from '../src/utils/atproto.ts';
 import {
@@ -58,6 +60,27 @@ import {
     parseTwitterUrl,
     truncateText,
 } from '../src/utils/fetch.ts';
+
+/** A complete first-party Instagram carousel card, as /api/embed returns it. */
+function instagramCardFixture(): EmbedData {
+    return {
+        title: 'A two-image carousel',
+        description: '',
+        caption: 'A two-image carousel',
+        url: 'https://www.instagram.com/p/TwoHopCard/',
+        siteName: 'FixEmbed \u2022 \u{1F4F7} Instagram',
+        authorName: 'creator',
+        authorHandle: 'creator',
+        authorUrl: 'https://www.instagram.com/creator/',
+        images: [
+            'https://scontent.example.cdninstagram.com/one.jpg',
+            'https://scontent.example.cdninstagram.com/two.jpg',
+        ],
+        image: 'https://scontent.example.cdninstagram.com/one.jpg',
+        color: '#E4405F',
+        platform: 'instagram',
+    };
+}
 
 type TestCase = {
     name: string;
@@ -6870,7 +6893,7 @@ const tests: TestCase[] = [
                 assert.equal(requestsAfterHit, requestsAfterFirst);
                 assert.ok(upstreamRequests > requestsAfterHit + 1);
                 assert.equal(cacheKeys.length, 3);
-                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v21']);
+                assert.deepEqual(Array.from(new Set(cacheNames)), ['fixembed-embed-api-v22']);
                 assert.equal(
                     Array.from(entries.values()).every((entry) => (
                         entry.headers.get('Cache-Control') === 'public, max-age=0, s-maxage=300'
@@ -6883,6 +6906,260 @@ const tests: TestCase[] = [
                 if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
                 else delete (globalThis as { caches?: unknown }).caches;
             }
+        },
+    },
+    {
+        name: 'instagramHandler recovers the poster and decodes the caption when only a poster-less Vx reel survives',
+        run: async () => {
+            // Production capture (Nov 11): Instagram refused both first-party
+            // pages, Vx answered with an offload MP4 and an HTML-escaped caption
+            // but no og:image, and Snapsave/kkinstagram were unavailable.
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.includes('instagram.com/p/PosterlessVx/embed/captioned')) return new Response('', { status: 429 });
+                if (url === 'https://www.instagram.com/reel/PosterlessVx/') return new Response('', { status: 429 });
+                if (url.includes('vxinstagram.com/reel/PosterlessVx')) {
+                    return new Response([
+                        '<meta property="og:video" content="https://vxinstagram.com/offload/PosterlessVx/0.mp4">',
+                        '<meta property="og:description" content="You wouldn&#x2019;t download a car.&#xA;&#xA;#linux">',
+                    ].join(''), { status: 200 });
+                }
+                if (url.includes('kkinstagram.com') || url.includes('snapsave.app')) return new Response('', { status: 503 });
+                if (url === 'https://www.instagram.com/p/PosterlessVx/media/?size=l') {
+                    return new Response(null, {
+                        status: 302,
+                        headers: { Location: 'https://scontent-phl2-1.cdninstagram.com/v/poster.jpg?stp=dst-jpg_e15' },
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await instagramHandler.handle('https://www.instagram.com/reel/PosterlessVx/', env);
+                assert.equal(response.success, true);
+                assert.match(response.data?.video?.url || '', /vxinstagram\.com%2Foffload%2FPosterlessVx/);
+                const poster = 'https://scontent-phl2-1.cdninstagram.com/v/poster.jpg?stp=dst-jpg_e15';
+                assert.equal(response.data?.video?.thumbnail, poster);
+                assert.equal(response.data?.image, poster);
+                assert.equal(response.data?.description, 'You wouldn\u2019t download a car.\n\n#linux');
+                assert.doesNotMatch(response.data?.caption || '', /&#x/);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'recoverInstagramPoster only accepts an Instagram CDN redirect and leaves complete cards alone',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            const requested: string[] = [];
+            const posterless: HandlerResponse = {
+                success: true,
+                data: { ...instagramCardFixture(), url: 'https://www.instagram.com/reel/Guarded/', images: undefined, image: undefined, video: { url: 'https://fixembed.app/video/instagram?url=x' } },
+            };
+            try {
+                for (const answer of [
+                    new Response(null, { status: 302, headers: { Location: 'https://evil.example/poster.jpg' } }),
+                    new Response('<html>login</html>', { status: 200 }),
+                    new Response('', { status: 429 }),
+                ]) {
+                    globalThis.fetch = async (input) => { requested.push(String(input)); return answer; };
+                    const result = await recoverInstagramPoster(posterless);
+                    assert.equal(result.data?.video?.thumbnail, undefined);
+                    assert.equal(result.data?.image, undefined);
+                }
+                assert.deepEqual(new Set(requested), new Set(['https://www.instagram.com/p/Guarded/media/?size=l']));
+
+                requested.length = 0;
+                const complete: HandlerResponse = { success: true, data: instagramCardFixture() };
+                assert.equal(await recoverInstagramPoster(complete), complete);
+                assert.equal(requested.length, 0);
+            } finally { globalThis.fetch = originalFetch; }
+        },
+    },
+    {
+        name: 'prepareEmbedRequest retries a poster-less Instagram card once and keeps the complete answer',
+        run: async () => {
+            const originalHandle = instagramHandler.handle;
+            const answers: HandlerResponse[] = [
+                { success: true, source: 'fallback', data: { ...instagramCardFixture(), images: undefined, image: undefined, video: { url: 'https://fixembed.app/video/instagram?url=x' } } },
+                { success: true, source: 'first-party', data: instagramCardFixture() },
+            ];
+            let calls = 0;
+            instagramHandler.handle = async () => answers[calls++];
+            try {
+                const request = prepareEmbedRequest('https://www.instagram.com/p/RetryPoster/');
+                const result = await request!.fetch(env);
+                assert.equal(calls, 2);
+                assert.equal(result.source, 'first-party');
+                assert.equal(result.incomplete, undefined);
+                assert.equal(result.data?.images?.length, 2);
+            } finally { instagramHandler.handle = originalHandle; }
+        },
+    },
+    {
+        name: 'prepareEmbedRequest flags a card that stays poster-less and skips retries after a slow first answer',
+        run: async () => {
+            const originalHandle = instagramHandler.handle;
+            const posterless: HandlerResponse = {
+                success: true,
+                source: 'fallback',
+                data: { ...instagramCardFixture(), images: undefined, image: undefined, video: { url: 'https://fixembed.app/video/instagram?url=x' } },
+            };
+            let calls = 0;
+            instagramHandler.handle = async () => { calls += 1; return posterless; };
+            try {
+                const flagged = await prepareEmbedRequest('https://www.instagram.com/reel/StillPosterless/')!.fetch(env);
+                assert.equal(calls, 2);
+                assert.equal(flagged.success, true);
+                assert.equal(flagged.incomplete, true);
+
+                calls = 0;
+                let clock = 0;
+                const slow = prepareEmbedRequest(
+                    'https://www.instagram.com/reel/SlowPosterless/',
+                    undefined,
+                    undefined,
+                    () => (clock += EMBED_RETRY_WINDOW_MS),
+                );
+                const slowResult = await slow!.fetch(env);
+                assert.equal(calls, 1);
+                assert.equal(slowResult.incomplete, true);
+
+                // Complete cards are never retried.
+                calls = 0;
+                instagramHandler.handle = async () => { calls += 1; return { success: true, data: instagramCardFixture() }; };
+                await prepareEmbedRequest('https://www.instagram.com/p/AlreadyComplete/')!.fetch(env);
+                assert.equal(calls, 1);
+            } finally { instagramHandler.handle = originalHandle; }
+        },
+    },
+    {
+        name: 'Discord status hop reuses the card /embed advertised instead of refetching Instagram',
+        run: async () => {
+            const originalHandle = instagramHandler.handle;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const pendingWrites: Promise<unknown>[] = [];
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request) { return entries.get(key.url)?.clone(); },
+                            async put(key: Request, response: Response) { entries.set(key.url, response.clone()); },
+                        };
+                    },
+                },
+            });
+            // The first answer is the full carousel. Any second fetch would get a
+            // different, media-less answer, as Instagram does intermittently.
+            let calls = 0;
+            instagramHandler.handle = async () => {
+                calls += 1;
+                return calls === 1
+                    ? { success: true, source: 'first-party', data: instagramCardFixture() }
+                    : { success: true, source: 'fallback', data: { ...instagramCardFixture(), images: undefined, image: undefined } };
+            };
+            clearEmbedMemoryCache();
+            try {
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+                const discord = { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' } };
+                const source = encodeURIComponent('https://www.instagram.com/p/TwoHopCard/');
+                const embed = await app.request(`/embed?url=${source}&v=154&quality=fastest`, discord, cacheEnv, executionContext);
+                const html = await embed.text();
+                const activity = html.match(/href='https:\/\/fixembed\.app(\/users\/[^']+\/statuses\/(\d+))'/);
+                assert.ok(activity, 'Discord card advertises an activity status');
+
+                // Discord asks for the status before waitUntil's cache write lands.
+                const status = await app.request(`/api/v1/statuses/${activity[2]}`, discord, cacheEnv, executionContext);
+                const body = await status.json() as { media_attachments: Array<{ url: string }> };
+                assert.equal(status.status, 200);
+                assert.equal(calls, 1);
+                assert.deepEqual(body.media_attachments.map((media) => media.url), instagramCardFixture().images);
+
+                // A fresh isolate still finds the card in the edge cache.
+                await Promise.all(pendingWrites.splice(0));
+                clearEmbedMemoryCache();
+                const coldStatus = await app.request(activity[1], discord, cacheEnv, executionContext);
+                assert.equal(coldStatus.status, 200);
+                assert.equal(calls, 1);
+            } finally {
+                instagramHandler.handle = originalHandle;
+                clearEmbedMemoryCache();
+                if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+                else delete (globalThis as { caches?: unknown }).caches;
+            }
+        },
+    },
+    {
+        name: 'incomplete Instagram cards are served but never cached on any route',
+        run: async () => {
+            const originalHandle = instagramHandler.handle;
+            const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+            const entries = new Map<string, Response>();
+            const pendingWrites: Promise<unknown>[] = [];
+            const executionContext = {
+                waitUntil(promise: Promise<unknown>) { pendingWrites.push(promise); },
+                passThroughOnException() {},
+            } as ExecutionContext;
+            Object.defineProperty(globalThis, 'caches', {
+                configurable: true,
+                value: {
+                    async open() {
+                        return {
+                            async match(key: Request) { return entries.get(key.url)?.clone(); },
+                            async put(key: Request, response: Response) { entries.set(key.url, response.clone()); },
+                        };
+                    },
+                },
+            });
+            let calls = 0;
+            instagramHandler.handle = async () => {
+                calls += 1;
+                return {
+                    success: true,
+                    source: 'fallback',
+                    data: { ...instagramCardFixture(), images: undefined, image: undefined, video: { url: 'https://fixembed.app/video/instagram?url=x' } },
+                };
+            };
+            clearEmbedMemoryCache();
+            try {
+                const cacheEnv = { ...env, ENABLE_CACHE: 'true', CACHE_TTL: '300' };
+                const discord = { headers: { 'User-Agent': 'Discordbot/2.0' } };
+                const source = encodeURIComponent('https://www.instagram.com/reel/NoPoster/');
+                const embed = await app.request(`/embed?url=${source}`, discord, cacheEnv, executionContext);
+                const api = await app.request(`/api/embed?url=${source}`, {}, cacheEnv, executionContext);
+                await Promise.all(pendingWrites.splice(0));
+                const again = await app.request(`/embed?url=${source}`, discord, cacheEnv, executionContext);
+
+                assert.equal(embed.status, 200);
+                assert.equal(api.status, 200);
+                assert.equal(api.headers.get('X-FixEmbed-Cache'), null);
+                assert.equal(again.status, 200);
+                assert.equal(entries.size, 0);
+                // Each request gets its own first attempt plus one retry.
+                assert.equal(calls, 6);
+            } finally {
+                instagramHandler.handle = originalHandle;
+                clearEmbedMemoryCache();
+                if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+                else delete (globalThis as { caches?: unknown }).caches;
+            }
+        },
+    },
+    {
+        name: 'generateEmbedHTML flattens Instagram caption titles to one visible line',
+        run: () => {
+            const html = generateEmbedHTML({
+                ...instagramCardFixture(),
+                title: 'Reiko in Caramel Forest \u{1F970}\u2063\u2063\n\u2063\u2063\nI enjoy posing dolls',
+            }, 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)');
+            const title = html.match(/<meta property="og:title" content="([^"]*)">/)?.[1];
+            assert.equal(title, 'Reiko in Caramel Forest \u{1F970} I enjoy posing dolls');
+            assert.doesNotMatch(html.match(/twitter:title" content="([^"]*)"/)?.[1] || '', /[\n\u2063]/);
         },
     },
     {

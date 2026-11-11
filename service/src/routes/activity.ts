@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types.ts';
 import { type Context } from 'hono';
 import { prepareEmbedRequest } from '../utils/embed_request.ts';
+import { optionalExecutionContext, resolveEmbedThroughCache } from '../utils/embed_cache.ts';
 import { normalizeLanguage } from '../utils/translation.ts';
 import { FIXEMBED_LOGO, activityBodyText, formatActivityContent } from '../utils/embed.ts';
 
@@ -300,13 +301,24 @@ const mastodonStatusRequest = async (c: Context<{ Bindings: Env }>) => {
                     translationLanguage = requestedLanguage;
                 }
                 parsedSource.searchParams.delete('fixembed_lang');
+                // The activity revision only busts Discord's cache; the card
+                // itself is the one /embed already built for this source.
+                parsedSource.searchParams.delete('fixembed_activity');
                 sourceUrl = parsedSource.toString();
             } catch {
                 return c.json({ error: 'Invalid activity source URL' }, 400);
             }
         }
         const request = prepareEmbedRequest(sourceUrl, translationLanguage);
-        const result = await request?.fetch(c.env);
+        const result = request
+            ? await resolveEmbedThroughCache(
+                c.env,
+                c.req.url,
+                sourceUrl,
+                request,
+                optionalExecutionContext(c),
+            )
+            : undefined;
         if (!result?.success || !result.data) {
             return c.json({ error: result?.error || 'Unable to rebuild activity status' }, 502);
         }

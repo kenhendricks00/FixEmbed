@@ -20,6 +20,18 @@ function escapeHtml(str: string): string {
 const SNOWCODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789{}[]":,.-_';
 const INSTAGRAM_ACTIVITY_REVISION = '26';
 
+// Invisible separators and joiners Instagram captions use as spacing (U+2063
+// and friends). They render as nothing but still count against Discord limits.
+const INVISIBLE_FORMAT_CHARACTERS = /[\u200B\u2060-\u2064\uFEFF]/g;
+
+/** Flatten a card title to the single visible line Discord's title field shows. */
+export function singleLineTitle(value: string): string {
+    return value
+        .replace(INVISIBLE_FORMAT_CHARACTERS, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 /** Encode compact activity metadata as digits so Discord recognizes a Mastodon-style status URL. */
 export function encodeSnowcode(data: object): string {
     const json = JSON.stringify(data).slice(1, -1);
@@ -138,9 +150,11 @@ export function generateEmbedHTML(embed: EmbedData, userAgent: string): string {
     const useDiscordActivityCard = isDiscord && embed.platform !== 'twitter' && supportsDiscordActivityCard;
     const useDiscordActivityVideo = isDiscord && embed.platform === 'twitter' && Boolean(embed.video);
     const suppressDiscordOgMedia = useDiscordActivityCard || useDiscordActivityVideo;
-    const displayTitle = embed.platform === 'twitter' && embed.authorName && embed.authorHandle
-        ? `${embed.authorName} (${embed.authorHandle})`
-        : embed.title;
+    const displayTitle = singleLineTitle(
+        embed.platform === 'twitter' && embed.authorName && embed.authorHandle
+            ? `${embed.authorName} (${embed.authorHandle})`
+            : embed.title,
+    );
 
     // Escape HTML entities
     const escape = escapeHtml;

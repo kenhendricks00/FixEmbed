@@ -4,7 +4,14 @@ import { Hono } from 'hono';
 import type { Env } from '../types.ts';
 import { prepareEmbedRequest } from '../utils/embed_request.ts';
 import { generateEmbedHTML, generateErrorHTML } from '../utils/embed.ts';
-import { prepareEmbedCache, readEmbedCache, storeEmbedCache } from '../utils/embed_cache.ts';
+import {
+    isCacheableEmbed,
+    optionalExecutionContext,
+    prepareEmbedCache,
+    readEmbedCache,
+    rememberEmbed,
+    resolveEmbedThroughCache,
+} from '../utils/embed_cache.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -27,7 +34,13 @@ app.get('/embed', async (c) => {
     }
 
     try {
-        const result = await request.fetch(c.env);
+        const result = await resolveEmbedThroughCache(
+            c.env,
+            c.req.url,
+            url,
+            request,
+            optionalExecutionContext(c),
+        );
 
         if (!result.success) {
             // Unverified links get the same treatment as links with no handler.
@@ -101,10 +114,14 @@ app.get('/api/embed', async (c) => {
             source: result.source,
             data: result.data,
         });
-        // A missed translation is usually transient upstream, so don't pin it for the cache TTL.
-        return cacheContext && !result.translationUnavailable
-            ? storeEmbedCache(cacheContext, response, c.executionCtx)
-            : response;
+        // Missed translations and media-less cards are usually transient
+        // upstream, so they are served but never pinned for the cache TTL.
+        if (cacheContext && isCacheableEmbed(result)) {
+            rememberEmbed(cacheContext, request.platform, result, optionalExecutionContext(c));
+            response.headers.set('Cache-Control', 'no-store');
+            response.headers.set('X-FixEmbed-Cache', 'MISS');
+        }
+        return response;
     } catch (error) {
         return c.json({
             error: error instanceof Error ? error.message : 'Unknown error'
