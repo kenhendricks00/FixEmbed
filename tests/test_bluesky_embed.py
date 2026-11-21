@@ -99,6 +99,44 @@ class BlueskyEmbedTests(unittest.TestCase):
             [payload["video"]["url"]],
         )
 
+    def test_quote_post_with_video_renders_its_own_video(self):
+        # Worker payload for bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k, a
+        # recordWithMedia quote post (own video, quoting an image post).
+        video_url = (
+            "https://bsky.social/xrpc/com.atproto.sync.getBlob"
+            "?did=did%3Aplc%3A24b5qiscvu647kyfrx2lqahv"
+            "&cid=bafkreic5x5jbahvxvvg23gpvez3saszdzwrctez4wztevfpero4ikcgpfm"
+        )
+        for source, label in (
+            ("https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k", "Bluesky"),
+            ("https://fxbsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k", "AT Protocol"),
+        ):
+            with self.subTest(source=source):
+                payload = {
+                    "description": "As a voice actor, I had to test this and, WELL",
+                    "url": source,
+                    "authorName": "Perrydotto",
+                    "authorHandle": "@perrydotto.net",
+                    "authorAvatar": "https://cdn.bsky.app/img/avatar/plain/perry",
+                    "video": {
+                        "url": video_url,
+                        "thumbnail": "https://video.bsky.app/watch/perry/thumbnail.jpg",
+                        "width": 720,
+                        "height": 1280,
+                    },
+                    "stats": "💬 22 🔁 1.1K ❤️ 2.6K",
+                }
+
+                components = build_bluesky_layout(payload).to_components()[0]["components"]
+                galleries = [c for c in components if c.get("type") == 12]
+
+                self.assertEqual(len(galleries), 1)
+                self.assertEqual(
+                    [item["media"]["url"] for item in galleries[0]["items"]],
+                    [video_url],
+                )
+                self.assertIn(label, components[-1]["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -87,6 +87,116 @@ type TestCase = {
     run: () => void | Promise<void>;
 };
 
+// Shape of https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k: a quote
+// post (recordWithMedia) whose own media is a video, quoting an image post.
+const PERRY_DID = 'did:plc:24b5qiscvu647kyfrx2lqahv';
+const PERRY_VIDEO_CID = 'bafkreic5x5jbahvxvvg23gpvez3saszdzwrctez4wztevfpero4ikcgpfm';
+const IGN_DID = 'did:plc:xwqgusybtrpm67tcwqdfmzvy';
+const IGN_IMAGE = 'https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:xwqgusybtrpm67tcwqdfmzvy/bafkreih2g7bhzn4sjulp4kcwa77vqekqkxcv4wiuip5lqsx5cuzlmioxmi';
+
+function blueskyVideoView(did: string, cid: string, width: number, height: number) {
+    const base = `https://video.bsky.app/watch/${encodeURIComponent(did)}/${cid}`;
+    return {
+        $type: 'app.bsky.embed.video#view',
+        cid,
+        playlist: `${base}/playlist.m3u8`,
+        thumbnail: `${base}/thumbnail.jpg`,
+        alt: 'A video.',
+        aspectRatio: { width, height },
+        presentation: 'default',
+    };
+}
+
+function ignQuotedRecord(embeds: unknown[] = [{
+    $type: 'app.bsky.embed.images#view',
+    images: [{
+        thumb: IGN_IMAGE.replace('feed_fullsize', 'feed_thumbnail'),
+        fullsize: IGN_IMAGE,
+        alt: '',
+        aspectRatio: { width: 1280, height: 720 },
+    }],
+}]) {
+    return {
+        $type: 'app.bsky.embed.record#viewRecord',
+        uri: `at://${IGN_DID}/app.bsky.feed.post/3n232pnnc2n2l`,
+        cid: 'bafyreigecvd3uumy65ewqkvguszmiakbsxzswp45346fauhckomg6r5azq',
+        author: { did: IGN_DID, handle: 'ign.com', displayName: 'IGN' },
+        value: {
+            $type: 'app.bsky.feed.post',
+            text: 'Ocarina of Time Remake Players are stunned to find out that a Family Guy meme works to summon Epona.',
+            createdAt: '2026-11-11T23:01:01.441Z',
+        },
+        embeds,
+    };
+}
+
+function perryQuotePost(embed: unknown = {
+    $type: 'app.bsky.embed.recordWithMedia#view',
+    media: blueskyVideoView(PERRY_DID, PERRY_VIDEO_CID, 720, 1280),
+    record: { record: ignQuotedRecord() },
+}) {
+    return {
+        uri: `at://${PERRY_DID}/app.bsky.feed.post/3n24qxsnkfs2k`,
+        cid: 'bafyreiperry',
+        author: {
+            did: PERRY_DID,
+            handle: 'perrydotto.net',
+            displayName: 'Perrydotto',
+            avatar: 'https://cdn.bsky.app/img/avatar/plain/did:plc:24b5qiscvu647kyfrx2lqahv/avatar',
+        },
+        record: {
+            $type: 'app.bsky.feed.post',
+            text: 'As a voice actor, I had to test this and, WELL',
+            createdAt: '2026-11-12T15:11:57.212Z',
+            embed: {
+                $type: 'app.bsky.embed.recordWithMedia',
+                media: {
+                    $type: 'app.bsky.embed.video',
+                    aspectRatio: { width: 720, height: 1280 },
+                    video: { $type: 'blob', ref: { $link: PERRY_VIDEO_CID }, mimeType: 'video/mp4', size: 4903787 },
+                },
+                record: {
+                    $type: 'app.bsky.embed.record',
+                    record: {
+                        uri: `at://${IGN_DID}/app.bsky.feed.post/3n232pnnc2n2l`,
+                        cid: 'bafyreigecvd3uumy65ewqkvguszmiakbsxzswp45346fauhckomg6r5azq',
+                    },
+                },
+            },
+        },
+        embed,
+        likeCount: 2600,
+        repostCount: 1100,
+        replyCount: 22,
+    };
+}
+
+/** Mock the public AppView for the one perrydotto.net post. */
+function mockPerryAppView(post: unknown): () => void {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith('/com.atproto.identity.resolveHandle')) {
+            return url.searchParams.get('handle') === 'perrydotto.net'
+                ? Response.json({ did: PERRY_DID })
+                : Response.json({ error: 'InvalidRequest' }, { status: 400 });
+        }
+        if (url.pathname.endsWith('/app.bsky.feed.getPostThread')
+            && url.searchParams.get('uri') === `at://${PERRY_DID}/app.bsky.feed.post/3n24qxsnkfs2k`) {
+            return Response.json({ thread: { $type: 'app.bsky.feed.defs#threadViewPost', post } });
+        }
+        throw new Error('Unexpected request: ' + url);
+    };
+    return () => { globalThis.fetch = originalFetch; };
+}
+
+const PERRY_VIDEO = {
+    url: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(PERRY_DID)}&cid=${PERRY_VIDEO_CID}`,
+    width: 720,
+    height: 1280,
+    thumbnail: `https://video.bsky.app/watch/${encodeURIComponent(PERRY_DID)}/${PERRY_VIDEO_CID}/thumbnail.jpg`,
+};
+
 const env: Env = {
     SITE_NAME: 'FixEmbed',
     BRANDING_NAME: 'FixEmbed',
@@ -4899,6 +5009,206 @@ const tests: TestCase[] = [
                 ]);
             } finally {
                 globalThis.fetch = originalFetch;
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler uses a quote post\'s own video (recordWithMedia) on bsky.app, bskyx.app and fxbsky.app',
+        run: async () => {
+            clearAtprotoCaches();
+            const restore = mockPerryAppView(perryQuotePost());
+            try {
+                const cases: Array<[string, string, string]> = [
+                    ['https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k', 'https://bsky.app', 'FixEmbed • 🦋 Bluesky'],
+                    ['https://bskyx.app/profile/perrydotto.net/post/3n24qxsnkfs2k', 'https://bsky.app', 'FixEmbed • 🦋 Bluesky'],
+                    // fxbsky.app takes the verified AT Protocol app-host path (#128).
+                    ['https://fxbsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k', 'https://fxbsky.app', 'FixEmbed • 🦋 AT Protocol'],
+                ];
+                for (const [sourceUrl, origin, siteName] of cases) {
+                    const response = await blueskyHandler.handle(sourceUrl, env);
+                    assert.equal(response.success, true, sourceUrl);
+                    assert.equal(response.data?.url, `${origin}/profile/perrydotto.net/post/3n24qxsnkfs2k`, sourceUrl);
+                    assert.equal(response.data?.siteName, siteName, sourceUrl);
+                    assert.equal(response.data?.description, 'As a voice actor, I had to test this and, WELL');
+                    assert.deepEqual(response.data?.video, PERRY_VIDEO, sourceUrl);
+                    // The quoted IGN image neither replaces nor joins the post's own video.
+                    assert.equal(response.data?.image, undefined, sourceUrl);
+                    assert.equal(response.data?.images, undefined, sourceUrl);
+                    assert.equal(response.data?.mediaOrigin, undefined, sourceUrl);
+                }
+            } finally {
+                restore();
+                clearAtprotoCaches();
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler reads recordWithMedia images and link cards like a plain post',
+        run: async () => {
+            const imagesView = (count: number) => ({
+                $type: 'app.bsky.embed.images#view',
+                images: Array.from({ length: count }, (_, i) => ({
+                    fullsize: `https://cdn.bsky.app/img/feed_fullsize/plain/${PERRY_DID}/img${i}`,
+                    thumb: `https://cdn.bsky.app/img/feed_thumbnail/plain/${PERRY_DID}/img${i}`,
+                    alt: `Image ${i}`,
+                })),
+            });
+            const externalView = {
+                $type: 'app.bsky.embed.external#view',
+                external: {
+                    uri: 'https://example.com/story',
+                    title: 'Story',
+                    description: 'A linked story.',
+                    thumb: 'https://cdn.bsky.app/img/feed_thumbnail/plain/link-thumb',
+                },
+            };
+            const cases: Array<[string, unknown, { image?: string; images?: string[] }]> = [
+                ['one image', imagesView(1), { image: `https://cdn.bsky.app/img/feed_fullsize/plain/${PERRY_DID}/img0` }],
+                ['five images', imagesView(5), {
+                    images: [0, 1, 2, 3].map((i) => `https://cdn.bsky.app/img/feed_fullsize/plain/${PERRY_DID}/img${i}`),
+                }],
+                ['link card', externalView, { image: 'https://cdn.bsky.app/img/feed_thumbnail/plain/link-thumb' }],
+            ];
+            for (const [label, media, expected] of cases) {
+                for (const [shape, embed] of [
+                    ['plain', media],
+                    ['recordWithMedia', { $type: 'app.bsky.embed.recordWithMedia#view', media, record: { record: ignQuotedRecord() } }],
+                ] as const) {
+                    const restore = mockPerryAppView(perryQuotePost(embed));
+                    try {
+                        const response = await blueskyHandler.handle(
+                            'https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k',
+                            env,
+                        );
+                        const message = `${shape} ${label}`;
+                        assert.equal(response.success, true, message);
+                        assert.equal(response.data?.image, expected.image, message);
+                        assert.deepEqual(response.data?.images, expected.images, message);
+                        assert.equal(response.data?.video, undefined, message);
+                        assert.equal(response.data?.mediaOrigin, undefined, message);
+                    } finally {
+                        restore();
+                    }
+                }
+            }
+        },
+    },
+    {
+        name: 'blueskyHandler falls back to quoted media only when the quoting post has none',
+        run: async () => {
+            const ignVideoCid = 'bafkreiignvideo';
+            const cases: Array<[string, unknown, Record<string, unknown>]> = [
+                [
+                    'plain quote of an image post',
+                    { $type: 'app.bsky.embed.record#view', record: ignQuotedRecord() },
+                    { image: IGN_IMAGE, mediaOrigin: 'quote' },
+                ],
+                [
+                    'plain quote of a quote-with-video post uses the quoted video and its author DID',
+                    {
+                        $type: 'app.bsky.embed.record#view',
+                        record: ignQuotedRecord([{
+                            $type: 'app.bsky.embed.recordWithMedia#view',
+                            media: blueskyVideoView(IGN_DID, ignVideoCid, 1920, 1080),
+                            record: { record: { $type: 'app.bsky.embed.record#viewNotFound', uri: 'at://x', notFound: true } },
+                        }]),
+                    },
+                    {
+                        video: {
+                            url: `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(IGN_DID)}&cid=${ignVideoCid}`,
+                            width: 1920,
+                            height: 1080,
+                            thumbnail: `https://video.bsky.app/watch/${encodeURIComponent(IGN_DID)}/${ignVideoCid}/thumbnail.jpg`,
+                        },
+                        mediaOrigin: 'quote',
+                    },
+                ],
+                [
+                    'quote of a text-only post',
+                    { $type: 'app.bsky.embed.record#view', record: ignQuotedRecord([]) },
+                    {},
+                ],
+                [
+                    'quote of a deleted post',
+                    {
+                        $type: 'app.bsky.embed.record#view',
+                        record: {
+                            $type: 'app.bsky.embed.record#viewNotFound',
+                            uri: `at://${IGN_DID}/app.bsky.feed.post/3n232pnnc2n2l`,
+                            notFound: true,
+                        },
+                    },
+                    {},
+                ],
+                [
+                    'quote of a blocked post',
+                    {
+                        $type: 'app.bsky.embed.record#view',
+                        record: { $type: 'app.bsky.embed.record#viewBlocked', uri: 'at://x', blocked: true, author: { did: IGN_DID } },
+                    },
+                    {},
+                ],
+            ];
+            for (const [label, embed, expected] of cases) {
+                const restore = mockPerryAppView(perryQuotePost(embed));
+                try {
+                    const response = await blueskyHandler.handle(
+                        'https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k',
+                        env,
+                    );
+                    assert.equal(response.success, true, label);
+                    assert.equal(response.data?.description, 'As a voice actor, I had to test this and, WELL', label);
+                    for (const key of ['image', 'images', 'video', 'mediaOrigin'] as const) {
+                        assert.deepEqual(response.data?.[key], expected[key], `${label}: ${key}`);
+                    }
+                } finally {
+                    restore();
+                }
+            }
+        },
+    },
+    {
+        name: 'Discord activity status for a Bluesky quote-with-video post carries the video',
+        run: async () => {
+            clearEmbedMemoryCache();
+            clearAtprotoCaches();
+            const restore = mockPerryAppView(perryQuotePost());
+            try {
+                const discord = { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' } };
+                for (const source of [
+                    'https://bsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k',
+                    'https://fxbsky.app/profile/perrydotto.net/post/3n24qxsnkfs2k',
+                ]) {
+                    clearEmbedMemoryCache();
+                    const embed = await app.request(`/embed?url=${encodeURIComponent(source)}`, discord, env);
+                    assert.equal(embed.status, 200, source);
+                    const html = await embed.text();
+                    const activity = html.match(
+                        /href='https:\/\/fixembed\.app\/users\/[^']+\/statuses\/(\d+)' rel='alternate' type='application\/activity\+json'/,
+                    );
+                    assert.ok(activity, `${source}: Discord card advertises an activity status`);
+
+                    const status = await app.request(`/api/v1/statuses/${activity[1]}`, discord, env);
+                    assert.equal(status.status, 200, source);
+                    const body = await status.json() as {
+                        media_attachments: Array<{
+                            type: string;
+                            url: string;
+                            preview_url: string;
+                            meta: { original: { width: number; height: number } };
+                        }>;
+                    };
+                    assert.equal(body.media_attachments.length, 1, source);
+                    assert.equal(body.media_attachments[0].type, 'video', source);
+                    assert.equal(body.media_attachments[0].url, PERRY_VIDEO.url, source);
+                    assert.equal(body.media_attachments[0].preview_url, PERRY_VIDEO.thumbnail, source);
+                    assert.equal(body.media_attachments[0].meta.original.width, 720, source);
+                    assert.equal(body.media_attachments[0].meta.original.height, 1280, source);
+                }
+            } finally {
+                restore();
+                clearEmbedMemoryCache();
+                clearAtprotoCaches();
             }
         },
     },

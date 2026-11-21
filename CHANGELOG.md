@@ -1,5 +1,9 @@
 ## Unreleased
 
+#### **Bluesky quote posts with media**
+- Fixed Bluesky quote posts that have their own video or images showing no media. Bluesky puts a quote post's own media in a different place than a plain post's, and FixEmbed only looked in the plain-post place, so these cards showed text only. A quote post now shows its own video, images, or link preview exactly like a plain post. This applies to bsky.app, bskyx.app, fxbsky.app, and other AT Protocol app links, and to the Discord video player.
+- When a quote post has no media of its own, the card now shows the quoted post's video or images instead.
+
 #### **Instagram links in Discord**
 - Fixed Instagram links that sometimes unfurled in Discord with no preview at all. Discord reads a FixEmbed link in two steps: the page, then the post it points to. The hosted service fetched Instagram again for each step, and Instagram's answers differ from one request to the next, so the second step could get a different card than the first, or fail. Both steps now share the same card for five minutes, and the second step no longer contacts Instagram.
 - Fixed Instagram reels whose card had a video but no poster image. Discord shows nothing for those. When Instagram refuses its own pages, the backup source has the video but never the poster. FixEmbed now gets the poster from Instagram's image link, retries once when a card still has no poster or no media, and never caches a card like that.
