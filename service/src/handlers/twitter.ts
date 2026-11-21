@@ -18,6 +18,7 @@ import { languageName, normalizeLanguage } from '../utils/translation.ts';
 import {
     fetchTwitterGraphQL,
     normalizeTwitterPoll,
+    normalizeTwitterUnifiedCardMedia,
     type TwitterMedia as SyndicationMedia,
     type TwitterTweetData as SyndicationTweet,
     type TwitterUrlEntity,
@@ -40,6 +41,9 @@ interface FxTwitterMedia {
     height?: number;
     altText?: string;
     alt_text?: string;
+    /** Seconds. */
+    duration?: number;
+    variants?: Array<{ url?: string; bitrate?: number; content_type?: string }>;
 }
 
 interface FxTwitterPoll {
@@ -312,11 +316,25 @@ function fxTwitterMedia(tweet: FxTwitterTweet): {
         || allMedia.filter((item) => ['video', 'gif', 'animated_gif'].includes(item.type || ''))
     )[0] || tweet.media?.external;
     const isGif = ['gif', 'animated_gif'].includes(firstVideo?.type || '');
-    const video = firstVideo?.url
+    // FxTwitter's own `url` is the top-bitrate variant (4K on some posts), which Discord cannot proxy.
+    const selected = !isGif && firstVideo
+        ? selectTwitterVideoVariant(
+            (firstVideo.variants || []).flatMap((variant) => (
+                typeof variant.url === 'string'
+                    ? [{ url: variant.url, bitrate: variant.bitrate, content_type: variant.content_type }]
+                    : []
+            )),
+            Number(firstVideo.duration) > 0 ? Number(firstVideo.duration) * 1000 : undefined,
+        )
+        : undefined;
+    const videoUrl = selected?.url || firstVideo?.url;
+    const videoSize = selected?.width && selected.height
+        ? { width: selected.width, height: selected.height }
+        : { width: firstVideo?.width || 1280, height: firstVideo?.height || 720 };
+    const video = firstVideo && videoUrl
         ? {
-            url: isGif ? animatedGifUrl(firstVideo.url) : firstVideo.url,
-            width: firstVideo.width || 1280,
-            height: firstVideo.height || 720,
+            url: isGif ? animatedGifUrl(videoUrl) : videoUrl,
+            ...videoSize,
             thumbnail: firstVideo.thumbnail_url,
             mediaType: isGif ? 'gif' as const : 'video' as const,
         }
@@ -479,25 +497,106 @@ async function fetchFxTwitterFallback(
     }
 }
 
-function bestVideoUrl(media: SyndicationMedia): string | null {
-    const variants = (media.video_info?.variants || [])
-        .filter((variant) => variant.content_type === 'video/mp4')
+/** Largest frame Discord is sent by default: 1080p, either orientation. */
+const MAX_VIDEO_LONG_EDGE = 1920;
+const MAX_VIDEO_SHORT_EDGE = 1080;
+/**
+ * Estimated-size budget (bitrate × duration). X's mp4 bitrates are nominal and overstate the
+ * real file: Tesla's 46.5 s 1080p variant estimates at about 60 MB but is about 27 MB. Discord
+ * fails to proxy files around 95 MB ("Image failed to load"), so longer 1080p clips drop to 720p.
+ */
+const MAX_ESTIMATED_VIDEO_BYTES = 80_000_000;
+
+export interface TwitterVideoVariantInput {
+    url: string;
+    content_type?: string;
+    bitrate?: number;
+}
+
+export interface SelectedTwitterVideoVariant {
+    url: string;
+    bitrate?: number;
+    width?: number;
+    height?: number;
+}
+
+/** X encodes variant frame sizes in the path, e.g. `/vid/avc1/1920x1080/<id>.mp4`. */
+function variantDimensions(url: string): { width: number; height: number } | undefined {
+    const match = url.match(/\/vid\/(?:[^/]+\/)?(\d{2,5})x(\d{2,5})\//);
+    if (!match) return undefined;
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    return width > 0 && height > 0 ? { width, height } : undefined;
+}
+
+/**
+ * Pick the mp4 Discord can play: the highest-bitrate variant no larger than 1080p whose
+ * estimated size fits the budget, else the smallest variant no larger than 1080p, else the
+ * smallest variant overall. Variants without a size in the URL (GIF mp4s) count as within 1080p.
+ */
+export function selectTwitterVideoVariant(
+    variants: TwitterVideoVariantInput[] | undefined,
+    durationMs?: number,
+): SelectedTwitterVideoVariant | undefined {
+    const mp4s = (variants || [])
+        .filter((variant) => (
+            typeof variant.url === 'string'
+            && Boolean(variant.url)
+            && (variant.content_type === 'video/mp4' || variant.content_type === undefined)
+            && !/\.m3u8(?:[?#]|$)/i.test(variant.url)
+        ))
+        .map((variant) => ({
+            url: variant.url,
+            bitrate: Number(variant.bitrate) > 0 ? Number(variant.bitrate) : undefined,
+            ...variantDimensions(variant.url),
+        }))
         .sort((left, right) => (right.bitrate || 0) - (left.bitrate || 0));
-    return variants[0]?.url || null;
+    if (!mp4s.length) return undefined;
+    const withinFrameCap = mp4s.filter((variant) => (
+        !variant.width
+        || !variant.height
+        || (
+            Math.max(variant.width, variant.height) <= MAX_VIDEO_LONG_EDGE
+            && Math.min(variant.width, variant.height) <= MAX_VIDEO_SHORT_EDGE
+        )
+    ));
+    const durationSeconds = Number(durationMs) > 0 ? Number(durationMs) / 1000 : undefined;
+    const fitsBudget = (variant: SelectedTwitterVideoVariant) => (
+        !durationSeconds
+        || !variant.bitrate
+        || (variant.bitrate * durationSeconds) / 8 <= MAX_ESTIMATED_VIDEO_BYTES
+    );
+    return withinFrameCap.find(fitsBudget)
+        || withinFrameCap[withinFrameCap.length - 1]
+        || mp4s[mp4s.length - 1];
 }
 
 function twitterVideoEmbed(media?: SyndicationMedia): VideoEmbed | undefined {
     if (!media || media.type === 'photo') return undefined;
-    const sourceUrl = bestVideoUrl(media);
+    const selected = selectTwitterVideoVariant(
+        media.video_info?.variants,
+        media.video_info?.duration_millis,
+    );
     const isGif = media.type === 'animated_gif';
-    const url = sourceUrl && isGif ? animatedGifUrl(sourceUrl) : sourceUrl;
-    if (!url) return undefined;
-    const [widthRatio, heightRatio] = media.video_info?.aspect_ratio || [16, 9];
-    const width = 1280;
+    const url = selected?.url && isGif ? animatedGifUrl(selected.url) : selected?.url;
+    if (!url || !selected) return undefined;
+    let width = selected.width;
+    let height = selected.height;
+    const original = media.original_info;
+    if ((!width || !height) && Number(original?.width) > 0 && Number(original?.height) > 0) {
+        width = Number(original?.width);
+        height = Number(original?.height);
+    }
+    if (!width || !height) {
+        // No real size anywhere: keep the historic 1280-wide frame at the post's aspect ratio.
+        const [widthRatio, heightRatio] = media.video_info?.aspect_ratio || [16, 9];
+        width = 1280;
+        height = Math.round(width * (heightRatio / widthRatio));
+    }
     return {
         url,
         width,
-        height: Math.round(width * (heightRatio / widthRatio)),
+        height,
         thumbnail: media.media_url_https,
         mediaType: isGif ? 'gif' : 'video',
     };
@@ -534,7 +633,16 @@ export const twitterHandler: PlatformHandler = {
                     );
                 }
                 tweet = await response.json() as SyndicationTweet;
-                tweet.poll ||= normalizeTwitterPoll((tweet as unknown as { card?: unknown }).card);
+                const card = (tweet as unknown as { card?: unknown }).card;
+                tweet.poll ||= normalizeTwitterPoll(card);
+                if (
+                    !tweet.mediaDetails?.length
+                    && !tweet.extended_entities?.media?.length
+                    && !tweet.entities?.media?.length
+                ) {
+                    const cardMedia = normalizeTwitterUnifiedCardMedia(card);
+                    if (cardMedia.length) tweet.mediaDetails = cardMedia;
+                }
             }
             if (!tweet?.user || tweet.__typename === 'TweetTombstone') {
                 return fetchFxTwitterFallback(

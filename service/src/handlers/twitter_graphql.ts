@@ -58,8 +58,10 @@ export interface TwitterMedia {
     media_url_https: string;
     url?: string;
     ext_alt_text?: string;
+    original_info?: { width?: number; height?: number };
     video_info?: {
         aspect_ratio?: [number, number];
+        duration_millis?: number;
         variants: Array<{ bitrate?: number; content_type: string; url: string }>;
     };
 }
@@ -193,6 +195,49 @@ export function normalizeTwitterPoll(cardValue: unknown): TwitterPoll | undefine
     };
 }
 
+/**
+ * Media attached through a unified card (promoted "video_website" / "image_website" posts,
+ * swipeable app cards, and similar). X leaves `legacy.entities` and `extended_entities` empty
+ * for these posts and ships the media only inside the card's `unified_card` binding, as a JSON
+ * string whose `media_entities` map holds ordinary media objects keyed by media key.
+ */
+export function normalizeTwitterUnifiedCardMedia(cardValue: unknown): TwitterMedia[] {
+    const card = record(cardValue);
+    const cardName = String(card.legacy?.name ?? card.name ?? '');
+    const raw = bindingMap(card).get('unified_card')?.string_value;
+    if (cardName !== 'unified_card' || typeof raw !== 'string') return [];
+    let unified: Record<string, any>;
+    try {
+        unified = record(JSON.parse(raw));
+    } catch {
+        return [];
+    }
+    const entities = record(unified.media_entities);
+    const componentObjects = record(unified.component_objects);
+    const orderedKeys: string[] = [];
+    const addKey = (key: unknown) => {
+        if (typeof key === 'string' && key in entities && !orderedKeys.includes(key)) orderedKeys.push(key);
+    };
+    // Follow the card's own component order, so the first video shown on X is the first one here.
+    for (const name of Array.isArray(unified.components) ? unified.components : []) {
+        const data = record(record(componentObjects[String(name)]).data);
+        addKey(data.id);
+        for (const item of Array.isArray(data.media_list) ? data.media_list : []) addKey(record(item).id);
+    }
+    for (const destination of Object.values(record(unified.destination_objects))) {
+        addKey(record(record(destination).data).media_id);
+    }
+    for (const key of Object.keys(entities)) addKey(key);
+    return normalizeMedia(orderedKeys.map((key) => entities[key]));
+}
+
+/** Post media from the legacy entities, or from a unified card when the entities carry none. */
+function tweetMedia(node: Record<string, any>): TwitterMedia[] {
+    const legacy = record(node.legacy);
+    const media = normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media);
+    return media.length ? media : normalizeTwitterUnifiedCardMedia(node.card);
+}
+
 export function normalizeTwitterWebsiteCard(cardValue: unknown): TwitterTweetData['linkCard'] {
     const card = record(cardValue);
     const cardName = String(card.legacy?.name ?? card.name ?? '');
@@ -263,7 +308,7 @@ function normalizeQuote(value: unknown): TwitterQuote | undefined {
             typeof noteText === 'string' ? noteText : legacy.full_text,
         ),
         user,
-        mediaDetails: normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media),
+        mediaDetails: tweetMedia(quote),
         entities: {
             urls: normalizeUrlEntities(textEntities.urls),
             media: normalizeMedia(legacy.entities?.media),
@@ -308,7 +353,7 @@ export function normalizeGraphQLTweet(value: unknown): TwitterTweetData | null {
             urls: normalizeUrlEntities(textEntities.urls),
             media: normalizeMedia(legacy.entities?.media),
         },
-        mediaDetails: normalizeMedia(legacy.extended_entities?.media ?? legacy.entities?.media),
+        mediaDetails: tweetMedia(node),
         poll: normalizeTwitterPoll(node.card),
         quote: node.quoted_status_result || node.quoted_tweet_results
             ? normalizeQuote(node.quoted_status_result ?? node.quoted_tweet_results)

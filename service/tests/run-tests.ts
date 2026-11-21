@@ -4,7 +4,7 @@ import { redditVideoTests } from './reddit_video.ts';
 
 import app, { STATUS_PROBES } from '../src/index.ts';
 import { findHandler } from '../src/handlers/index.ts';
-import { twitterHandler } from '../src/handlers/twitter.ts';
+import { selectTwitterVideoVariant, twitterHandler } from '../src/handlers/twitter.ts';
 import {
     normalizeGraphQLTweet,
     normalizeTwitterWebsiteCard,
@@ -196,6 +196,90 @@ const PERRY_VIDEO = {
     height: 1280,
     thumbnail: `https://video.bsky.app/watch/${encodeURIComponent(PERRY_DID)}/${PERRY_VIDEO_CID}/thumbnail.jpg`,
 };
+
+/**
+ * The promoted @GeminiApp post 2123813017855103449 as X returned it in November 2026: empty
+ * `legacy.entities`, no `extended_entities`, and its amplify video only inside the
+ * `unified_card` binding's JSON string. `bindingValues` picks GraphQL's array form or
+ * syndication's keyed-object form.
+ */
+const GEMINI_VIDEO_MP4 = 'https://video.twimg.com/amplify_video/2123808451096932352/vid/avc1/720x720/e72efwSSozxn23RO.mp4?tag=29';
+const GEMINI_VIDEO_THUMBNAIL = 'https://pbs.twimg.com/media/HXlIrQgbkAAHBco.png';
+function geminiUnifiedCard(bindingValues: 'array' | 'object'): Record<string, unknown> {
+    const mediaKey = '13_2123808451096932352';
+    const unifiedCard = JSON.stringify({
+        type: 'video_website',
+        component_objects: {
+            details_1: { type: 'details', data: {
+                title: { content: 'Create GIFs in Gemini today', is_rtl: false },
+                subtitle: { content: 'google.com', is_rtl: false },
+                destination: 'browser_with_docked_media_1',
+            } },
+            media_1: { type: 'media', data: { id: mediaKey, destination: 'browser_with_docked_media_1' } },
+        },
+        destination_objects: {
+            browser_with_docked_media_1: { type: 'browser_with_docked_media', data: {
+                url_data: { url: 'https://gemini.google.com/image', vanity: 'google.com' },
+                media_id: mediaKey,
+            } },
+        },
+        components: ['media_1', 'details_1'],
+        media_entities: {
+            [mediaKey]: {
+                id_str: '2123808451096932352',
+                media_url_https: GEMINI_VIDEO_THUMBNAIL,
+                url: '',
+                type: 'video',
+                original_info: { width: 720, height: 720 },
+                media_key: mediaKey,
+                video_info: {
+                    aspect_ratio: [1, 1],
+                    duration_millis: 36458,
+                    variants: [
+                        { content_type: 'application/x-mpegURL', url: 'https://video.twimg.com/amplify_video/2123808451096932352/pl/AJHYxpHmWr-00oUD.m3u8?tag=29&v=cfc' },
+                        { bitrate: 432000, content_type: 'video/mp4', url: 'https://video.twimg.com/amplify_video/2123808451096932352/vid/avc1/320x320/azbZw_R8BZd2Cv-V.mp4?tag=29' },
+                        { bitrate: 1280000, content_type: 'video/mp4', url: GEMINI_VIDEO_MP4 },
+                        { bitrate: 832000, content_type: 'video/mp4', url: 'https://video.twimg.com/amplify_video/2123808451096932352/vid/avc1/540x540/xvPKk_-KGXi3CNdC.mp4?tag=29' },
+                    ],
+                },
+            },
+        },
+    });
+    const bindings = {
+        unified_card: { string_value: unifiedCard, type: 'STRING' },
+        card_url: { string_value: 'https://twitter.com', type: 'STRING' },
+    };
+    return bindingValues === 'array'
+        ? { rest_id: 'card://2123813017121071105', legacy: {
+            name: 'unified_card',
+            url: 'card://2123813017121071105',
+            binding_values: Object.entries(bindings).map(([key, value]) => ({ key, value })),
+        } }
+        : { name: 'unified_card', url: 'card://2123813017121071105', binding_values: bindings };
+}
+
+/** The @Tesla post 2124222447855743019 (46.5 s, 16:9): X offers mp4s up to 3840x2160 at 25 Mbps. */
+const TESLA_VIDEO_BASE = 'https://video.twimg.com/amplify_video/2124221674111512576';
+const TESLA_VIDEO_1080 = `${TESLA_VIDEO_BASE}/vid/avc1/1920x1080/exp2P2D1CbcW1xU7.mp4?tag=29`;
+const TESLA_VIDEO_720 = `${TESLA_VIDEO_BASE}/vid/avc1/1280x720/CB-ZGrFnTWyL0d6a.mp4?tag=29`;
+const TESLA_VIDEO_4K = `${TESLA_VIDEO_BASE}/vid/avc1/3840x2160/paG-_6HblizxnFgC.mp4?tag=29`;
+const TESLA_THUMBNAIL = 'https://pbs.twimg.com/amplify_video_thumb/2124221674111512576/img/tesla.jpg';
+const TESLA_VARIANTS = [
+    { content_type: 'application/x-mpegURL', url: `${TESLA_VIDEO_BASE}/pl/eczZ0bKF2Zuv5dgC.m3u8?tag=29&v=cfc` },
+    { bitrate: 256000, content_type: 'video/mp4', url: `${TESLA_VIDEO_BASE}/vid/avc1/480x270/q3da8s2G4pFdyIbp.mp4?tag=29` },
+    { bitrate: 832000, content_type: 'video/mp4', url: `${TESLA_VIDEO_BASE}/vid/avc1/640x360/Y4p4f2zCeQbtzbVf.mp4?tag=29` },
+    { bitrate: 2176000, content_type: 'video/mp4', url: TESLA_VIDEO_720 },
+    { bitrate: 10368000, content_type: 'video/mp4', url: TESLA_VIDEO_1080 },
+    { bitrate: 25128000, content_type: 'video/mp4', url: TESLA_VIDEO_4K },
+];
+function teslaVideoMedia(): Record<string, unknown> {
+    return {
+        type: 'video',
+        media_url_https: TESLA_THUMBNAIL,
+        original_info: { width: 3840, height: 2160 },
+        video_info: { aspect_ratio: [16, 9], duration_millis: 46506, variants: TESLA_VARIANTS },
+    };
+}
 
 const env: Env = {
     SITE_NAME: 'FixEmbed',
@@ -6215,6 +6299,282 @@ const tests: TestCase[] = [
             const traditional = await applyRequestedTranslation(result, translationEnv, { language: 'zh-hant' });
             assert.equal(traditional, result);
             assert.deepEqual(targets, []);
+        },
+    },
+    {
+        name: 'normalizeGraphQLTweet reads video from a unified card when the entities carry no media',
+        run: () => {
+            const normalized = normalizeGraphQLTweet({
+                __typename: 'Tweet',
+                rest_id: '2123813017855103449',
+                card: geminiUnifiedCard('array'),
+                core: { user_results: { result: {
+                    core: { name: 'Google Gemini', screen_name: 'GeminiApp' },
+                    avatar: { image_url: 'https://pbs.twimg.com/profile_images/gemini.jpg' },
+                } } },
+                legacy: {
+                    id_str: '2123813017855103449',
+                    full_text: 'Create GIFs in Gemini.',
+                    created_at: 'Fri Nov 20 17:00:00 +0000 2026',
+                    entities: {},
+                },
+            });
+            assert.equal(normalized?.mediaDetails?.length, 1);
+            assert.equal(normalized?.mediaDetails?.[0].type, 'video');
+            assert.equal(normalized?.mediaDetails?.[0].media_url_https, GEMINI_VIDEO_THUMBNAIL);
+
+            const withEntityMedia = normalizeGraphQLTweet({
+                __typename: 'Tweet',
+                rest_id: '1',
+                card: geminiUnifiedCard('array'),
+                core: { user_results: { result: {
+                    core: { name: 'A', screen_name: 'a' },
+                    avatar: { image_url: 'https://pbs.twimg.com/profile_images/a.jpg' },
+                } } },
+                legacy: {
+                    full_text: 'Own photo.',
+                    extended_entities: { media: [{ type: 'photo', media_url_https: 'https://pbs.twimg.com/media/own.jpg' }] },
+                },
+            });
+            assert.deepEqual(
+                withEntityMedia?.mediaDetails?.map((item) => item.media_url_https),
+                ['https://pbs.twimg.com/media/own.jpg'],
+                'post media in the entities wins over card media',
+            );
+        },
+    },
+    {
+        name: 'X unified-card video reaches /api/embed, the Discord /embed card, and the activity status',
+        run: async () => {
+            clearEmbedMemoryCache();
+            const source = 'https://x.com/GeminiApp/status/2123813017855103449';
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.endsWith('/1.1/guest/activate.json')) {
+                    return Response.json({ guest_token: 'guest-123' });
+                }
+                if (url.includes('/graphql/') && url.includes('/TweetResultByRestId')) {
+                    return Response.json({ data: { tweetResult: { result: {
+                        __typename: 'Tweet',
+                        rest_id: '2123813017855103449',
+                        card: geminiUnifiedCard('array'),
+                        core: { user_results: { result: {
+                            core: { name: 'Google Gemini', screen_name: 'GeminiApp' },
+                            avatar: { image_url: 'https://pbs.twimg.com/profile_images/gemini_normal.jpg' },
+                        } } },
+                        views: { count: '125000' },
+                        legacy: {
+                            id_str: '2123813017855103449',
+                            full_text: 'Create GIFs in Gemini.',
+                            created_at: 'Fri Nov 20 17:00:00 +0000 2026',
+                            entities: {},
+                            favorite_count: 900,
+                            retweet_count: 80,
+                            reply_count: 70,
+                            lang: 'en',
+                        },
+                    } } } });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const api = await app.request(`/api/embed?url=${encodeURIComponent(source)}`, {}, env);
+                assert.equal(api.status, 200);
+                const body = await api.json() as { source: string; data: EmbedData };
+                assert.equal(body.source, 'first-party');
+                assert.deepEqual(body.data.video, {
+                    url: GEMINI_VIDEO_MP4,
+                    width: 720,
+                    height: 720,
+                    thumbnail: GEMINI_VIDEO_THUMBNAIL,
+                    mediaType: 'video',
+                });
+                assert.equal(body.data.image, GEMINI_VIDEO_THUMBNAIL);
+                assert.equal(body.data.images, undefined);
+
+                clearEmbedMemoryCache();
+                const discord = { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' } };
+                const embed = await app.request(`/embed?url=${encodeURIComponent(source)}`, discord, env);
+                assert.equal(embed.status, 200);
+                const html = await embed.text();
+                assert.match(html, /<meta name="twitter:card" content="player">/);
+                const activity = html.match(
+                    /href='https:\/\/fixembed\.app\/users\/[^']+\/statuses\/(\d+)' rel='alternate' type='application\/activity\+json'/,
+                );
+                assert.ok(activity, 'Discord card advertises an activity status');
+
+                const status = await app.request(`/api/v1/statuses/${activity[1]}`, discord, env);
+                assert.equal(status.status, 200);
+                const statusBody = await status.json() as {
+                    media_attachments: Array<{
+                        type: string;
+                        url: string;
+                        preview_url: string;
+                        meta: { original: { width: number; height: number } };
+                    }>;
+                };
+                assert.equal(statusBody.media_attachments.length, 1);
+                assert.equal(statusBody.media_attachments[0].type, 'video');
+                assert.equal(statusBody.media_attachments[0].url, GEMINI_VIDEO_MP4);
+                assert.equal(statusBody.media_attachments[0].preview_url, GEMINI_VIDEO_THUMBNAIL);
+                assert.equal(statusBody.media_attachments[0].meta.original.width, 720);
+                assert.equal(statusBody.media_attachments[0].meta.original.height, 720);
+            } finally {
+                globalThis.fetch = originalFetch;
+                clearEmbedMemoryCache();
+            }
+        },
+    },
+    {
+        name: 'selectTwitterVideoVariant caps X video at 1080p and an estimated-size budget',
+        run: () => {
+            const tesla = selectTwitterVideoVariant(TESLA_VARIANTS, 46506);
+            assert.deepEqual(tesla, { url: TESLA_VIDEO_1080, bitrate: 10368000, width: 1920, height: 1080 });
+
+            // Two minutes of 1080p at 10.4 Mbps estimates at ~155 MB, so 720p is sent instead.
+            assert.equal(selectTwitterVideoVariant(TESLA_VARIANTS, 120000)?.url, TESLA_VIDEO_720);
+            // Without a duration only the frame cap applies.
+            assert.equal(selectTwitterVideoVariant(TESLA_VARIANTS)?.url, TESLA_VIDEO_1080);
+            // Even the smallest variant over budget: send the smallest rather than nothing.
+            assert.equal(
+                selectTwitterVideoVariant(TESLA_VARIANTS, 3_600_000)?.url,
+                `${TESLA_VIDEO_BASE}/vid/avc1/480x270/q3da8s2G4pFdyIbp.mp4?tag=29`,
+            );
+
+            const portrait = selectTwitterVideoVariant([
+                { bitrate: 632000, content_type: 'video/mp4', url: 'https://video.twimg.com/ext_tw_video/1/pu/vid/avc1/320x568/a.mp4' },
+                { bitrate: 10368000, content_type: 'video/mp4', url: 'https://video.twimg.com/ext_tw_video/1/pu/vid/avc1/1080x1920/b.mp4' },
+                { bitrate: 25128000, content_type: 'video/mp4', url: 'https://video.twimg.com/ext_tw_video/1/pu/vid/avc1/2160x3840/c.mp4' },
+            ], 20000);
+            assert.deepEqual(
+                [portrait?.width, portrait?.height],
+                [1080, 1920],
+                'portrait 1080x1920 is within the 1080p cap',
+            );
+
+            // Only 4K offered: the smallest variant still beats sending nothing.
+            assert.equal(
+                selectTwitterVideoVariant([{ bitrate: 25128000, content_type: 'video/mp4', url: TESLA_VIDEO_4K }], 46506)?.url,
+                TESLA_VIDEO_4K,
+            );
+            // GIF mp4s carry no size in the URL and no bitrate.
+            assert.deepEqual(
+                selectTwitterVideoVariant([{ bitrate: 0, content_type: 'video/mp4', url: 'https://video.twimg.com/tweet_video/reaction.mp4' }]),
+                { url: 'https://video.twimg.com/tweet_video/reaction.mp4', bitrate: undefined },
+            );
+            assert.equal(selectTwitterVideoVariant([TESLA_VARIANTS[0]]), undefined, 'HLS playlists are never chosen');
+        },
+    },
+    {
+        name: 'X 4K posts embed the 1080p variant at its real size on every path',
+        run: async () => {
+            const source = 'https://x.com/Tesla/status/2124222447855743019';
+            const tesla = {
+                core: { user_results: { result: {
+                    core: { name: 'Tesla', screen_name: 'Tesla' },
+                    avatar: { image_url: 'https://pbs.twimg.com/profile_images/tesla.jpg' },
+                } } },
+            };
+            const fxTweet = {
+                id: '2124222447855743019',
+                url: source,
+                text: 'Tesla video',
+                author: { name: 'Tesla', screen_name: 'Tesla', avatar_url: 'https://pbs.twimg.com/profile_images/tesla.jpg' },
+                created_at: 'Sat Nov 21 12:00:00 +0000 2026',
+                media: { videos: [{
+                    type: 'video',
+                    url: TESLA_VIDEO_4K,
+                    thumbnail_url: TESLA_THUMBNAIL,
+                    width: 3840,
+                    height: 2160,
+                    duration: 46.506,
+                    variants: TESLA_VARIANTS,
+                }] },
+            };
+            const expected = { url: TESLA_VIDEO_1080, width: 1920, height: 1080, thumbnail: TESLA_THUMBNAIL, mediaType: 'video' };
+            const originalFetch = globalThis.fetch;
+            for (const path of ['graphql', 'syndication', 'fxtwitter'] as const) {
+                globalThis.fetch = async (input) => {
+                    const url = String(input);
+                    if (url.endsWith('/1.1/guest/activate.json')) return Response.json({ guest_token: 'guest-123' });
+                    if (url.includes('/graphql/')) {
+                        if (path !== 'graphql') return new Response('rate limited', { status: 429 });
+                        return Response.json({ data: { tweetResult: { result: {
+                            __typename: 'Tweet',
+                            rest_id: '2124222447855743019',
+                            ...tesla,
+                            legacy: {
+                                id_str: '2124222447855743019',
+                                full_text: 'Tesla video https://t.co/video',
+                                created_at: 'Sat Nov 21 12:00:00 +0000 2026',
+                                extended_entities: { media: [teslaVideoMedia()] },
+                            },
+                        } } } });
+                    }
+                    if (url.startsWith('https://cdn.syndication.twimg.com/tweet-result')) {
+                        if (path !== 'syndication') return new Response('missing', { status: 404 });
+                        return Response.json({
+                            __typename: 'Tweet',
+                            id_str: '2124222447855743019',
+                            text: 'Tesla video',
+                            user: { name: 'Tesla', screen_name: 'Tesla', profile_image_url_https: 'https://pbs.twimg.com/profile_images/tesla.jpg' },
+                            created_at: '2026-11-21T12:00:00.000Z',
+                            mediaDetails: [teslaVideoMedia()],
+                        });
+                    }
+                    if (url.startsWith('https://api.fxtwitter.com/')) return Response.json({ code: 200, tweet: fxTweet });
+                    throw new Error(`Unexpected request: ${url}`);
+                };
+                try {
+                    const response = await twitterHandler.handle(source, env);
+                    assert.equal(response.source, path === 'fxtwitter' ? 'fallback' : 'first-party', path);
+                    assert.deepEqual(response.data?.video, expected, path);
+                } finally {
+                    globalThis.fetch = originalFetch;
+                }
+            }
+        },
+    },
+    {
+        name: 'twitterHandler reads unified-card video from the syndication fallback',
+        run: async () => {
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = async (input) => {
+                const url = String(input);
+                if (url.endsWith('/1.1/guest/activate.json')) {
+                    return Response.json({ guest_token: 'guest-123' });
+                }
+                if (url.includes('/graphql/')) return new Response('rate limited', { status: 429 });
+                if (url.startsWith('https://cdn.syndication.twimg.com/tweet-result')) {
+                    return Response.json({
+                        __typename: 'Tweet',
+                        id_str: '2123813017855103449',
+                        text: 'Create GIFs in Gemini.',
+                        user: {
+                            name: 'Google Gemini',
+                            screen_name: 'GeminiApp',
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/gemini.jpg',
+                        },
+                        created_at: '2026-11-20T17:00:00.000Z',
+                        entities: { hashtags: [], urls: [], user_mentions: [], symbols: [] },
+                        card: geminiUnifiedCard('object'),
+                    });
+                }
+                throw new Error(`Unexpected request: ${url}`);
+            };
+            try {
+                const response = await twitterHandler.handle(
+                    'https://x.com/GeminiApp/status/2123813017855103449',
+                    env,
+                );
+                assert.equal(response.source, 'first-party');
+                assert.equal(response.data?.video?.url, GEMINI_VIDEO_MP4);
+                assert.equal(response.data?.video?.thumbnail, GEMINI_VIDEO_THUMBNAIL);
+                assert.equal(response.data?.video?.width, response.data?.video?.height);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
         },
     },
     {

@@ -1,5 +1,10 @@
 ## Unreleased
 
+#### **X videos**
+- Fixed videos missing from X posts that show the video in a website card, such as promoted posts with a "From google.com" card (for example, a GeminiApp post). X sends these videos only inside the card, not with the post's other media, so FixEmbed showed the text and stats with no video. The video now appears on the card, on the embed page, and in Discord's video player.
+- Fixed X videos showing "Image failed to load" in Discord when the post offers a 4K version. FixEmbed always sent the highest-quality file, which can be close to 100 MB, and Discord can't load files that large. FixEmbed now sends the best version up to 1080p, and a lower one when a long video at 1080p would still be very large.
+- X video cards now report the real width and height of the video file that is sent, instead of a fixed 1280-pixel width. For example, square videos are reported as 720×720 instead of 1280×1280.
+
 #### **Bluesky quote posts with media**
 - Fixed Bluesky quote posts that have their own video or images showing no media. Bluesky puts a quote post's own media in a different place than a plain post's, and FixEmbed only looked in the plain-post place, so these cards showed text only. A quote post now shows its own video, images, or link preview exactly like a plain post. This applies to bsky.app, bskyx.app, fxbsky.app, and other AT Protocol app links, and to the Discord video player.
 - When a quote post has no media of its own, the card now shows the quoted post's video or images instead.
